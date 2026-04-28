@@ -61,7 +61,8 @@ Claude / Codex
 플러그인 루트에서 실행합니다.
 
 ```bash
-cd /Users/jimmy/Documents/GitHub/synapse-memory
+git clone https://github.com/Jimmy-Jung/synapse-memory.git
+cd synapse-memory
 python3 scripts/synapse.py status
 python3 scripts/synapse.py bootstrap
 python3 scripts/synapse.py install
@@ -89,7 +90,7 @@ python3 scripts/synapse.py e2e --dry-run
 기본 Vault 위치는 다음 경로입니다.
 
 ```text
-~/Library/Mobile Documents/iCloud~md~obsidian/Documents/90_System/AI
+~/ObsidianVault/90_System/AI
 ```
 
 다른 Vault를 사용한다면 명령마다 `--vault-ai-root`를 넘깁니다.
@@ -403,10 +404,22 @@ Codex에서는 GitHub 저장소를 플러그인 소스로 사용합니다.
 https://github.com/Jimmy-Jung/synapse-memory
 ```
 
+Codex에서 플러그인을 설치할 때는 아래 프롬프트를 붙여 넣습니다.
+
+```text
+다음 GitHub 저장소를 Codex 플러그인으로 설치해줘.
+
+https://github.com/Jimmy-Jung/synapse-memory
+
+설치가 끝나면 synapse-memory 플러그인이 사용 가능한지 확인해줘.
+단, Synapse Memory 자동화 설치, LaunchAgent 등록, reflect 실행처럼 파일이나 설정을 실제로 바꾸는 작업은 내가 명시적으로 승인하기 전까지 실행하지 마.
+```
+
 로컬에서 개발하거나 검증할 때는 clone된 저장소에서 CLI를 직접 실행해도 됩니다.
 
 ```bash
-cd /Users/jimmy/Documents/GitHub/synapse-memory
+git clone https://github.com/Jimmy-Jung/synapse-memory.git
+cd synapse-memory
 python3 scripts/synapse.py status
 ```
 
