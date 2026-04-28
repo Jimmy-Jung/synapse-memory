@@ -1,0 +1,15 @@
+{
+  "name": "synapse-memory-marketplace",
+  "description": "Claude/Codex and Obsidian AI memory automation plugins.",
+  "owner": {
+    "name": "JunyoungJung",
+    "url": "https://github.com/Jimmy-Jung"
+  },
+  "plugins": [
+    {
+      "name": "synapse-memory",
+      "source": "./",
+      "description": "Local-first AI memory automation for Claude/Codex and Obsidian MemoryInbox workflows."
+    }
+  ]
+}

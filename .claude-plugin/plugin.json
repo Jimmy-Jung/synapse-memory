@@ -1,0 +1,20 @@
+{
+  "name": "synapse-memory",
+  "description": "Local-first Synapse AI Memory automation for Claude/Codex conversations, Obsidian MemoryInbox review, and explicit long-term memory reflection.",
+  "version": "0.1.0",
+  "author": {
+    "name": "JunyoungJung",
+    "url": "https://github.com/Jimmy-Jung"
+  },
+  "keywords": [
+    "synapse",
+    "ai-memory",
+    "claude-code",
+    "codex",
+    "obsidian",
+    "vault-setup"
+  ],
+  "commands": "./commands",
+  "skills": "./skills",
+  "hooks": "./hooks/hooks.json"
+}
