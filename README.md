@@ -58,7 +58,13 @@ Claude / Codex
 
 ## 빠른 시작
 
-플러그인 루트에서 실행합니다.
+Claude Code에서 가장 간단한 방법은 통합 setup 커맨드입니다. 단계마다 사용자 승인을 받고 dry-run부터 실행합니다.
+
+```text
+/synapse-memory:synapse-setup
+```
+
+수동으로 단계별 실행을 원하면 플러그인 루트에서 직접 CLI를 사용합니다.
 
 ```bash
 git clone https://github.com/Jimmy-Jung/synapse-memory.git
@@ -388,6 +394,7 @@ Claude Code에 marketplace를 추가합니다. GitHub 저장소에는 `.claude-p
 사용 가능한 slash commands:
 
 ```text
+/synapse-memory:synapse-setup       # 통합 온보딩 (권장)
 /synapse-memory:synapse-status
 /synapse-memory:synapse-bootstrap
 /synapse-memory:synapse-install
