@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+pytest-cache-files-*/
+
+# venv
+.venv/
+venv/
+
+# editor
+.vscode/
+.idea/
+.DS_Store
+
+# synapse-memory local
+.synapse_local/
