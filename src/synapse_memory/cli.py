@@ -106,6 +106,37 @@ from synapse_memory.storage.l0 import (
 OK = "✓"
 FAIL = "✗"
 
+# 대화형 endpoint(ask / me *) 가 사람-터미널에서 직접 호출되었을 때 안내하는 경고.
+# Claude Code / Codex 의 slash 명령이 subprocess 로 호출하면 SYNAPSE_FROM_AGENT=1 환경변수가
+# 설정되어 있어 경고가 생략됩니다. stdout 이 pipe 인 경우(자동화)도 통과.
+_INTERACTIVE_GUARD_DELAY_SECONDS = 3
+_INTERACTIVE_GUARD_MESSAGE = (
+    "⚠  {command} 는 LLM 대화 컨텍스트에서 호출할 때 가장 자연스럽게 동작합니다.\n"
+    "   Claude Code / Codex 안에서 `/synapse-{slash}` 슬래시 명령으로 호출하면\n"
+    "   결과가 대화에 인라인되고 후속 질문에 컨텍스트가 유지됩니다.\n"
+    "   계속 진행하려면 {delay}초 기다리세요. 즉시 우회: SYNAPSE_FROM_AGENT=1\n"
+)
+
+
+def _stdout_is_tty() -> bool:
+    """sys.stdout.isatty() 의 thin wrapper — 테스트에서 monkeypatch 하기 위함."""
+    return sys.stdout.isatty()
+
+
+def _interactive_guard(command: str, slash: str) -> None:
+    """대화형 endpoint 에서 사람의 직접 CLI 호출을 부드럽게 만류한다."""
+    if os.environ.get("SYNAPSE_FROM_AGENT"):
+        return
+    if not _stdout_is_tty():
+        return
+    sys.stderr.write(
+        _INTERACTIVE_GUARD_MESSAGE.format(
+            command=command, slash=slash, delay=_INTERACTIVE_GUARD_DELAY_SECONDS
+        )
+    )
+    sys.stderr.flush()
+    time.sleep(_INTERACTIVE_GUARD_DELAY_SECONDS)
+
 
 def cmd_doctor(_args: argparse.Namespace) -> int:
     """환경 진단 — apfel/macOS/Apple Silicon."""
@@ -316,6 +347,7 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
 
 
 def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
+    _interactive_guard("me what-did-i-think", "recall")
     claude_env = detect_claude_environment(model=args.model)
     if not claude_env.ready:
         print(f"{FAIL} Claude 사용 불가", file=sys.stderr)
@@ -338,6 +370,7 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
 
 
 def cmd_me_decide(args: argparse.Namespace) -> int:
+    _interactive_guard("me decide", "decide")
     claude_env = detect_claude_environment(model=args.model)
     if not claude_env.ready:
         print(f"{FAIL} Claude 사용 불가", file=sys.stderr)
@@ -394,6 +427,7 @@ def cmd_daily(args: argparse.Namespace) -> int:
 
 def cmd_me_update_profile(args: argparse.Namespace) -> int:
     """raw → Profile/DecisionPattern 후보 → MemoryInbox PR."""
+    _interactive_guard("me update-profile", "update-profile")
     claude_env = detect_claude_environment(model=args.model)
     if not claude_env.ready:
         print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
@@ -434,6 +468,7 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
 
 def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     """회사 맞춤 이력서 자동 생성 → vault Drafts."""
+    _interactive_guard("me draft-resume", "resume")
     claude_env = detect_claude_environment(model=args.model)
     if not claude_env.ready:
         print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
@@ -467,6 +502,7 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
 
 def cmd_ask(args: argparse.Namespace) -> int:
     """자연어 질의 → RAG → Claude 답변."""
+    _interactive_guard("ask", "ask")
     claude_env = detect_claude_environment(model=args.model)
     if not claude_env.ready:
         print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)

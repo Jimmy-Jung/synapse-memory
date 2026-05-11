@@ -1,92 +1,83 @@
 # 사용 시나리오
 
-실제 사용 패턴별 예시.
+이 문서는 설치가 끝난 뒤 실제로 Synapse Memory를 어떻게 쓰는지 설명합니다. 명령 옵션 전체가 필요하면 [CLI 명령 레퍼런스](commands.md)를 보세요.
 
-## 시나리오 1. 일일 5분 워크플로
+> 각 시나리오는 **CLI** 와 **Slash** 두 가지 호출 방식을 함께 보여줍니다. 둘은 같은 백엔드를 호출하므로 결과가 동일합니다.
+>
+> | 시나리오 | CLI | Slash |
+> | --- | --- | --- |
+> | 일일 통합 | `synapse-memory daily` | `/synapse-daily` |
+> | 자연어 질의 | `synapse-memory ask "..."` | `/synapse-ask ...` |
+> | 시간순 회상 | `synapse-memory me what-did-i-think "..."` | `/synapse-recall ...` |
+> | 의사결정 | `synapse-memory me decide "..."` | `/synapse-decide ...` |
+> | 이력서 | `synapse-memory me draft-resume <slug>` | `/synapse-resume <slug>` |
+> | 환경 진단 | `synapse-memory doctor` | `/synapse-doctor` |
 
-매일 아침 한 줄로 vault 자동 갱신:
+## 1. 매일 5분 워크플로
+
+가장 자주 쓰는 명령입니다.
 
 ```bash
 synapse-memory daily --profile-facts-only
 ```
 
-내부 동작 (모두 incremental):
-1. **collect_claude_code** — 어제 추가된 Claude Code 활동 mirror (jsonl 새 줄만)
-2. **collect_obsidian** — 변경된 vault .md만 mirror (mtime+hash 비교)
-3. **classify** — 새 cluster만 분류 (haiku, ~$0.001/cluster)
-4. **generate** — 신규 project/company kind cluster의 Card 자동 생성 (sonnet)
-5. **index** — Card 변경분 벡터 DB upsert
-6. **update_profile** — 오늘 활동 분석 → MemoryInbox PR
+이 한 줄은 다음 일을 순서대로 처리합니다.
 
-평균 소요 시간:
-- 변경 없음 (모두 skip): ~30초
-- 새 cluster 1-2개: 2-3분
-- 큰 변경 (새 회사 추가 등): 5-10분
+1. Claude Code 활동 로그 수집
+2. Obsidian vault 변경분 수집
+3. 새 cluster 분류
+4. 필요한 Card 생성
+5. Card 검색 인덱스 갱신
+6. Profile 후보를 `MemoryInbox`에 작성
 
-비용 예측:
-- 일반 일: ~$0.10-0.30 (profile만)
-- 새 cluster 발견: +$0.30-1.00
+결과는 vault 안에 생깁니다.
 
-### 5분 검토
+```text
+90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md
+20_Reference/Projects/*.md
+20_Reference/Companies/*.md
+```
 
-`Profile-YYYY-MM-DD.md` 생성됨 (vault `90_System/AI/MemoryInbox/`).
+매일 할 일은 간단합니다.
 
-Obsidian에서 열어보고:
-- 좋은 ProfileFact → `90_System/AI/Profile.md`로 복사 (진실원본)
-- 좋은 DecisionPattern → `DecisionPatterns.md`로 복사
-- 불필요한 후보 → 그대로 두거나 삭제
+1. `MemoryInbox`의 새 파일을 열어 봅니다.
+2. 맞는 ProfileFact는 `90_System/AI/Profile.md`로 옮깁니다.
+3. 맞는 DecisionPattern은 `90_System/AI/DecisionPatterns.md`로 옮깁니다.
+4. 새 Card가 있으면 내용과 `status`를 확인합니다.
 
-draft Card도 함께 검토 (`20_Reference/Projects/*.md` 중 `status: draft`):
-- 내용 정확 → `status: active` 변경
-- 정보 보강 필요 → 직접 편집
-- 불필요 → 삭제
+처음에는 자동 생성 내용을 바로 믿기보다, Obsidian에서 한 번 검토한 것만 “진실원본”으로 올리는 흐름을 권장합니다.
 
-## 시나리오 2. 회사 맞춤 이력서
+## 2. 내 자료에 질문하기
 
-당근마켓 지원 준비:
+가장 자유로운 질문 endpoint입니다.
 
 ```bash
-# 1. (사전) Company Card가 비어있으면 채워두기
-synapse-memory card show danggeun --type company
-# 또는 vault에서 직접 편집
-
-# 2. 회사 키워드 + 매칭 ProjectCard로 이력서 자동 생성
-synapse-memory me draft-resume danggeun --model sonnet
+synapse-memory ask "iOS 개발에서 클린 아키텍처를 어떻게 적용했지?"
 ```
 
-출력:
-```
-✓ 이력서 생성: ~/Library/.../30_Creative/Drafts/Resume - 당근마켓 (2026-05).md
-  매칭 ProjectCard (6):
-    - dansim-ios
-    - 이력서-2026
-    - ai-symbiote
-    ...
+특정 종류의 Card만 검색할 수도 있습니다.
+
+```bash
+synapse-memory ask "어떤 회사에 관심 있었지?" --kind company
+synapse-memory ask "기술 스택 전반을 정리해줘" --kind project --top-k 8
 ```
 
-생성된 markdown:
-- yaml frontmatter (company_id, generated, based_on)
-- 한 줄 소개
-- 핵심 경험 (회사 키워드 매칭 우선)
-- 프로젝트 상세 (역할/문제/접근/영향/기술스택)
-- 기술 스택 (회사 키워드 우선)
+답변에는 근거가 된 Card ID가 함께 표시됩니다. 검색 결과가 빈약하면 먼저 Card를 검토하고 다시 인덱싱합니다.
 
-Obsidian에서 열어서 직접 편집·다듬은 뒤 docx 변환해 지원.
+```bash
+synapse-memory card list
+synapse-memory rag index --rebuild
+```
 
-## 시나리오 3. 세컨드 브레인 회상
+## 3. 과거의 내 생각 회상하기
 
-"X에 대해 내가 뭐라 했었지?"
+“내가 예전에 이 주제에 대해 뭐라고 생각했지?”에 가까운 기능입니다.
 
 ```bash
 synapse-memory me what-did-i-think "TCA 아키텍처"
 ```
 
-답변 패턴:
-- 첫 줄: 핵심 한 문장
-- 시점별 정리 (시간순)
-- 입장 변화 발견 시 명시 ("처음엔 X, 나중엔 Y")
-- 자료에 없는 부분 솔직히 ("장단점 비교 자료 없음")
-- 각 주장에 `[card_id]` 인용
+좋은 질문 예시는 다음과 같습니다.
 
 ```bash
 synapse-memory me what-did-i-think "메가스터디에서 한 일"
@@ -94,115 +85,110 @@ synapse-memory me what-did-i-think "AI 코딩 도구 사용 경험"
 synapse-memory me what-did-i-think "은퇴 자금 계획"
 ```
 
-## 시나리오 4. 의사결정 코파일럿 (★ 진짜 클론 모드)
+답변은 보통 핵심 요약, 시간순 변화, 근거 Card 인용으로 구성됩니다. 자료에 없는 내용은 없다고 말하도록 설계되어 있습니다.
 
-"나라면 어떻게 결정할까?"
+## 4. 의사결정 도움 받기
+
+`me decide`는 Profile과 DecisionPatterns가 채워질수록 가치가 커집니다.
 
 ```bash
-synapse-memory me decide "이력서를 sonnet으로 갈지 opus로 갈지"
+synapse-memory me decide "이력서를 sonnet으로 작성할까 opus로 작성할까?"
 ```
 
-출력에 `(Profile/Patterns 사용 ✓)` 표시되면 클론 모드 동작 — `vault 90_System/AI/Profile.md`와 `DecisionPatterns.md`를 진짜 인용.
+출력에 `(Profile/Patterns 사용 ✓)`가 보이면 승인된 Profile 자료를 사용한 것입니다. `(Profile 없음 - 일반 모드)`가 보이면 아직 판단 재료가 부족한 상태입니다.
 
-답변 형식:
-1. **추천**: 한 줄 결정
-2. **근거**: Profile/Patterns/Card 인용
-3. **대안**: 1-2개 + 트레이드오프
-4. **추가 고려**: 사용자 자체 판단할 부분
+Profile 자료를 만들려면 다음 흐름을 사용합니다.
 
 ```bash
-synapse-memory me decide "다음 분기 어디에 시간 투자?"
-synapse-memory me decide "이 PR을 리뷰할까 그냥 머지할까"
-synapse-memory me decide "이력서 보낼 회사 우선순위"
+synapse-memory me update-profile --facts-only
 ```
 
-**중요**: Profile.md / DecisionPatterns.md가 비어있으면 `(Profile 없음 — 일반 모드)` 메시지. 클론 가치 발생하려면:
-1. `synapse-memory me update-profile` 실행 → MemoryInbox PR
-2. 사용자가 검토 후 좋은 항목을 `90_System/AI/Profile.md`, `DecisionPatterns.md`에 복사
+그 뒤 `MemoryInbox`에 생성된 후보를 직접 검토해서 `Profile.md`나 `DecisionPatterns.md`로 옮깁니다.
 
-## 시나리오 5. 자연어 질의 (일반 ask)
+## 5. 회사 맞춤 이력서 만들기
 
-가장 자유로운 endpoint. 특정 카테고리 필터 가능:
+회사 Card와 프로젝트 Card를 바탕으로 이력서 초안을 만듭니다.
 
 ```bash
-# 일반
-synapse-memory ask "iOS 개발에서 클린 아키텍처 어떻게 적용했지?"
-
-# 회사만
-synapse-memory ask "어떤 회사 다녔지?" --kind company
-
-# 프로젝트만 + retrieval 넓히기
-synapse-memory ask "기술 스택 전반 정리" --kind project --top-k 8
-
-# haiku로 비용 절감
-synapse-memory ask "메가스터디 정보 요약" --model haiku
+synapse-memory me draft-resume danggeun --model sonnet
 ```
 
-## 시나리오 6. 진행 중 작업 추가
+출력 파일은 vault 안에 생성됩니다.
 
-새 프로젝트 시작했을 때:
+```text
+30_Creative/Drafts/Resume - <회사> (YYYY-MM).md
+```
+
+품질을 높이는 순서는 이렇습니다.
+
+1. `synapse-memory card show danggeun --type company`로 회사 Card를 확인합니다.
+2. 회사 키워드, 포지션, 원하는 경험이 비어 있으면 Obsidian에서 보강합니다.
+3. `synapse-memory rag index --rebuild`로 인덱스를 갱신합니다.
+4. `me draft-resume`을 다시 실행합니다.
+
+생성된 이력서는 초안입니다. 지원 전에 반드시 문장, 수치, 민감 정보를 직접 확인합니다.
+
+## 6. 새 프로젝트나 회사 추가하기
+
+빈 Card를 먼저 만들어 직접 채울 수 있습니다.
 
 ```bash
-# 빈 Card 생성 (Obsidian 편집기에서 채움)
 synapse-memory card new my-new-project "내 새 프로젝트"
-
-# 또는 vault에 직접 노트 N개 작성하고 daily가 자동 인식
-# (단 폴더 단위 cluster — 10_Active/<프로젝트명>/ 안에 노트 2개+)
-```
-
-새 회사 관심 추가:
-
-```bash
 synapse-memory card new acme "Acme Corp" --type company
-# 또는 vault 20_Reference/Companies/acme.md 직접 편집
 ```
 
-## 시나리오 7. NDA 회사 마스킹
+또는 vault에 새 노트를 작성하고 `daily`가 자동으로 cluster를 찾게 둘 수 있습니다. 프로젝트 폴더에 노트가 2개 이상 있으면 cluster로 잡힐 가능성이 높습니다.
 
-특정 회사·프로젝트 키워드를 모든 raw에서 강제 마스킹:
+## 7. NDA 키워드 마스킹하기
+
+외부 LLM에 절대 보내고 싶지 않은 회사명, 프로젝트명, 키워드는 redact-list에 추가합니다.
 
 ```bash
-synapse-memory redactlist add "프로젝트X"
 synapse-memory redactlist add "비공개사명"
+synapse-memory redactlist add "프로젝트X"
 synapse-memory redactlist show
 ```
 
-이후 모든 redact / ask / me 호출에서 `[REDACT_*]`로 자동 치환됩니다. Pass 1 단계에서 처리 (priority 200, 모든 다른 카테고리 우선).
+추가된 항목은 redaction의 가장 앞 단계에서 `[REDACT_*]` 형태로 치환됩니다.
 
-## 시나리오 8. 백필 / 재인덱싱
+## 8. 다시 만들기와 백필
 
-vault에 큰 변경 있어 처음부터:
+큰 변경 후 처음부터 다시 만들고 싶을 때만 사용합니다.
 
 ```bash
-# Card 모두 재생성 (--force 덮어쓰기, 비용 큼)
 synapse-memory card generate --force --kind all
-
-# RAG 재인덱싱
 synapse-memory rag index --rebuild
-
-# Pass 1+2 redaction 전체 백필 (오래 걸림)
-synapse-memory redact backfill claude-code --max-bytes-per-file 50000
 ```
 
-## 비용 예상 (참고)
+Claude Code raw 전체에 redaction을 다시 적용하려면 시간이 오래 걸릴 수 있습니다.
 
-| 명령 | 모델 | 평균 비용 |
-|---|---|---|
-| `daily` (변경 없음) | - | ~$0 |
-| `daily --profile-facts-only` | sonnet | ~$0.10-0.20 |
-| `daily` (풀, 새 cluster 3개) | sonnet | ~$1.0-1.5 |
-| `me draft-resume` | sonnet | ~$0.3/이력서 |
-| `ask "<짧은 질의>"` | sonnet | ~$0.10 |
-| `me decide` | sonnet | ~$0.15 |
-| `me what-did-i-think` | sonnet | ~$0.10-0.20 |
-| `me update-profile` | sonnet | ~$0.30-0.60 |
-| `cluster classify --resume` (5개) | haiku | ~$0.005 |
-| `card generate` (1개) | sonnet | ~$0.30 |
-| `rag index` | (로컬 임베딩) | $0 |
+```bash
+synapse-memory redact backfill claude-code --resume
+```
 
-Pro/Max 구독 안에서 사용량 카운트. API 별도 비용 없음.
+작게 시험하려면 제한을 둡니다.
 
-## 다음 단계
+```bash
+synapse-memory redact backfill claude-code --limit 3 --max-bytes-per-file 50000
+```
 
-- [아키텍처](architecture.md)
-- [명령 레퍼런스](commands.md)
+## 비용 감각
+
+로컬 작업인 collect, redaction Pass 1, RAG index 자체는 Claude 비용이 들지 않습니다. Claude Code CLI를 부르는 classify, card generate, ask, me 계열 명령은 사용량이 발생할 수 있습니다.
+
+| 작업 | 대략적인 비용 감각 |
+| --- | --- |
+| `daily`에서 변경이 거의 없음 | 거의 없음 |
+| `daily --profile-facts-only` | 낮음 |
+| `cluster classify --resume` | 낮음, 기본 haiku |
+| `card generate` | Card 수에 비례 |
+| `ask`, `me decide`, `me what-did-i-think` | 질문 길이와 검색 결과 수에 비례 |
+| `me draft-resume` | 이력서 1개 단위로 발생 |
+
+정확한 비용은 Claude Code의 모델, 구독, 내부 과금 정책에 따라 달라질 수 있습니다.
+
+## 다음에 볼 문서
+
+- [CLI 명령 레퍼런스](commands.md): 옵션 전체
+- [아키텍처](architecture.md): raw가 어떻게 보호되는지
+- [개발자 가이드](development.md): 새 기능을 추가하는 법

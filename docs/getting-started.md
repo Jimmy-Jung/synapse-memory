@@ -1,67 +1,90 @@
 # Getting Started
 
-처음 설치 + 첫 실행 가이드 (15-20분).
+설치부터 첫 질문까지 15-20분 정도 걸립니다. 이 문서는 “일단 동작하게 만들기”에 집중합니다.
 
-## 1. 시스템 요구사항 확인
+## 1. 준비물 확인
 
-| 항목 | 요구 |
-|---|---|
-| 하드웨어 | Apple Silicon (M1 이상) |
-| OS | macOS Tahoe 26.0+ |
-| Python | 3.11+ |
+| 항목 | 필요 조건 |
+| --- | --- |
+| Mac | Apple Silicon, M1 이상 |
+| OS | macOS Tahoe 26.0 이상 |
+| Python | 3.11 이상 |
+| Obsidian | vault 하나 이상 |
+| Claude Code | 로그인된 CLI |
 
-Intel Mac 또는 macOS 25 이하는 지원하지 않습니다 — `apfel`(Apple FoundationModels)이 동작하지 않습니다.
+Intel Mac이나 macOS 25 이하는 지원하지 않습니다. 로컬 redaction에 쓰는 `apfel`이 Apple FoundationModels를 사용하기 때문입니다.
 
-## 2. 외부 도구 설치
+## 2. 도구 설치
 
-### apfel — Apple FoundationModels CLI
-
-로컬 LLM (redaction Pass 2, Card 분류 등에 사용).
+`apfel`은 로컬 LLM 작업에 필요합니다.
 
 ```bash
 brew install Arthur-Ficial/tap/apfel
-apfel --version    # apfel v1.3.x 이상
+apfel --version
 ```
 
-### Claude Code CLI
-
-원격 LLM (Card 자동 생성, ask, me endpoints에 사용). 별도 API key 발급 불필요 — Pro/Max 구독 OAuth 그대로 사용.
-
-```bash
-# 이미 설치되어 있으면 skip
-claude --version
-```
-
-설치 안 되어 있으면 [docs.claude.com/claude-code](https://docs.claude.com/claude-code).
-
-### uv — Python 패키지 매니저
-
-표준 venv 대신 `uv` 사용 권장 (macOS Tahoe에서 system Python venv가 깨지는 케이스 회피).
+`uv`는 Python 환경과 패키지 설치에 사용합니다.
 
 ```bash
 brew install uv
 ```
 
-## 3. 저장소 복제 + 패키지 설치
+Claude Code CLI가 이미 설치되어 있고 로그인되어 있는지 확인합니다.
+
+```bash
+claude --version
+```
+
+설치가 필요하면 Claude Code 공식 문서의 설치 안내를 따릅니다.
+
+## 3. Synapse Memory 설치 — 두 모드 중 선택
 
 ```bash
 git clone https://github.com/Jimmy-Jung/synapse-memory.git
-cd synapse-memory/v2
+cd synapse-memory
+```
 
-# 격리된 Python 3.13 환경
+### 모드 A — 글로벌 CLI 설치 (권장)
+
+매일 사용자는 이 모드를 선택합니다. `synapse-memory` 바이너리가 사용자 PATH에 등록되어 어디서든 호출 가능 — Claude Code / Codex slash 명령도 이 모드를 가정합니다.
+
+```bash
+uv tool install --editable '.[rag]'
+synapse-memory --version
+```
+
+이후 venv activate가 필요하지 않습니다.
+
+### 모드 B — Venv 격리 설치 (개발 / 실험용)
+
+소스를 자주 고치거나 격리된 환경이 필요할 때만 선택합니다.
+
+```bash
 uv venv --python 3.13
 source .venv/bin/activate
-
-# 패키지 설치 (RAG 의존성 포함)
 uv pip install -e '.[rag]'
 ```
 
-**의존성 분량:**
-- 기본: `PyYAML`
-- `[rag]`: `chromadb` + `sentence-transformers` + `torch` + `rank-bm25` (~1.5GB)
-- `[dev]`: pytest + ruff + mypy
+> 이 모드에서는 매번 `source .venv/bin/activate`가 필요하며, slash 명령은 이 venv가 활성화된 셸에서 Claude Code/Codex를 실행해야 동작합니다.
 
-`[rag]` 미설치 시 `rag index/search`, `ask`, `me draft-resume/decide/what-did-i-think`가 동작하지 않습니다.
+`[rag]` 옵션은 검색과 질문 기능에 필요합니다. 첫 설치 때 `chromadb`, `sentence-transformers`, `torch`, `rank-bm25`가 함께 설치됩니다.
+
+개발까지 할 예정이면 다음도 설치합니다.
+
+```bash
+uv pip install -e '.[dev,rag]'
+```
+
+## 3a. Claude Code / Codex plugin 활성화
+
+이 repo는 Claude Code / Codex 양쪽 plugin manifest를 포함합니다 (`.claude-plugin/`, `.codex-plugin/`). plugin이 로드되면 6개 slash 명령이 자동 등록됩니다.
+
+```
+/synapse-ask <질의>        /synapse-recall <주제>     /synapse-decide <상황>
+/synapse-resume <회사>     /synapse-daily             /synapse-doctor
+```
+
+Claude Code 의 plugin 등록 방법은 Claude Code 공식 문서의 plugin / marketplace 가이드를 따릅니다. Codex 의 경우 `.codex-plugin/plugin.json` 을 marketplace 로 가리키면 됩니다. slash 호출은 모두 위 CLI를 subprocess 로 실행하므로 모드 A 글로벌 설치가 가장 안정적입니다.
 
 ## 4. 환경 진단
 
@@ -69,98 +92,103 @@ uv pip install -e '.[rag]'
 synapse-memory doctor
 ```
 
-기대 출력:
-```
-✓ apfel 설치: /opt/homebrew/bin/apfel
-  버전: apfel v1.3.3
-✓ Apple Silicon (arm64)
-✓ macOS 26.2 (Tahoe+)
-✓ L0 루트: /Users/jimmy/.synapse/private (0700)
-✓ Claude Code CLI: /Users/jimmy/.local/bin/claude [2.1.x] (model=sonnet)
+정상이라면 대략 이런 항목이 표시됩니다.
 
+```text
+✓ apfel 설치: /opt/homebrew/bin/apfel
+✓ Apple Silicon (arm64)
+✓ macOS 26.x (Tahoe+)
+✓ L0 루트: /Users/<you>/.synapse/private (0700)
+✓ Claude Code CLI: ... (model=sonnet)
 ✓ 준비 완료
 ```
 
-모든 항목 ✓이어야 진행 가능.
+여기서 실패가 나오면 먼저 그 항목을 해결합니다. 특히 `L0 루트`는 원본 로그가 저장되는 비공개 디렉터리라 권한이 `0700`이어야 합니다.
 
-## 5. 첫 데이터 수집
+## 5. Obsidian vault 경로 지정
 
-```bash
-# Claude Code 활동 로그
-synapse-memory collect claude-code
+기본 경로를 자동으로 찾지 못하면 환경변수로 vault를 지정합니다.
 
-# Obsidian vault (iCloud 동기 경로 기본)
-synapse-memory collect obsidian
-```
-
-다른 vault 경로면:
 ```bash
 export SYNAPSE_OBSIDIAN_VAULT="/path/to/your/vault"
+```
+
+이 값을 계속 쓰려면 사용하는 shell 설정 파일에 추가합니다.
+
+## 6. 첫 데이터 수집
+
+Claude Code 로그와 Obsidian vault를 `~/.synapse/private/raw/` 아래로 mirror합니다.
+
+```bash
+synapse-memory collect claude-code
 synapse-memory collect obsidian
 ```
 
-결과는 `~/.synapse/private/raw/` 아래에 mirror됩니다 (외부 노출 금지, 권한 0700).
+이 단계는 원본을 복사할 뿐입니다. 원본 raw 데이터는 외부 LLM에 보내지 않습니다.
 
-## 6. Card 자동 생성 (선택 — 비용 발생)
+## 7. Card 만들기
 
-vault에서 프로젝트 클러스터를 자동 식별하고 카드를 생성합니다.
+Card는 프로젝트와 회사를 요약한 Obsidian 문서입니다. 질문, 회상, 이력서 생성의 주요 재료가 됩니다.
 
 ```bash
-# 1. raw → 프로젝트 클러스터
 synapse-memory cluster scan
-
-# 2. cluster를 project/company/domain/life/skip 분류 (~$0.04, haiku)
 synapse-memory cluster classify --resume
-
-# 3. project/company kind만 Card 자동 생성 (~$1-3, sonnet)
 synapse-memory card generate
-
-# 4. 결과 vault 확인
-ls "$VAULT_PATH/20_Reference/Projects/"
-ls "$VAULT_PATH/20_Reference/Companies/"
 ```
 
-생성된 Card는 `status: draft`로 저장됩니다 — Obsidian에서 직접 검토·수정 후 `status: active`로 promote.
+생성된 Card는 vault의 아래 위치에 저장됩니다.
 
-## 7. RAG 인덱싱
+```text
+20_Reference/Projects/
+20_Reference/Companies/
+```
 
-Card를 벡터 DB에 임베드합니다 (bge-m3 ~2.3GB 첫 다운로드, 5분).
+처음 생성된 Card는 보통 `status: draft`입니다. Obsidian에서 내용을 검토하고 맞으면 `status: active`로 바꿉니다.
+
+## 8. 검색 인덱스 만들기
+
+Card를 로컬 벡터 DB에 넣습니다. 첫 실행 때 임베딩 모델을 다운로드하므로 몇 분 걸릴 수 있습니다.
 
 ```bash
 synapse-memory rag index --rebuild
 ```
 
-## 8. 첫 endpoint 사용
+## 9. 첫 질문하기
 
 ```bash
-# 세컨드 브레인
 synapse-memory ask "iOS 클린 아키텍처 어떻게 도입했지?"
+```
 
-# 의사결정 코파일럿
-synapse-memory me decide "다음 회사 지원할 때 어떤 프로젝트 강조?"
+이제 다음 기능도 사용할 수 있습니다.
 
-# 회사 맞춤 이력서
+```bash
+synapse-memory me what-did-i-think "TCA 아키텍처"
+synapse-memory me decide "다음 회사 지원할 때 어떤 프로젝트를 강조할까?"
 synapse-memory me draft-resume danggeun
 ```
 
-## 9. 일일 워크플로 등록 (선택)
+## 10. 매일 실행하기
 
-매일 5분 한 줄로:
+수동으로는 하루 한 번 이 명령을 실행하면 됩니다.
 
 ```bash
-synapse-memory daily
+synapse-memory daily --profile-facts-only
 ```
 
-`crontab -e`로 자동화:
+cron으로 돌릴 때는 저장소 루트에서 venv를 활성화한 뒤 실행합니다.
 
 ```cron
-# 매일 오전 8시
-0 8 * * * cd ~/Documents/GitHub/synapse-memory/v2 && source .venv/bin/activate && synapse-memory daily --profile-facts-only
+0 8 * * * cd ~/Documents/GitHub/synapse-memory && . .venv/bin/activate && synapse-memory daily --profile-facts-only
 ```
 
-## 다음 단계
+## 문제가 생기면
 
-- [사용 시나리오](usage.md) — 이력서 작성 / 의사결정 / 주제 회상
-- [아키텍처](architecture.md) — 설계 결정 + 데이터 흐름 + 보안
-- [명령 레퍼런스](commands.md) — 모든 CLI 옵션
-- [개발자 가이드](development.md) — 테스트 + 기여
+| 증상 | 먼저 확인할 것 |
+| --- | --- |
+| `apfel 미설치` | `brew install Arthur-Ficial/tap/apfel` |
+| `Claude Code CLI 미설치` | `claude --version`, Claude Code 로그인 상태 |
+| vault를 못 찾음 | `SYNAPSE_OBSIDIAN_VAULT` 값 |
+| 검색 결과 없음 | `synapse-memory rag index --rebuild` 실행 여부 |
+| Card가 없음 | `cluster classify`, `card generate` 실행 여부 |
+
+다음은 [사용 시나리오](usage.md)에서 실제 workflow별 예시를 보면 됩니다.

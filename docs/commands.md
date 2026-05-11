@@ -1,6 +1,73 @@
 # CLI 명령 레퍼런스
 
-## 환경 / 데이터 수집
+모든 명령은 저장소 환경을 설치한 뒤 `synapse-memory`로 실행합니다.
+
+```bash
+synapse-memory --version
+synapse-memory <command> --help
+```
+
+## Slash 명령 (Claude Code / Codex)
+
+이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 6개 slash 명령이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
+
+| Slash | 대응 CLI | 인자 |
+|---|---|---|
+| `/synapse-ask` | `synapse-memory ask "..."` | `<질의>` |
+| `/synapse-recall` | `synapse-memory me what-did-i-think "..."` | `<주제>` |
+| `/synapse-decide` | `synapse-memory me decide "..."` | `<상황>` |
+| `/synapse-resume` | `synapse-memory me draft-resume <slug>` | `<회사 slug>` |
+| `/synapse-daily` | `synapse-memory daily [flags]` | (선택) `--profile-facts-only` 등 |
+| `/synapse-doctor` | `synapse-memory doctor` | 없음 |
+
+> slash 명령이 CLI를 호출하므로, **`synapse-memory` 바이너리가 PATH에 있어야 합니다**. `uv tool install --editable '.[rag]'` 로 글로벌 설치 권장.
+
+활성화 방법은 [getting-started.md](getting-started.md) 참고. plugin 메타데이터는 `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json` 에 정의되어 있습니다.
+
+### 대화형 endpoint TTY 가드
+
+`ask`, `me what-did-i-think`, `me decide`, `me draft-resume`, `me update-profile` 다섯 endpoint 는 사용자가 *터미널에서 직접* 호출했을 때 다음과 같이 동작합니다:
+
+```
+$ synapse-memory ask "iOS 클린 아키텍처 어떻게 도입했지?"
+⚠  ask 는 LLM 대화 컨텍스트에서 호출할 때 가장 자연스럽게 동작합니다.
+   Claude Code / Codex 안에서 `/synapse-ask` 슬래시 명령으로 호출하면
+   결과가 대화에 인라인되고 후속 질문에 컨텍스트가 유지됩니다.
+   계속 진행하려면 3초 기다리세요. 즉시 우회: SYNAPSE_FROM_AGENT=1
+[3초 대기]
+[정상 결과 출력]
+```
+
+| 조건 | 동작 |
+|---|---|
+| TTY + env 없음 (= 사람의 직접 호출) | 3초 안내 후 진행 |
+| stdout 이 pipe (= 자동화 / 다른 도구) | 즉시 진행, 안내 없음 |
+| `SYNAPSE_FROM_AGENT=1` env | 즉시 진행, 안내 없음 |
+
+slash command markdown 은 자동으로 `SYNAPSE_FROM_AGENT=1` 을 설정합니다. 배치 endpoint(`daily`, `doctor`, ...) 는 이 가드를 적용하지 않습니다.
+
+## 자주 쓰는 순서
+
+처음 실행:
+
+```bash
+synapse-memory doctor
+synapse-memory collect claude-code
+synapse-memory collect obsidian
+synapse-memory cluster scan
+synapse-memory cluster classify --resume
+synapse-memory card generate
+synapse-memory rag index --rebuild
+synapse-memory ask "..."
+```
+
+매일 실행:
+
+```bash
+synapse-memory daily --profile-facts-only
+```
+
+## 환경 진단
 
 ### `doctor`
 
@@ -8,59 +75,63 @@
 synapse-memory doctor
 ```
 
-환경 진단 + L0 setup. 매 호출마다:
-- apfel 설치 + 버전
-- Apple Silicon (arm64)
-- macOS 26+ (Tahoe)
-- L0 디렉토리 0700 강제
-- Claude Code CLI 설치 + 버전
+apfel, Apple Silicon, macOS 버전, L0 디렉터리 권한, Claude Code CLI 상태를 확인합니다. 준비가 끝나면 종료 코드 `0`, 문제가 있으면 `1`을 반환합니다.
 
-종료 코드: 모두 ✓면 0, 미충족이면 1.
+## 데이터 수집
 
 ### `collect claude-code`
 
 ```bash
 synapse-memory collect claude-code
-  --src PATH     # ~/.claude (기본)
-  --dst PATH     # ~/.synapse/private/raw/claude-code (기본)
+synapse-memory collect claude-code --src ~/.claude --dst ~/.synapse/private/raw/claude-code
 ```
 
-`~/.claude/projects/<slug>/<id>.jsonl` + `~/.claude/history.jsonl`을 L0로 incremental mirror.
+Claude Code의 `projects/*.jsonl`과 `history.jsonl`을 L0 raw 영역으로 증분 mirror합니다.
 
-특징:
-- jsonl tail-safe (partial line 보호)
-- offset 메타파일로 재시작 idempotent
-- rotation 감지 시 처음부터 재mirror
+주요 특징:
+
+- JSONL tail-safe 처리
+- offset 메타파일로 재실행 가능
+- log rotation 감지 시 다시 mirror
 
 ### `collect obsidian`
 
 ```bash
 synapse-memory collect obsidian
-  --vault PATH   # iCloud Obsidian 경로 (기본)
-  --dst PATH     # ~/.synapse/private/raw/obsidian (기본)
+synapse-memory collect obsidian --vault "/path/to/vault"
 ```
 
-`SYNAPSE_OBSIDIAN_VAULT` 환경변수로도 vault 위치 지정 가능.
+Obsidian vault의 Markdown 파일을 L0 raw 영역으로 증분 mirror합니다.
 
-특징:
-- mtime + size + sha256 3-tier 변경 감지
-- 90_System/AI, .obsidian, .trash, .sync-conflict 자동 제외
-- 한국어 파일명 (NFD/NFC) 정상 처리
+vault 경로는 환경변수로도 지정할 수 있습니다.
 
-## Redaction
+```bash
+export SYNAPSE_OBSIDIAN_VAULT="/path/to/vault"
+```
+
+기본 제외 대상은 `90_System/AI`, `.obsidian`, `.trash`, `.sync-conflict`입니다.
+
+## Redaction과 평가
 
 ### `redact backfill claude-code`
 
 ```bash
 synapse-memory redact backfill claude-code
-  --limit N             # 처리할 파일 수
-  --max-bytes-per-file N  # 파일당 처리 최대 바이트 (샘플링용)
-  --resume              # 이미 redact된 파일 skip
+synapse-memory redact backfill claude-code --resume
+synapse-memory redact backfill claude-code --limit 3 --max-bytes-per-file 50000
 ```
 
-L0 raw 전체에 Pass 1+2 적용 → `redacted/` 저장. 1 파일당 분 단위 소요.
+L0의 Claude Code raw에 Pass 1, Pass 2 redaction을 적용하고 `~/.synapse/private/redacted/` 아래에 저장합니다.
 
-### `redactlist show / add / remove`
+옵션:
+
+| 옵션 | 설명 |
+| --- | --- |
+| `--limit N` | 처리할 파일 수 제한 |
+| `--max-bytes-per-file N` | 파일당 처리할 최대 바이트 |
+| `--resume` | 이미 처리된 파일 건너뛰기 |
+
+### `redactlist`
 
 ```bash
 synapse-memory redactlist show
@@ -68,226 +139,188 @@ synapse-memory redactlist add "프로젝트X"
 synapse-memory redactlist remove "프로젝트X"
 ```
 
-NDA 회사·프로젝트 키워드를 모든 raw에서 강제 `[REDACT_*]` 마스킹. Pass 1 단계에 동적 합류 (priority 200).
+NDA 회사명, 프로젝트명, 민감 키워드를 강제로 마스킹하는 목록을 관리합니다. 항목은 대소문자를 구분하지 않고 substring으로 매칭됩니다.
 
 ### `eval golden`
 
 ```bash
 synapse-memory eval golden
-  --set PATH           # 골든셋 JSON 파일 (기본 tests/golden/pii_synthetic.json)
-  --show-failures N    # 실패 sample N개 출력 (0=숨김)
+synapse-memory eval golden --show-failures 0
+synapse-memory eval golden --set tests/golden/pii_synthetic.json
 ```
 
-골든셋 P/R/F1 측정. 현재 골든셋: 58 samples, OVERALL F1=0.92.
+PII redaction 골든셋의 precision, recall, F1을 측정합니다. 실제 apfel 호출이 필요합니다.
 
-## Card / Cluster
+## Cluster와 Card
 
 ### `cluster scan`
 
 ```bash
 synapse-memory cluster scan
-  --show-details N   # 상위 N 클러스터 상세 출력 (0=요약만)
+synapse-memory cluster scan --show-details 0
 ```
 
-raw에서 프로젝트 클러스터 식별. Claude Code cwd + vault 폴더 segment 기반.
+수집된 raw에서 같은 프로젝트나 주제로 보이는 묶음을 찾습니다. Claude Code의 cwd와 vault 폴더 구조를 함께 사용합니다.
 
 ### `cluster classify`
 
 ```bash
-synapse-memory cluster classify
-  --limit N
-  --resume        # 이미 분류된 cluster skip
-  --model MODEL   # haiku (기본) / sonnet / opus
+synapse-memory cluster classify --resume
+synapse-memory cluster classify --limit 10 --model haiku
 ```
 
-각 cluster → `project | company | domain | life | skip` 분류. haiku로 ~$0.001/cluster.
-
-결과: `~/.synapse/private/clusters/classifications.json`.
+cluster를 `project`, `company`, `domain`, `life`, `skip` 중 하나로 분류하고 결과를 저장합니다.
 
 ### `card list`
 
 ```bash
 synapse-memory card list
-  --type project|company|all   # 기본 all
+synapse-memory card list --type project
+synapse-memory card list --type company
 ```
 
-vault `20_Reference/{Projects,Companies}/`에 있는 Card 목록.
+vault의 `20_Reference/Projects/`, `20_Reference/Companies/`에 있는 Card 목록을 출력합니다.
 
-### `card show <id>`
+### `card show`
 
 ```bash
 synapse-memory card show dansim-ios
-synapse-memory card show 메가스터디 --type company
+synapse-memory card show danggeun --type company
 ```
 
-Card 내용 출력 (yaml frontmatter + body).
+Card의 frontmatter와 본문을 출력합니다.
 
-### `card new <id> <name>`
+### `card new`
 
 ```bash
 synapse-memory card new my-project "내 새 프로젝트"
 synapse-memory card new acme "Acme Corp" --type company
-synapse-memory card new x "X" --force   # 기존 덮어쓰기
+synapse-memory card new acme "Acme Corp" --type company --force
 ```
 
-빈 Card 템플릿 생성 (사용자가 vault에서 편집).
+빈 Card 템플릿을 vault에 생성합니다. `--force`는 기존 파일을 덮어씁니다.
 
 ### `card generate`
 
 ```bash
 synapse-memory card generate
-  --kind project|company|all   # 기본 all
-  --limit N
-  --model sonnet               # sonnet 권장 (yaml 안정성)
-  --force                      # 기존 Card 덮어쓰기
+synapse-memory card generate --kind project --limit 5
+synapse-memory card generate --kind all --model sonnet --force
 ```
 
-classify된 project/company cluster를 Claude로 Card 자동 생성. ~$0.3/Card.
+분류된 project/company cluster를 바탕으로 Card 초안을 생성합니다. 기존 Card는 기본적으로 건너뜁니다.
 
-## RAG / 검색
+## RAG 검색
 
 ### `rag index`
 
 ```bash
 synapse-memory rag index
-  --rebuild   # collection 비우고 처음부터
+synapse-memory rag index --rebuild
 ```
 
-모든 Card를 bge-m3로 임베드 → ChromaDB upsert. 첫 호출 시 bge-m3 ~2.3GB 다운로드.
+Card를 임베딩해서 ChromaDB에 저장합니다. `--rebuild`는 기존 collection을 비우고 다시 만듭니다.
 
 ### `rag search`
 
 ```bash
 synapse-memory rag search "iOS retention 회고"
-  --top-k 5
-  --show-snippet
+synapse-memory rag search "이력서 프로젝트" --top-k 8 --show-snippet
 ```
 
-dense vector 검색 (cosine 유사도). 거리 낮을수록 가까움.
+검색 결과 Card를 거리와 함께 출력합니다. 거리가 작을수록 query와 가깝습니다.
 
-## Endpoint (사용자 가치)
+## 사용자 endpoint
 
 ### `ask`
 
 ```bash
-synapse-memory ask "내가 클린 아키텍처 어떻게 도입했지?"
-  --top-k 5
-  --model sonnet
-  --kind project|company   # 특정 종류만 retrieve
+synapse-memory ask "내가 클린 아키텍처를 어떻게 도입했지?"
+synapse-memory ask "어떤 회사에 관심 있었지?" --kind company
+synapse-memory ask "기술 스택 정리" --top-k 8 --model sonnet
 ```
 
-자연어 질의 → RAG retrieve + Claude 합성 답변. 출처 인용 `[card_id]`.
-
-비용: sonnet ~$0.10/call, haiku ~$0.03/call.
+자연어 질문을 받고, 관련 Card를 검색한 뒤 Claude로 답변을 합성합니다.
 
 ### `me draft-resume`
 
 ```bash
 synapse-memory me draft-resume danggeun
-  --top-k 6      # 매칭할 ProjectCard 수
-  --model sonnet
+synapse-memory me draft-resume danggeun --top-k 6 --model sonnet
 ```
 
-CompanyCard + 매칭 ProjectCard들 → 회사 맞춤 이력서 → vault `30_Creative/Drafts/Resume - <회사> (YYYY-MM).md`.
-
-비용: sonnet ~$0.3/이력서.
+CompanyCard와 매칭되는 ProjectCard를 바탕으로 회사 맞춤 이력서 초안을 vault에 작성합니다.
 
 ### `me what-did-i-think`
 
 ```bash
 synapse-memory me what-did-i-think "TCA 아키텍처"
-  --top-k 8
-  --model sonnet
+synapse-memory me what-did-i-think "AI 코딩 도구 사용 경험" --top-k 8
 ```
 
-주제에 대한 과거 사고 회상 (시간순 / 입장별 정리).
+특정 주제에 대해 과거 자료를 검색하고, 시간순 변화와 현재 입장을 요약합니다.
 
 ### `me decide`
 
 ```bash
-synapse-memory me decide "이력서를 sonnet으로 갈지 opus로 갈지"
-  --top-k 6
-  --model sonnet
+synapse-memory me decide "다음 분기에 어디에 시간을 투자할까?"
 ```
 
-vault `90_System/AI/Profile.md` + `DecisionPatterns.md` + RAG search → 의사결정 추천.
-
-출력에 `(Profile/Patterns 사용 ✓)` 보이면 진짜 클론 모드 동작.
-`(Profile 없음 — 일반 모드)`면 `me update-profile` 먼저 + 검토 후 진실원본 promote 필요.
+Profile, DecisionPatterns, RAG 검색 결과를 함께 사용해 의사결정 초안을 제안합니다.
 
 ### `me update-profile`
 
 ```bash
 synapse-memory me update-profile
-  --sample-lines 200   # history.jsonl 마지막 N 줄
-  --model sonnet
-  --facts-only         # DecisionPattern 추출 skip (비용 절감)
+synapse-memory me update-profile --facts-only --sample-lines 200
 ```
 
-L0 raw → Claude 분석 → `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` PR 생성.
+최근 raw 활동에서 ProfileFact와 DecisionPattern 후보를 추출해 `90_System/AI/MemoryInbox/`에 작성합니다.
 
-검토 후 사용자가 좋은 항목을 `Profile.md`, `DecisionPatterns.md`에 복사.
-
-## 일일 통합
+## 일일 통합 파이프라인
 
 ### `daily`
 
 ```bash
 synapse-memory daily
-  --only STEP1,STEP2          # 특정 단계만
-  --skip STEP                  # 제외할 단계
-  --classify-model haiku
-  --generate-model sonnet
-  --profile-model sonnet
-  --profile-sample-lines 200
-  --profile-facts-only         # DecisionPattern skip
-  --dry-run                    # 단계만 출력, 실행 X
+synapse-memory daily --profile-facts-only
+synapse-memory daily --dry-run
 ```
 
-통합 파이프라인. 가능한 단계:
-- `collect_claude_code`
-- `collect_obsidian`
-- `classify`
-- `generate`
-- `index`
-- `update_profile`
+가능한 단계는 다음과 같습니다.
 
-매일 5분 워크플로 권장:
+```text
+collect_claude_code
+collect_obsidian
+classify
+generate
+index
+update_profile
+```
+
+특정 단계만 실행하거나 제외할 수 있습니다.
 
 ```bash
-synapse-memory daily --profile-facts-only
+synapse-memory daily --only collect_obsidian,index
+synapse-memory daily --skip update_profile
 ```
 
-비용 절감 (모두 haiku):
+모델 관련 옵션:
+
 ```bash
 synapse-memory daily \
   --classify-model haiku \
-  --generate-model haiku \
-  --profile-model haiku \
-  --profile-facts-only
+  --generate-model sonnet \
+  --profile-model sonnet \
+  --profile-sample-lines 200
 ```
 
-## 종료 코드
+## 빠른 문제 해결
 
-| 코드 | 의미 |
-|---|---|
-| 0 | 성공 |
-| 1 | 실행 중 일부 실패 (continued) |
-| 2 | 환경 미충족 (사전 조건 안 됨) |
-
-## 환경변수
-
-| 변수 | 용도 |
-|---|---|
-| `SYNAPSE_L0_ROOT` | L0 위치 override (기본 `~/.synapse/private`) |
-| `SYNAPSE_OBSIDIAN_VAULT` | vault 경로 override |
-| `HF_TOKEN` | HuggingFace 토큰 (bge-m3 다운로드 속도) |
-
-## 빈 출력 시 디버깅
-
-```bash
-synapse-memory doctor                          # 환경 확인
-ls ~/.synapse/private/raw/                     # 수집된 게 있는지
-ls $VAULT/20_Reference/Projects/               # Card 있는지
-python -c "from synapse_memory.rag import open_vector_store; print(open_vector_store().count())"
-```
+| 상황 | 해결 |
+| --- | --- |
+| `결과 없음` | `synapse-memory rag index --rebuild` |
+| `분류 결과 없음` | `synapse-memory cluster classify --resume` |
+| vault 경로 없음 | `SYNAPSE_OBSIDIAN_VAULT` 또는 `--vault` 지정 |
+| Claude 사용 불가 | `claude --version`, 로그인 상태 확인 |
+| apfel 사용 불가 | `synapse-memory doctor`, apfel 설치 확인 |
