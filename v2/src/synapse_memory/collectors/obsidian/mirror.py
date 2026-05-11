@@ -1,0 +1,272 @@
+"""Obsidian vault → L0 mirror.
+
+핵심 차이 (Claude Code mirror 대비)
+-----------------------------------
+- 단위가 jsonl 라인이 아니라 .md **파일 전체**.
+- partial-line 안전성 불필요 — md는 atomic 저장.
+- 변경 감지: mtime + size + sha256 3-tier (가장 싼 것부터).
+- 삭제된 파일은 mirror에 그대로 남겨둠 (실수 보호 — W2 후 정책 재검토).
+
+vault 경로
+----------
+``~/Library/Mobile Documents/iCloud~md~obsidian/Documents`` 가 기본.
+``SYNAPSE_OBSIDIAN_VAULT`` 환경변수로 override 가능.
+
+저자: JunyoungJung <joony300@gmail.com>
+작성일: 2026-05-10
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+
+from synapse_memory.storage.l0 import (
+    L0_FILE_MODE,
+    ensure_l0_root_secure,
+    ensure_secure_dir,
+    l0_root,
+)
+
+DEFAULT_VAULT_PATH = (
+    Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents"
+)
+ENV_VAR_VAULT = "SYNAPSE_OBSIDIAN_VAULT"
+SUBPATH = Path("raw") / "obsidian"
+META_DIR = ".meta"
+STATES_FILE = "states.json"
+
+# vault CLAUDE.md 원칙: AI 메모리는 mirror 안 함 (순환 방지),
+# Attachments/binary와 마이그레이션 스냅샷도 제외.
+# plugin config 디렉토리(.claude, .codex 등)도 PII 가치 낮음 + 토큰 가능성.
+EXCLUDED_DIRS: tuple[str, ...] = (
+    "90_System/AI",
+    "90_System/Attachments",
+    "90_System/_migration",
+    ".obsidian",
+    ".trash",
+    ".claude",
+    ".codex",
+)
+# 부분 매칭 — 파일 경로에 포함되면 제외.
+# iCloud sync-conflict 파일 패턴 — ``Note (sync-conflict 2026-...)`` 또는
+# ``.sync-conflict-...`` 모두 커버하기 위해 점 없이 매칭.
+EXCLUDED_SUBSTRINGS: tuple[str, ...] = (
+    "sync-conflict",
+)
+
+INCLUDED_EXT = ".md"
+
+
+# ---------------------------------------------------------------------------
+# 데이터
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FileState:
+    """이전 mirror 시점의 파일 메타. 변경 감지용."""
+
+    rel_path: str
+    mtime: float
+    size: int
+    sha256: str
+
+
+@dataclass
+class CollectStats:
+    files_scanned: int = 0
+    files_mirrored: int = 0     # 실제 copy된 파일
+    files_unchanged: int = 0    # mtime/size 또는 hash 일치로 skip
+    bytes_added: int = 0
+    errors: list[tuple[Path, str]] = field(default_factory=list)
+
+    def summary(self) -> str:
+        return (
+            f"scanned={self.files_scanned} mirrored={self.files_mirrored} "
+            f"unchanged={self.files_unchanged} bytes+={self.bytes_added} "
+            f"errors={len(self.errors)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 유틸
+# ---------------------------------------------------------------------------
+
+
+def get_vault_path() -> Path:
+    """env var 우선, 없으면 기본 iCloud Obsidian 경로."""
+    override = os.environ.get(ENV_VAR_VAULT)
+    if override:
+        return Path(override).expanduser().resolve()
+    return DEFAULT_VAULT_PATH
+
+
+def _is_excluded(rel_path: Path) -> bool:
+    """exclude 패턴 매칭."""
+    rel_str = rel_path.as_posix()
+    for ex in EXCLUDED_DIRS:
+        if rel_str == ex or rel_str.startswith(ex + "/"):
+            return True
+    for sub in EXCLUDED_SUBSTRINGS:
+        if sub in rel_str:
+            return True
+    return False
+
+
+def _file_sha256(path: Path) -> str:
+    """파일 sha256 — 16자 prefix만 (전체는 과도, 충돌 거의 없음)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()[:16]
+
+
+def _enumerate_md(vault: Path) -> list[Path]:
+    """vault 안 .md 파일 목록 (exclude 적용)."""
+    targets: list[Path] = []
+    for p in sorted(vault.rglob(f"*{INCLUDED_EXT}")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(vault)
+        if _is_excluded(rel):
+            continue
+        targets.append(p)
+    return targets
+
+
+# ---------------------------------------------------------------------------
+# state 로드/저장
+# ---------------------------------------------------------------------------
+
+
+def _load_states(meta_path: Path) -> dict[str, FileState]:
+    if not meta_path.exists():
+        return {}
+    try:
+        raw = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    states: dict[str, FileState] = {}
+    for item in raw:
+        try:
+            s = FileState(
+                rel_path=str(item["rel_path"]),
+                mtime=float(item["mtime"]),
+                size=int(item["size"]),
+                sha256=str(item["sha256"]),
+            )
+            states[s.rel_path] = s
+        except (KeyError, TypeError, ValueError):
+            continue
+    return states
+
+
+def _save_states_atomic(meta_path: Path, states: dict[str, FileState]) -> None:
+    ensure_secure_dir(meta_path.parent)
+    payload = json.dumps(
+        [asdict(s) for s in states.values()],
+        ensure_ascii=False,
+        indent=2,
+        sort_keys=True,
+    )
+    tmp = meta_path.with_suffix(meta_path.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(payload)
+        f.flush()
+        os.fsync(f.fileno())
+    try:
+        os.chmod(tmp, L0_FILE_MODE)
+    except OSError:
+        pass
+    os.replace(tmp, meta_path)
+
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+
+def collect_obsidian(
+    *,
+    vault_path: Path | None = None,
+    dst_root: Path | None = None,
+) -> CollectStats:
+    """Obsidian vault → L0 mirror (incremental).
+
+    Args:
+        vault_path: vault 루트 (기본: ``get_vault_path()``).
+        dst_root: L0 mirror 루트 (기본: ``<l0_root>/raw/obsidian``).
+
+    Returns:
+        CollectStats — 처리 통계.
+    """
+    vault = (vault_path or get_vault_path()).expanduser().resolve()
+    dst = (dst_root or (l0_root() / SUBPATH)).expanduser().resolve()
+
+    stats = CollectStats()
+
+    if not vault.is_dir():
+        stats.errors.append((vault, f"vault 없음: {vault}"))
+        return stats
+
+    # L0 루트 보호
+    if dst.is_relative_to(l0_root().expanduser().resolve()):
+        ensure_l0_root_secure()
+    ensure_secure_dir(dst)
+    ensure_secure_dir(dst / META_DIR)
+
+    meta_path = dst / META_DIR / STATES_FILE
+    prev_states = _load_states(meta_path)
+    new_states: dict[str, FileState] = {}
+
+    for src in _enumerate_md(vault):
+        stats.files_scanned += 1
+        try:
+            rel = src.relative_to(vault)
+            rel_key = rel.as_posix()
+            file_stat = src.stat()
+            mtime = file_stat.st_mtime
+            size = file_stat.st_size
+
+            prev = prev_states.get(rel_key)
+
+            # Tier 1: mtime + size 일치 → 변경 없음 (가장 흔한 경로)
+            if prev and prev.mtime == mtime and prev.size == size:
+                new_states[rel_key] = prev
+                stats.files_unchanged += 1
+                continue
+
+            # Tier 2: hash 비교 (mtime만 바뀐 케이스 — touch 등)
+            sha = _file_sha256(src)
+            if prev and prev.sha256 == sha:
+                new_states[rel_key] = FileState(
+                    rel_path=rel_key, mtime=mtime, size=size, sha256=sha
+                )
+                stats.files_unchanged += 1
+                continue
+
+            # Tier 3: 진짜 변경 또는 신규 — copy
+            dst_file = dst / rel
+            ensure_secure_dir(dst_file.parent)
+            content = src.read_bytes()
+            dst_file.write_bytes(content)
+            try:
+                os.chmod(dst_file, L0_FILE_MODE)
+            except OSError:
+                pass
+
+            stats.files_mirrored += 1
+            stats.bytes_added += size
+            new_states[rel_key] = FileState(
+                rel_path=rel_key, mtime=mtime, size=size, sha256=sha
+            )
+        except OSError as exc:
+            stats.errors.append((src, str(exc)))
+
+    _save_states_atomic(meta_path, new_states)
+    return stats
