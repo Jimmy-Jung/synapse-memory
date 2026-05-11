@@ -1,0 +1,132 @@
+"""me what-did-i-think / decide 테스트.
+
+저자: JunyoungJung <joony300@gmail.com>
+작성일: 2026-05-10
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+import synapse_memory.endpoints.me as me_mod
+from synapse_memory.endpoints.me import (
+    DecideResult,
+    WhatDidIThinkResult,
+    _load_profile_text,
+    decide,
+    what_did_i_think,
+)
+from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.rag.vector_store import VectorRecord
+
+
+def _claude_env() -> ClaudeEnvironment:
+    return ClaudeEnvironment(claude_path="/x/claude", claude_version="2.1", model="sonnet")
+
+
+def _rec(cid: str, doc: str, kind: str = "card_project") -> VectorRecord:
+    return VectorRecord(
+        id=f"{kind}:{cid}",
+        document=doc,
+        embedding=[0.0],
+        metadata={"source_kind": kind, "card_id": cid, "display_name": cid},
+    )
+
+
+class TestWhatDidIThink:
+    def test_returns_answer_with_sources(self) -> None:
+        store = MagicMock()
+        store.query.return_value = [
+            (_rec("dansim", "# 단심\n## 회고\nTCA 도입"), 0.3),
+            (_rec("이력서-2026", "# 클린 아키텍처 도입"), 0.4),
+        ]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api, "complete",
+            return_value="TCA를 도입했습니다 [dansim].",
+        ):
+            result = what_did_i_think(
+                "TCA 아키텍처", store=store, claude_env=_claude_env()
+            )
+
+        assert isinstance(result, WhatDidIThinkResult)
+        assert "TCA" in result.answer
+        assert result.source_ids == ["dansim", "이력서-2026"]
+
+    def test_empty_topic_raises(self) -> None:
+        with pytest.raises(ValueError):
+            what_did_i_think("", store=MagicMock(), claude_env=_claude_env())
+
+    def test_no_results_returns_help(self) -> None:
+        store = MagicMock()
+        store.query.return_value = []
+        with patch.object(me_mod, "embed_query", return_value=[0.0]):
+            result = what_did_i_think("x", store=store, claude_env=_claude_env())
+        assert "rag index" in result.answer.lower()
+
+
+class TestDecide:
+    def test_without_profile(self, tmp_path: Path) -> None:
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api, "complete", return_value="추천: A"
+        ):
+            result = decide(
+                "어떤 회사 지원?",
+                store=store,
+                claude_env=_claude_env(),
+                vault_path=tmp_path,
+            )
+        assert result.profile_used is False
+        assert "추천" in result.answer
+        assert result.source_ids == ["x"]
+
+    def test_with_profile(self, tmp_path: Path) -> None:
+        # Profile.md 생성
+        ai_dir = tmp_path / "90_System" / "AI"
+        ai_dir.mkdir(parents=True)
+        (ai_dir / "Profile.md").write_text(
+            "# Profile\n- 한국어 응답 선호\n- 단계별 작업", encoding="utf-8"
+        )
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X"), 0.4)]
+
+        captured_prompt: list[str] = []
+
+        def fake_complete(prompt, **kwargs):
+            captured_prompt.append(prompt)
+            return "추천"
+
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api, "complete", side_effect=fake_complete
+        ):
+            result = decide(
+                "결정",
+                store=store,
+                claude_env=_claude_env(),
+                vault_path=tmp_path,
+            )
+        assert result.profile_used is True
+        assert "한국어 응답 선호" in captured_prompt[0]
+
+    def test_empty_situation_raises(self) -> None:
+        with pytest.raises(ValueError):
+            decide("", store=MagicMock(), claude_env=_claude_env())
+
+
+class TestLoadProfileText:
+    def test_missing_returns_empty(self, tmp_path: Path) -> None:
+        assert _load_profile_text(tmp_path) == ""
+
+    def test_loads_multiple_files(self, tmp_path: Path) -> None:
+        ai_dir = tmp_path / "90_System" / "AI"
+        ai_dir.mkdir(parents=True)
+        (ai_dir / "Profile.md").write_text("# Profile\nA", encoding="utf-8")
+        (ai_dir / "DecisionPatterns.md").write_text("# Patterns\nB", encoding="utf-8")
+        text = _load_profile_text(tmp_path)
+        assert "Profile" in text
+        assert "Patterns" in text
+        assert "A" in text and "B" in text
