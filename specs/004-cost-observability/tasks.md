@@ -17,9 +17,9 @@
 
 **Purpose**: Create cost observability scaffolding without behavior.
 
-- [ ] T001 [P] Create cost package exports in `src/synapse_memory/cost/__init__.py`
-- [ ] T002 [P] Create empty test modules `tests/test_cost_events.py`, `tests/test_cost_summary.py`, `tests/test_cost_cli.py`
-- [ ] T003 [P] Create slash command doc shell in `commands/synapse-cost.md`
+- [X] T001 [P] Create cost package exports in `src/synapse_memory/cost/__init__.py`
+- [X] T002 [P] Create empty test modules `tests/test_cost_events.py`, `tests/test_cost_summary.py`, `tests/test_cost_cli.py`
+- [X] T003 [P] Create slash command doc shell in `commands/synapse-cost.md`
 
 ---
 
@@ -27,13 +27,13 @@
 
 **Purpose**: Core cost event model, storage, and pricing helpers that all user stories depend on.
 
-- [ ] T004 [P] Write failing CostEvent validation/no-raw-fields tests in `tests/test_cost_events.py`
-- [ ] T005 [P] Write failing append-only/recovery/permission tests in `tests/test_cost_events.py`
-- [ ] T006 Implement CostEvent dataclass, event id generation, and validation in `src/synapse_memory/cost/events.py`
-- [ ] T007 Implement append-only JSONL writer, loader, and corrupt-tail recovery in `src/synapse_memory/cost/events.py`
-- [ ] T008 [P] Write failing pricing fallback tests for provider/local/unknown models in `tests/test_cost_events.py`
-- [ ] T009 Implement deterministic pricing helpers in `src/synapse_memory/cost/pricing.py`
-- [ ] T010 Run foundational tests with `python3 -m pytest tests/test_cost_events.py -q`
+- [X] T004 [P] Write failing CostEvent validation/no-raw-fields tests in `tests/test_cost_events.py`
+- [X] T005 [P] Write failing append-only/recovery/permission tests in `tests/test_cost_events.py`
+- [X] T006 Implement CostEvent dataclass, event id generation, and validation in `src/synapse_memory/cost/events.py`
+- [X] T007 Implement append-only JSONL writer, loader, and corrupt-tail recovery in `src/synapse_memory/cost/events.py`
+- [X] T008 [P] Write failing pricing fallback tests for provider/local/unknown models in `tests/test_cost_events.py`
+- [X] T009 Implement deterministic pricing helpers in `src/synapse_memory/cost/pricing.py`
+- [X] T010 Run foundational tests with `python3 -m pytest tests/test_cost_events.py -q`
 
 **Checkpoint**: Cost events can be safely created, persisted, loaded, and recovered.
 
@@ -47,20 +47,20 @@
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] Write failing Claude success cost logging tests in `tests/test_llm_claude.py`
-- [ ] T012 [P] [US1] Write failing Claude error/timeout cost logging tests in `tests/test_llm_claude.py`
-- [ ] T013 [P] [US1] Write failing apfel success cost logging tests in `tests/test_apfel.py`
-- [ ] T014 [P] [US1] Write failing apfel error/timeout cost logging tests in `tests/test_apfel.py`
-- [ ] T015 [P] [US1] Write failing command context tests for `SYNAPSE_COMMAND` fallback in `tests/test_cost_events.py`
+- [X] T011 [P] [US1] Write failing Claude success cost logging tests in `tests/test_llm_claude.py`
+- [X] T012 [P] [US1] Write failing Claude error/timeout cost logging tests in `tests/test_llm_claude.py`
+- [X] T013 [P] [US1] Write failing apfel success cost logging tests in `tests/test_apfel.py`
+- [X] T014 [P] [US1] Write failing apfel error/timeout cost logging tests in `tests/test_apfel.py`
+- [X] T015 [P] [US1] Write failing command context tests for `SYNAPSE_COMMAND` fallback in `tests/test_cost_events.py`
 
 ### Implementation for User Story 1
 
-- [ ] T016 [US1] Add command context resolver in `src/synapse_memory/cost/events.py`
-- [ ] T017 [US1] Extract Claude envelope token/cost metadata in `src/synapse_memory/llm/claude.py`
-- [ ] T018 [US1] Record Claude success/error/timeout cost events in `src/synapse_memory/llm/claude.py`
-- [ ] T019 [US1] Record apfel success/error/timeout cost events in `src/synapse_memory/llm/apfel.py`
-- [ ] T020 [US1] Ensure cost logging failures do not change original Claude/apfel behavior in `src/synapse_memory/llm/claude.py` and `src/synapse_memory/llm/apfel.py`
-- [ ] T021 [US1] Run US1 tests with `python3 -m pytest tests/test_llm_claude.py tests/test_apfel.py tests/test_cost_events.py -q`
+- [X] T016 [US1] Add command context resolver in `src/synapse_memory/cost/events.py`
+- [X] T017 [US1] Extract Claude envelope token/cost metadata in `src/synapse_memory/llm/claude.py`
+- [X] T018 [US1] Record Claude success/error/timeout cost events in `src/synapse_memory/llm/claude.py`
+- [X] T019 [US1] Record apfel success/error/timeout cost events in `src/synapse_memory/llm/apfel.py`
+- [X] T020 [US1] Ensure cost logging failures do not change original Claude/apfel behavior in `src/synapse_memory/llm/claude.py` and `src/synapse_memory/llm/apfel.py`
+- [X] T021 [US1] Run US1 tests with `python3 -m pytest tests/test_llm_claude.py tests/test_apfel.py tests/test_cost_events.py -q`
 
 **Checkpoint**: User Story 1 is independently usable as the MVP.
 
@@ -74,18 +74,18 @@
 
 ### Tests for User Story 2
 
-- [ ] T022 [P] [US2] Write failing summary date filtering and command grouping tests in `tests/test_cost_summary.py`
-- [ ] T023 [P] [US2] Write failing summary model grouping and total row tests in `tests/test_cost_summary.py`
-- [ ] T024 [P] [US2] Write failing JSON output parse/no-table tests in `tests/test_cost_cli.py`
-- [ ] T025 [P] [US2] Write failing no-data and invalid-days CLI tests in `tests/test_cost_cli.py`
+- [X] T022 [P] [US2] Write failing summary date filtering and command grouping tests in `tests/test_cost_summary.py`
+- [X] T023 [P] [US2] Write failing summary model grouping and total row tests in `tests/test_cost_summary.py`
+- [X] T024 [P] [US2] Write failing JSON output parse/no-table tests in `tests/test_cost_cli.py`
+- [X] T025 [P] [US2] Write failing no-data and invalid-days CLI tests in `tests/test_cost_cli.py`
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Implement CostSummaryGroup and aggregation in `src/synapse_memory/cost/summary.py`
-- [ ] T027 [US2] Implement table and JSON render helpers in `src/synapse_memory/cost/summary.py`
-- [ ] T028 [US2] Add `cost summary` argparse wiring and handler in `src/synapse_memory/cli.py`
-- [ ] T029 [US2] Add command context assignment for CLI command families in `src/synapse_memory/cli.py`
-- [ ] T030 [US2] Run US2 tests with `python3 -m pytest tests/test_cost_summary.py tests/test_cost_cli.py -q`
+- [X] T026 [US2] Implement CostSummaryGroup and aggregation in `src/synapse_memory/cost/summary.py`
+- [X] T027 [US2] Implement table and JSON render helpers in `src/synapse_memory/cost/summary.py`
+- [X] T028 [US2] Add `cost summary` argparse wiring and handler in `src/synapse_memory/cli.py`
+- [X] T029 [US2] Add command context assignment for CLI command families in `src/synapse_memory/cli.py`
+- [X] T030 [US2] Run US2 tests with `python3 -m pytest tests/test_cost_summary.py tests/test_cost_cli.py -q`
 
 **Checkpoint**: User Stories 1 and 2 work independently.
 
@@ -99,18 +99,18 @@
 
 ### Tests for User Story 3
 
-- [ ] T031 [P] [US3] Write failing prohibited-field regression tests in `tests/test_cost_events.py`
-- [ ] T032 [P] [US3] Write failing summary corrupt-tail recovery tests in `tests/test_cost_summary.py`
-- [ ] T033 [P] [US3] Write failing private permission tests for first-write behavior in `tests/test_cost_events.py`
-- [ ] T034 [P] [US3] Write failing logging-warning isolation tests in `tests/test_llm_claude.py` and `tests/test_apfel.py`
+- [X] T031 [P] [US3] Write failing prohibited-field regression tests in `tests/test_cost_events.py`
+- [X] T032 [P] [US3] Write failing summary corrupt-tail recovery tests in `tests/test_cost_summary.py`
+- [X] T033 [P] [US3] Write failing private permission tests for first-write behavior in `tests/test_cost_events.py`
+- [X] T034 [P] [US3] Write failing logging-warning isolation tests in `tests/test_llm_claude.py` and `tests/test_apfel.py`
 
 ### Implementation for User Story 3
 
-- [ ] T035 [US3] Harden CostEvent serialization against prohibited keys in `src/synapse_memory/cost/events.py`
-- [ ] T036 [US3] Ensure summary loads with recovery enabled and reports backup warnings in `src/synapse_memory/cost/summary.py`
-- [ ] T037 [US3] Ensure first-write directory/file permissions use L0 helpers in `src/synapse_memory/cost/events.py`
-- [ ] T038 [US3] Route logging failure warnings to stderr without swallowing original provider exceptions in `src/synapse_memory/llm/claude.py` and `src/synapse_memory/llm/apfel.py`
-- [ ] T039 [US3] Run US3 tests with `python3 -m pytest tests/test_cost_events.py tests/test_cost_summary.py tests/test_llm_claude.py tests/test_apfel.py -q`
+- [X] T035 [US3] Harden CostEvent serialization against prohibited keys in `src/synapse_memory/cost/events.py`
+- [X] T036 [US3] Ensure summary loads with recovery enabled and reports backup warnings in `src/synapse_memory/cost/summary.py`
+- [X] T037 [US3] Ensure first-write directory/file permissions use L0 helpers in `src/synapse_memory/cost/events.py`
+- [X] T038 [US3] Route logging failure warnings to stderr without swallowing original provider exceptions in `src/synapse_memory/llm/claude.py` and `src/synapse_memory/llm/apfel.py`
+- [X] T039 [US3] Run US3 tests with `python3 -m pytest tests/test_cost_events.py tests/test_cost_summary.py tests/test_llm_claude.py tests/test_apfel.py -q`
 
 **Checkpoint**: All user stories are independently functional.
 
@@ -120,14 +120,14 @@
 
 **Purpose**: User-facing docs, compatibility command, and merge gates.
 
-- [ ] T040 [P] Document `cost summary` options and examples in `docs/commands.md`
-- [ ] T041 [P] Complete `commands/synapse-cost.md` with `SYNAPSE_FROM_AGENT=1` examples
-- [ ] T042 Run quickstart smoke from `specs/004-cost-observability/quickstart.md` and save transcript in `specs/004-cost-observability/quickstart-results.md`
-- [ ] T043 Run ruff on changed files with `uvx ruff check src/synapse_memory/cost src/synapse_memory/llm/claude.py src/synapse_memory/llm/apfel.py src/synapse_memory/cli.py tests/test_cost_events.py tests/test_cost_summary.py tests/test_cost_cli.py tests/test_llm_claude.py tests/test_apfel.py`
-- [ ] T044 Run mypy strict on new modules with `python3 -m mypy --strict src/synapse_memory/cost`
-- [ ] T045 Run full tests with `python3 -m pytest tests/ -W ignore::DeprecationWarning`
-- [ ] T046 Run redaction golden eval and record Pass1/Pass2 F1 in `specs/004-cost-observability/redaction-eval-results.md`
-- [ ] T047 Review `git diff --check` and remove unrelated changes before commit
+- [X] T040 [P] Document `cost summary` options and examples in `docs/commands.md`
+- [X] T041 [P] Complete `commands/synapse-cost.md` with `SYNAPSE_FROM_AGENT=1` examples
+- [X] T042 Run quickstart smoke from `specs/004-cost-observability/quickstart.md` and save transcript in `specs/004-cost-observability/quickstart-results.md`
+- [X] T043 Run ruff on changed files with `uvx ruff check src/synapse_memory/cost src/synapse_memory/llm/claude.py src/synapse_memory/llm/apfel.py src/synapse_memory/cli.py tests/test_cost_events.py tests/test_cost_summary.py tests/test_cost_cli.py tests/test_llm_claude.py tests/test_apfel.py`
+- [X] T044 Run mypy strict on new modules with `python3 -m mypy --strict src/synapse_memory/cost`
+- [X] T045 Run full tests with `python3 -m pytest tests/ -W ignore::DeprecationWarning`
+- [X] T046 Run redaction golden eval and record Pass1/Pass2 F1 in `specs/004-cost-observability/redaction-eval-results.md`
+- [X] T047 Review `git diff --check` and remove unrelated changes before commit
 
 ---
 
