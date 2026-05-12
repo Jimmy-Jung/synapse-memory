@@ -23,7 +23,9 @@ from synapse_memory.recipes.recipe import DomainSource
 DEFAULT_DOMAIN = "generic"
 TAG_FREQUENCY_THRESHOLD = 0.3
 
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(?P<yaml>.*?)\n---\s*\n", re.DOTALL)
+_FRONTMATTER_RE = re.compile(
+    r"^---\s*\n(?P<yaml>.*?)\n---\s*\n", re.DOTALL | re.MULTILINE
+)
 _FIELD_RE = re.compile(
     r"^\s*domain\s*:\s*(?P<v>['\"]?)(?P<value>[^\"'\n]+)(?P=v)\s*$",
     re.MULTILINE,
@@ -33,7 +35,7 @@ _FIELD_RE = re.compile(
 def _parse_profile_domain(profile_text: str) -> str | None:
     if not profile_text:
         return None
-    m = _FRONTMATTER_RE.match(profile_text)
+    m = _FRONTMATTER_RE.search(profile_text)
     if not m:
         return None
     field = _FIELD_RE.search(m.group("yaml"))

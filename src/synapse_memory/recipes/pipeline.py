@@ -215,6 +215,12 @@ def generate(
     company: Any = None,
     dry_run: bool = False,
     save_last: bool = True,
+    ai_env: Any = None,
+    model_override: str | None = None,
+    timeout_override: int | None = None,
+    disable_save: bool = False,
+    top_k_override: int | None = None,
+    require_matched: bool = False,
 ) -> GenerationResult:
     """Recipe 1 회 실행 — orchestrator entry point.
 
@@ -231,6 +237,15 @@ def generate(
 
     _validate_inputs(recipe, inputs)
 
+    # inputs 에 company_id 가 있으면 CompanyCard 자동 로드 — locale precedence 1 순위.
+    if company is None and inputs.get("company_id"):
+        try:
+            from synapse_memory.cards.company import load_company_card
+
+            company = load_company_card(inputs["company_id"], vault_path=vault)
+        except (FileNotFoundError, ValueError):
+            company = None  # 미존재 시 fallback
+
     profile_text = _load_profile_text(vault) if recipe.use_profile else ""
     profile_used = bool(profile_text)
 
@@ -242,17 +257,24 @@ def generate(
 
     matched: list[tuple[Any, float]] = []
     if store is not None:
+        rag_top_k = top_k_override or recipe.rag_top_k
         try:
             matched = list(
                 store.query(
                     None,
-                    top_k=recipe.rag_top_k,
+                    top_k=rag_top_k,
                     where=recipe.rag_filter,
                 )
             )
         except TypeError:
             # store.query signature variation tolerance (for stubs / future stores)
             matched = list(store.query())
+
+    if require_matched and not matched:
+        raise ValueError(
+            f"recipe '{recipe.name}' requires RAG matches but got 0. "
+            "`synapse-memory rag index` 먼저 실행하세요."
+        )
 
     domain, domain_src = (
         resolve_domain(
@@ -318,16 +340,21 @@ def generate(
     answer = ai_api_complete(
         user_prompt,
         system=system_rendered,
-        model=recipe.model,
-        timeout=recipe.timeout,
+        model=model_override or recipe.model,
+        timeout=timeout_override or recipe.timeout,
+        env=ai_env,
     )
 
-    saved_path = _save_markdown(
-        recipe=recipe,
-        inputs=inputs,
-        answer=answer,
-        vault=vault,
-        today=today_resolved,
+    saved_path = (
+        None
+        if disable_save
+        else _save_markdown(
+            recipe=recipe,
+            inputs=inputs,
+            answer=answer,
+            vault=vault,
+            today=today_resolved,
+        )
     )
 
     last_ref: LastAnswerReference | None = None

@@ -148,7 +148,7 @@
 - **SC-002**: Built-in recipes `resume`, `weekly_report`, `journal`, `brainstorm` all produce non-empty markdown output and save to their declared paths in a fixture vault end-to-end test.
 - **SC-003**: For a fixture where Profile.preferred_lang is `en`, the generated resume contains zero Korean section headers and the AI prompt capture contains the Profile body text.
 - **SC-004**: Every recipe execution with `use_profile=true` and a non-empty Profile.md is verified (via prompt capture) to include the Profile text in the AI prompt — measured at 100% of such recipe runs in the test suite.
-- **SC-005**: The existing `me draft_resume`, `me decide`, and `me what_did_i_think` pytest suites pass without modification after the framework is introduced.
+- **SC-005**: The existing `me draft_resume`, `me decide`, and `me what_did_i_think` pytest suites pass after the framework is introduced. External API (function signatures, return types, CLI stdout / exit code) MUST remain byte-identical for existing callers. Internal mock targets in test setups MAY be updated minimally where they reach into implementation details (e.g., `patch.object(me_mod.ai_api, "complete", ...)` → `patch("synapse_memory.recipes.pipeline.ai_api_complete", ...)`); such mock-only edits do not constitute behavior changes.
 - **SC-006**: `me recipes list` returns within 1 second in a vault containing up to 50 recipes (built-in + user).
 - **SC-007**: A recipe with a malformed frontmatter does not block other recipes from loading; the failure is surfaced as a single warning line.
 - **SC-008**: `me what-did-i-think --timeline` output for the same fixture is byte-identical before and after the framework lands (proves the timeline path is not routed through the new pipeline).

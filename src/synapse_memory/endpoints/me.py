@@ -40,54 +40,7 @@ DEFAULT_RESUME_MODEL = "sonnet"
 DEFAULT_RESUME_TIMEOUT = 240
 DRAFTS_SUBPATH = Path("30_Creative") / "Drafts"
 
-RESUME_SYSTEM = """당신은 한국 IT 채용 시장에 능숙한 이력서 작성 어시스턴트입니다.
-
-# 임무
-지원 회사 정보(CompanyCard)와 사용자 ProjectCard 목록을 받아, **그 회사에 최적화된**
-한국어 이력서를 markdown 형식으로 작성합니다.
-
-# 원칙 (절대 위반 금지)
-- 회사 키워드와 매칭되는 프로젝트를 **상단**에 배치
-- 각 프로젝트의 메트릭/수치는 자료에 있는 값만 그대로 인용
-- 자료에 없는 사실은 **추측 금지** — 누락 처리 또는 "정보 없음"
-- 모든 주장에 ``[card_id]`` 출처 인용
-- 출력 첫 문자는 ``-`` (frontmatter 시작). prose 앞부분 금지.
-
-# 출력 형식
----
-title: <display_name> 지원 이력서
-company_id: <company_id>
-position: <포지션 또는 빈 문자열>
-generated: <YYYY-MM-DD>
-based_on:
-  - card_project:<id>
-  - ...
----
-
-# 핵심 한 줄 소개
-회사 키워드를 반영한 1-2문장.
-
-## 핵심 경험 (회사 매칭 우선)
-- **<프로젝트>**: 회사 키워드 맞춘 한 줄 [card_id]
-- ...
-
-## 프로젝트 상세 (3-5개)
-
-### <프로젝트명> ([card_id])
-- **역할/기간**: ...
-- **문제**: ...
-- **접근**: ...
-- **영향**: <수치 인용>
-- **기술 스택**: ...
-
-(반복)
-
-## 기술 스택
-회사 키워드와 매칭되는 항목 우선. 카테고리별 정리.
-
-## 비고
-자료에 없는 항목은 표시 안 함. 마지막에 "이력서 검토 후 본인이 채울 부분" 섹션 추가.
-"""
+_RESUME_RECIPE_NAME = "resume"  # 007-me-recipes — `draft_resume` 는 wrapper
 
 
 @dataclass
@@ -146,66 +99,67 @@ def draft_resume(
     store: VectorStore | None = None,
     timeout: int = DEFAULT_RESUME_TIMEOUT,
 ) -> ResumeDraft:
-    """회사 맞춤 이력서 자동 생성 → vault에 markdown 저장.
+    """회사 맞춤 이력서 자동 생성 → vault에 저장 (007-me-recipes wrapper).
 
-    Args:
-        company_id: ``20_Reference/Companies/<id>.md`` 파일명 슬러그.
-        top_k_projects: 매칭 ProjectCard 수 (이력서에 인용).
-        model: AI 모델 (sonnet 권장).
+    내부적으로 ``recipes.pipeline.generate("resume", ...)`` 를 호출하여
+    Profile + locale (CompanyCard.resume_language → Profile.preferred_lang →
+    default) + domain (Profile.domain → tags → generic) 을 인식한다.
 
-    Returns:
-        ResumeDraft (저장 경로, 인용 project_ids, 원문).
+    외부 시그니처와 ``ResumeDraft`` 반환은 SC-005 회귀 가드로 보존.
 
     Raises:
         FileNotFoundError: CompanyCard 없음.
         AIError: 호출 실패.
         ValueError: 매칭 ProjectCard 0건.
     """
-    company = load_company_card(company_id, vault_path=vault_path)
+    from synapse_memory.recipes import generate as recipes_generate
 
-    # RAG search — project만
+    company = load_company_card(company_id, vault_path=vault_path)
     store = store or open_vector_store()
-    query = _company_search_query(company)
-    q_vec = embed_query(query)
-    matched = store.query(
-        q_vec,
-        top_k=top_k_projects,
-        where={"source_kind": "card_project"},
-    )
-    if not matched:
+
+    try:
+        result = recipes_generate(
+            _RESUME_RECIPE_NAME,
+            inputs={"company_id": company_id},
+            vault_path=vault_path,
+            store=store,
+            ai_env=ai_env,
+            model_override=model,
+            timeout_override=timeout,
+            company=company,
+            disable_save=True,  # SC-005: wrapper 가 기존 filename rule 로 직접 저장
+            top_k_override=top_k_projects,
+            require_matched=True,  # ProjectCard 0 건 → ValueError
+        )
+    except ValueError as exc:
+        # 기존 message 호환 (SC-005)
+        if "got 0" in str(exc):
+            raise ValueError(
+                "매칭 ProjectCard 0건 — `synapse-memory rag index` 먼저 실행"
+            ) from exc
+        raise
+
+    if not result.source_ids:
         raise ValueError(
             "매칭 ProjectCard 0건 — `synapse-memory rag index` 먼저 실행"
         )
 
-    project_ids = [rec.metadata.get("card_id") or rec.id for rec, _ in matched]
-
-    user_prompt = _build_resume_prompt(company, matched)
-
-    raw_text = ai_api.complete(
-        user_prompt,
-        system=RESUME_SYSTEM,
-        model=model,
-        env=ai_env,
-        timeout=timeout,
-    )
-
-    # vault에 저장
+    # 기존 filename rule 유지 (SC-005): `Resume - {display_name} ({YYYY-MM}).md`
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     drafts_dir = vault / DRAFTS_SUBPATH
     drafts_dir.mkdir(parents=True, exist_ok=True)
-
     today = datetime.date.today().isoformat()
     safe_name = company.display_name.replace("/", "-").replace("\\", "-")
     filename = f"Resume - {safe_name} ({today[:7]}).md"
     path = drafts_dir / filename
-    path.write_text(raw_text, encoding="utf-8")
+    path.write_text(result.answer_markdown, encoding="utf-8")
 
     return ResumeDraft(
         company_id=company_id,
         company_name=company.display_name,
         saved_path=path,
-        project_card_ids=project_ids,
-        raw_text=raw_text,
+        project_card_ids=result.source_ids[:top_k_projects],
+        raw_text=result.answer_markdown,
     )
 
 

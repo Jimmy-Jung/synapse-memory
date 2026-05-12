@@ -1,0 +1,6 @@
+# User Profile (fixture variant — no frontmatter)
+
+이 variant 는 frontmatter 가 없어서 locale / domain 이 fallback (한국어 / generic) 됨.
+이름: Default Test User
+강점: ...
+지향: ...

@@ -98,17 +98,17 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 ### Test-First (RED)
 
-- [ ] T025 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_locale_english` — Profile.preferred_lang=en, CompanyCard 1 + ProjectCard 1, mock LLM with prompt capture; assert prompt 에 Profile 본문 포함, locale_source="profile", locale="English"
-- [ ] T026 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_company_card_locale_wins` — CompanyCard.resume_language=en, Profile.preferred_lang=한국어; assert locale_source="company_card", locale="English"
-- [ ] T027 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_domain_research_sections` — Profile.domain=research; assert rendered system_prompt 에 "Publications", "Grants", "Methodology" 섹션 가이드 포함 + "기술 스택" 미포함
-- [ ] T028 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_domain_design_sections` — Profile.domain=design; assert 동일하게 "Case Studies", "Tools" 등장 + IT-specific 기본 한국어 표현 0 개
+- [X] T025 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_locale_english` — Profile.preferred_lang=en, CompanyCard 1 + ProjectCard 1, mock LLM with prompt capture; assert prompt 에 Profile 본문 포함, locale_source="profile", locale="English"
+- [X] T026 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_company_card_locale_wins` — CompanyCard.resume_language=en, Profile.preferred_lang=한국어; assert locale_source="company_card", locale="English"
+- [X] T027 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_domain_research_sections` — Profile.domain=research; assert rendered system_prompt 에 "Publications", "Grants", "Methodology" 섹션 가이드 포함 + "기술 스택" 미포함
+- [X] T028 [P] [US2] Write failing test `tests/test_recipes_generate.py::test_resume_domain_design_sections` — Profile.domain=design; assert 동일하게 "Case Studies", "Tools" 등장 + IT-specific 기본 한국어 표현 0 개
 
 ### Implementation (GREEN)
 
-- [ ] T029 [P] [US2] Create builtin recipe `src/synapse_memory/recipes/builtin/resume.md` with system prompt embedding [research.md R-4](./research.md) domain matrix (software/design/research/pm/generic) via `{domain}` switch, locale via `{locale}` — must be ≤ 32KB
-- [ ] T030 [US2] Update `draft_resume()` in `src/synapse_memory/endpoints/me.py` to wrapper calling `recipes.pipeline.generate("resume", {"company_id": ...})` — preserve external function signature + return-type fields used by existing callers (depends on T014, T029)
-- [ ] T031 [US2] Remove the hardcoded "한국 IT 채용 시장" `RESUME_SYSTEM` constant from `endpoints/me.py` after T030 ships; ensure `tests/test_endpoints_me_extra.py` 와 같은 기존 시그니처 회귀 테스트가 그대로 통과
-- [ ] T032 [US2] Add fixture variants under `tests/fixtures/recipes_vault/` — `profile_en_design/`, `profile_en_research/`, `profile_default/` 디렉터리로 분기
+- [X] T029 [P] [US2] Create builtin recipe `src/synapse_memory/recipes/builtin/resume.md` with system prompt embedding [research.md R-4](./research.md) domain matrix (software/design/research/pm/generic) via `{domain}` switch, locale via `{locale}` — must be ≤ 32KB
+- [X] T030 [US2] Update `draft_resume()` in `src/synapse_memory/endpoints/me.py` to wrapper calling `recipes.pipeline.generate("resume", {"company_id": ...})` — preserve external function signature + return-type fields used by existing callers (depends on T014, T029)
+- [X] T031 [US2] Remove the hardcoded "한국 IT 채용 시장" `RESUME_SYSTEM` constant from `endpoints/me.py` after T030 ships; ensure `tests/test_endpoints_me_extra.py` 와 같은 기존 시그니처 회귀 테스트가 그대로 통과
+- [X] T032 [US2] Add fixture variants under `tests/fixtures/recipes_vault/` — `profile_en_design/`, `profile_en_research/`, `profile_default/` 디렉터리로 분기
 
 **Checkpoint**: US2 fully functional. Resume 가 user voice/locale/domain 을 인식.
 

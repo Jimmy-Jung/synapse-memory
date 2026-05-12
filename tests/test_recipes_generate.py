@@ -127,3 +127,184 @@ def test_weekly_report_end_to_end(fixture_vault: Path) -> None:
     assert result.last_answer_ref.command == "me.generate.weekly_report"
     assert "2026-W19" in result.last_answer_ref.query
     assert len(result.last_answer_ref.citations) >= 1
+
+
+# ----- US2: Resume voice·locale·domain (T025-T028) -----------------------------
+
+
+def _swap_profile(vault: Path, variant: str) -> None:
+    """fixture vault 의 90_System/AI/Profile.md 를 variant 디렉터리 내용으로 교체."""
+    src = vault / variant / "90_System" / "AI" / "Profile.md"
+    dst = vault / "90_System" / "AI" / "Profile.md"
+    dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _set_company_resume_language(vault: Path, lang: str) -> None:
+    """fixture acme_co.md 의 frontmatter 에 resume_language 를 삽입."""
+    p = vault / "20_Reference" / "Companies" / "acme_co.md"
+    text = p.read_text(encoding="utf-8")
+    # frontmatter 끝(--- 단독 줄) 직전에 한 줄 추가
+    lines = text.split("\n")
+    # frontmatter 의 두 번째 --- 위치
+    closing = -1
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            closing = i
+            break
+    assert closing > 0, "fixture frontmatter missing closing ---"
+    lines.insert(closing, f"resume_language: {lang}")
+    p.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _resume_store() -> _StoreStub:
+    return _StoreStub([
+        {
+            "card_id": "prj-2026-w19-alpha",
+            "display_name": "Synapse Memory v0.5 alpha",
+            "source_kind": "card_project",
+            "document": "Backend + LLM 통합 경험. recipe framework 설계.",
+        },
+    ])
+
+
+def test_resume_locale_english_from_profile(fixture_vault: Path) -> None:
+    """T025 — Profile.preferred_lang=en → locale_source=profile, locale=English."""
+    _swap_profile(fixture_vault, "profile_en_design")
+
+    captured: dict[str, str] = {}
+
+    def fake_complete(prompt: str, *, system: str | None = None, **_kw: Any) -> str:
+        captured["prompt"] = prompt
+        captured["system"] = system or ""
+        return "# Resume body (mock)"
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.ai_api_complete", side_effect=fake_complete
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.save_last_answer",
+        return_value=fixture_vault / "ignored.json",
+    ):
+        result = generate(
+            "resume",
+            inputs={"company_id": "acme_co"},
+            vault_path=fixture_vault,
+            store=_resume_store(),
+            builtin_dir=_BUILTIN_DIR,
+        )
+
+    assert result.locale == "English"
+    assert result.locale_source == "profile"
+    # Profile body 가 user prompt 에 첨부됨
+    assert "Designer Test User" in captured["prompt"]
+
+
+def test_resume_company_card_locale_wins_over_profile(fixture_vault: Path) -> None:
+    """T026 — CompanyCard.resume_language=en + Profile.preferred_lang=한국어 → locale_source=company_card."""
+    # base Profile.md 는 preferred_lang=한국어 (fixture default)
+    _set_company_resume_language(fixture_vault, "en")
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.ai_api_complete",
+        return_value="# Resume (mock)",
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.save_last_answer",
+        return_value=fixture_vault / "ignored.json",
+    ):
+        result = generate(
+            "resume",
+            inputs={"company_id": "acme_co"},
+            vault_path=fixture_vault,
+            store=_resume_store(),
+            builtin_dir=_BUILTIN_DIR,
+        )
+
+    assert result.locale == "English"
+    assert result.locale_source == "company_card"
+
+
+def test_resume_domain_research_sections(fixture_vault: Path) -> None:
+    """T027 — Profile.domain=research → domain="research" + system_prompt 에 Publications/Methodology 가이드 존재."""
+    _swap_profile(fixture_vault, "profile_en_research")
+
+    captured: dict[str, str] = {}
+
+    def fake_complete(prompt: str, *, system: str | None = None, **_kw: Any) -> str:
+        captured["system"] = system or ""
+        return "# mock research resume"
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.ai_api_complete", side_effect=fake_complete
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.save_last_answer",
+        return_value=fixture_vault / "ignored.json",
+    ):
+        result = generate(
+            "resume",
+            inputs={"company_id": "acme_co"},
+            vault_path=fixture_vault,
+            store=_resume_store(),
+            builtin_dir=_BUILTIN_DIR,
+        )
+
+    assert result.domain == "research"
+    assert result.domain_source == "profile"
+    # rendered system_prompt 에 research 도메인 가이드가 모두 포함됨
+    assert "Publications" in captured["system"]
+    assert "Grants" in captured["system"]
+    assert "Methodology" in captured["system"]
+
+
+def test_resume_domain_design_sections(fixture_vault: Path) -> None:
+    """T028 — Profile.domain=design → domain="design" + system_prompt 에 Case Studies/Tools 가이드."""
+    _swap_profile(fixture_vault, "profile_en_design")
+
+    captured: dict[str, str] = {}
+
+    def fake_complete(prompt: str, *, system: str | None = None, **_kw: Any) -> str:
+        captured["system"] = system or ""
+        return "# mock design resume"
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.ai_api_complete", side_effect=fake_complete
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.save_last_answer",
+        return_value=fixture_vault / "ignored.json",
+    ):
+        result = generate(
+            "resume",
+            inputs={"company_id": "acme_co"},
+            vault_path=fixture_vault,
+            store=_resume_store(),
+            builtin_dir=_BUILTIN_DIR,
+        )
+
+    assert result.domain == "design"
+    assert result.domain_source == "profile"
+    assert "Case Studies" in captured["system"]
+    assert "Tools" in captured["system"]
+
+
+def test_resume_default_korean_when_profile_has_no_frontmatter(
+    fixture_vault: Path,
+) -> None:
+    """spec User Story 2 AC#3 — Profile frontmatter 없고 CompanyCard 도 resume_language 없으면 한국어/generic fallback."""
+    _swap_profile(fixture_vault, "profile_default")
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.ai_api_complete", return_value="ok"
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.save_last_answer",
+        return_value=fixture_vault / "ignored.json",
+    ):
+        result = generate(
+            "resume",
+            inputs={"company_id": "acme_co"},
+            vault_path=fixture_vault,
+            store=_resume_store(),
+            builtin_dir=_BUILTIN_DIR,
+        )
+
+    assert result.locale == "한국어"
+    assert result.locale_source == "default"
+    assert result.domain == "generic"
+    assert result.domain_source == "default"
