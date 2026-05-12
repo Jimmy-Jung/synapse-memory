@@ -53,14 +53,14 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 ### Implementation (GREEN)
 
-- [ ] T009 [P] Implement `GenerationRecipe`, `GenerationContext`, `GenerationResult` frozen dataclasses in `src/synapse_memory/recipes/recipe.py` per [data-model.md §1-§4](./data-model.md)
-- [ ] T010 Implement frontmatter parser + validator in `src/synapse_memory/recipes/loader.py` (PyYAML, 32KB UTF-8 cap, malformed-isolate-others, save_subpath safety) — depends on T009
-- [ ] T011 Implement `RecipeRegistry` stateless scan in `src/synapse_memory/recipes/registry.py` (builtin+user dirs, user-over-builtin, alphabetic list, RecipeNotFoundError with difflib suggestions ≤ 3) — depends on T010
-- [ ] T012 [P] Implement `resolve_locale()` in `src/synapse_memory/recipes/locale.py` with precedence: cli → CompanyCard.resume_language → Profile.preferred_lang frontmatter → default `한국어` — depends on T009
-- [ ] T013 [P] Implement `resolve_domain()` in `src/synapse_memory/recipes/domain.py` with precedence: cli → Profile.domain → top tag frequency ≥ 0.3 → `generic` — depends on T009
-- [ ] T014 Implement `generate(recipe_name, inputs, ...)` orchestrator in `src/synapse_memory/recipes/pipeline.py` per [data-model.md §3](./data-model.md) construction order — depends on T009-T013
-- [ ] T015 [P] Add `resume_language: Optional[str] = None` field to `CompanyCard` dataclass and `load_company_card` frontmatter parser in `src/synapse_memory/cards/company.py` — independent of T009-T014
-- [ ] T016 Expose public API in `src/synapse_memory/recipes/__init__.py`: `generate`, `RecipeRegistry`, `RecipeNotFoundError`, `GenerationRecipe`, `GenerationResult`
+- [X] T009 [P] Implement `GenerationRecipe`, `GenerationContext`, `GenerationResult` frozen dataclasses in `src/synapse_memory/recipes/recipe.py` per [data-model.md §1-§4](./data-model.md)
+- [X] T010 Implement frontmatter parser + validator in `src/synapse_memory/recipes/loader.py` (PyYAML, 32KB UTF-8 cap, malformed-isolate-others, save_subpath safety) — depends on T009
+- [X] T011 Implement `RecipeRegistry` stateless scan in `src/synapse_memory/recipes/registry.py` (builtin+user dirs, user-over-builtin, alphabetic list, RecipeNotFoundError with difflib suggestions ≤ 3) — depends on T010
+- [X] T012 [P] Implement `resolve_locale()` in `src/synapse_memory/recipes/locale.py` with precedence: cli → CompanyCard.resume_language → Profile.preferred_lang frontmatter → default `한국어` — depends on T009
+- [X] T013 [P] Implement `resolve_domain()` in `src/synapse_memory/recipes/domain.py` with precedence: cli → Profile.domain → top tag frequency ≥ 0.3 → `generic` — depends on T009
+- [X] T014 Implement `generate(recipe_name, inputs, ...)` orchestrator in `src/synapse_memory/recipes/pipeline.py` per [data-model.md §3](./data-model.md) construction order — depends on T009-T013
+- [X] T015 [P] Add `resume_language: Optional[str] = None` field to `CompanyCard` dataclass and `load_company_card` frontmatter parser in `src/synapse_memory/cards/company.py` — independent of T009-T014
+- [X] T016 Expose public API in `src/synapse_memory/recipes/__init__.py`: `generate`, `RecipeRegistry`, `RecipeNotFoundError`, `GenerationRecipe`, `GenerationResult`
 
 **Checkpoint**: foundational green. T004-T008 모두 통과해야 다음 phase 진입.
 

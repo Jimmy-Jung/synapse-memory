@@ -70,6 +70,7 @@ class CompanyCard:
     created: str = ""
     last_reviewed: str = ""
     body: str = ""
+    resume_language: str | None = None
 
     @property
     def filename(self) -> str:
@@ -86,6 +87,7 @@ def _frontmatter_dict(card: CompanyCard) -> dict:
         "country": card.country,
         "size": card.size,
         "website": card.website,
+        "resume_language": card.resume_language,
     }.items():
         if v:
             d[k] = v
@@ -159,6 +161,7 @@ def parse_company_card(text: str) -> CompanyCard:
         created=str(meta.get("created", "")),
         last_reviewed=str(meta.get("last_reviewed", "")),
         body=m.group("body"),
+        resume_language=meta.get("resume_language"),
     )
 
 
