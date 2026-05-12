@@ -147,7 +147,7 @@ description: "Task list for Timeline Recall (FR-A1)"
 - [X] T049 Run `ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` and resolve any new lint warnings. (`uvx ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` 통과)
 - [X] T050 Run full test suite `pytest` and confirm 459 baseline + new tests all green (no regressions across redaction / cards / rag / profile / collectors). (480 passed)
 - [X] T051 Manual smoke test per `specs/002-timeline-recall/quickstart.md §1~§7` — capture stdout transcripts in PR description. (`quickstart-results.md` 에 실행 transcript 캡처; distance 모드 envelope 오류와 zero-result fixture 불일치 documented)
-- [ ] T052 Add eval golden 결과 첨부 to PR description: Pass1 / Pass2 F1 unchanged, Kendall τ on synthetic_30.json (parent plan §B4). (PR 작성 시 첨부)
+- [X] T052 Add eval golden 결과 첨부 to PR description: Pass1 / Pass2 F1 unchanged, Kendall τ on synthetic_30.json (parent plan §B4). (`redaction-eval-results.md` 추가; Pass1 F1=1.0000 통과, Pass2/contextual F1=0.7619 로 gate 미달 documented)
 
 ---
 
