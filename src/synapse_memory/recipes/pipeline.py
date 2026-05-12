@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
 from synapse_memory.recipes.domain import resolve_domain
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
@@ -344,6 +345,7 @@ def generate(
         timeout=timeout_override or recipe.timeout,
         env=ai_env,
     )
+    answer = strip_meta_prefix(answer)
 
     saved_path = (
         None

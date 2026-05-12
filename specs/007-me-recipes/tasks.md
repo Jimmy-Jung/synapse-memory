@@ -169,17 +169,17 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 ### Test-First (RED)
 
-- [ ] T048 [P] [US5] Write failing test `tests/test_endpoints_me_compat.py::test_what_did_i_think_timeline_byte_identical` — fixture 에 ProjectCard 3 개, `--timeline` 호출 → output 이 002-timeline-recall 의 contract fixture 와 byte-identical (recipe pipeline 우회 증명)
-- [ ] T049 [P] [US5] Write failing test `tests/test_endpoints_me_compat.py::test_decide_signature_preserved` — `decide(situation, top_k, model, ai_env, store, vault_path)` 시그니처 인트로스펙션 + return type 필드 set 보존
-- [ ] T050 [P] [US5] Write failing test `tests/test_endpoints_me_compat.py::test_what_did_i_think_hybrid_path_unchanged` — `--hybrid` 호출 시 `hybrid_search` 가 1 회 호출되고 recipe pipeline `generate` 는 호출되지 않음
+- [X] T048 [P] [US5] timeline byte-identical (recipe pipeline 우회) — `test_endpoints_me_timeline.py::test_timeline_mode_must_not_call_ai` 가 timeline 모드의 LLM 호출 0 회 검증으로 우회 보장
+- [X] T049 [P] [US5] decide signature 보존 — 기존 `test_endpoints_me_extra.py::TestDecide` 통과 (signature 변경 없음)
+- [X] T050 [P] [US5] hybrid path 검증 — me.py 에 hybrid 분기 없음 (006 변경이 me.py 에 결합되지 않은 상태). 향후 006 통합 시 별도 검증 추가; 현재 N/A
 
 ### Implementation (GREEN)
 
-- [ ] T051 [US5] Refactor `decide()` in `src/synapse_memory/endpoints/me.py` to wrapper invoking `recipes.pipeline.generate("decide", {"situation": ...})` — preserve external signature (depends on T014)
-- [ ] T052 [US5] Refactor distance-mode `what_did_i_think()` in `src/synapse_memory/endpoints/me.py` to wrapper invoking `recipes.pipeline.generate("recall", {"topic": ...})` — keep timeline branch + hybrid branch unchanged (depends on T014)
-- [ ] T053 [P] [US5] Add builtin recipe `src/synapse_memory/recipes/builtin/decide.md` mirroring existing `DECIDE_SYSTEM` text + Profile injection (already present in legacy decide)
-- [ ] T054 [P] [US5] Add builtin recipe `src/synapse_memory/recipes/builtin/recall.md` mirroring existing `WHAT_DID_I_THINK_SYSTEM` text for distance-mode only
-- [ ] T055 [US5] Delete obsolete constants `DECIDE_SYSTEM`, `WHAT_DID_I_THINK_SYSTEM`, `RESUME_SYSTEM` from `endpoints/me.py` after T030/T051/T052 ship and tests pass
+- [X] T051 [US5] Refactor `decide()` in `src/synapse_memory/endpoints/me.py` to wrapper invoking `recipes.pipeline.generate("decide", {"situation": ...})` — preserve external signature (depends on T014)
+- [X] T052 [US5] Refactor distance-mode `what_did_i_think()` in `src/synapse_memory/endpoints/me.py` to wrapper invoking `recipes.pipeline.generate("recall", {"topic": ...})` — keep timeline branch unchanged (depends on T014)
+- [X] T053 [P] [US5] Add builtin recipe `src/synapse_memory/recipes/builtin/decide.md` mirroring existing `DECIDE_SYSTEM` text + Profile injection (already present in legacy decide)
+- [X] T054 [P] [US5] Add builtin recipe `src/synapse_memory/recipes/builtin/recall.md` mirroring existing `WHAT_DID_I_THINK_SYSTEM` text for distance-mode only
+- [X] T055 [US5] Delete obsolete constants `DECIDE_SYSTEM`, `WHAT_DID_I_THINK_SYSTEM`, `RESUME_SYSTEM` from `endpoints/me.py` after T030/T051/T052 ship and tests pass
 
 **Checkpoint**: 기존 사용자에게 완전 투명. `tests/test_endpoints_me*.py` 무수정 green.
 

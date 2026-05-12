@@ -168,20 +168,7 @@ def draft_resume(
 # ---------------------------------------------------------------------------
 
 
-WHAT_DID_I_THINK_SYSTEM = """당신은 사용자의 세컨드 브레인입니다.
-
-# 임무
-주어진 주제에 대해 사용자가 어떻게 생각해왔는지 **시간순 또는 입장별로** 정리.
-
-# 원칙
-- 사고 변화가 발견되면 명시 ("처음엔 X, 나중엔 Y").
-- 입장 유지 시 "일관되게 X" 명시.
-- 자료에 없으면 "자료 없음"으로 솔직히.
-- 각 주장에 ``[card_id]`` 인용.
-- 한국어, 간결.
-
-# 형식
-첫 줄: 핵심 한 문장. 그 다음 자세한 정리."""
+_RECALL_RECIPE_NAME = "recall"  # 007-me-recipes — what_did_i_think distance-mode wrapper
 
 
 @dataclass
@@ -258,37 +245,25 @@ def what_did_i_think(
         )
         return WhatDidIThinkResult(topic=topic, answer=markdown, source_ids=source_ids)
 
-    parts: list[str] = []
-    source_ids = []
-    for rec, dist in results:
-        cid = rec.metadata.get("card_id") or rec.id
-        kind = rec.metadata.get("source_kind", "?")
-        parts.append(
-            f"---\n[{cid}] ({kind}, 거리={dist:.3f})\n{rec.document[:1500]}"
-        )
-        source_ids.append(cid)
+    # distance-mode → recipes.generate("recall", ...) wrapper (007 R-7)
+    from synapse_memory.recipes import generate as recipes_generate
 
-    prompt = (
-        f"# 주제\n{topic}\n\n"
-        f"# 자료 (top {len(results)})\n"
-        + "\n\n".join(parts)
-        + "\n\n사용자가 이 주제에 대해 어떻게 생각해왔는지 정리."
+    # 기존 호출자가 store 를 미리 전달했고 results 가 있으니, 같은 store 를
+    # 재사용 (pipeline 이 store.query 한 번 더 호출 — overhead 적음).
+    result = recipes_generate(
+        _RECALL_RECIPE_NAME,
+        inputs={"topic": topic},
+        store=store,
+        ai_env=ai_env,
+        model_override=model,
+        top_k_override=top_k,
+        disable_save=True,
     )
-
-    answer = ai_api.complete(
-        prompt,
-        system=WHAT_DID_I_THINK_SYSTEM,
-        model=model,
-        env=ai_env,
-        timeout=120,
+    return WhatDidIThinkResult(
+        topic=topic,
+        answer=result.answer_markdown,
+        source_ids=result.source_ids,
     )
-    answer = strip_meta_prefix(answer)
-    _record_last_answer(
-        command="me.what_did_i_think",
-        query=topic,
-        source_ids=source_ids,
-    )
-    return WhatDidIThinkResult(topic=topic, answer=answer, source_ids=source_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -296,22 +271,7 @@ def what_did_i_think(
 # ---------------------------------------------------------------------------
 
 
-DECIDE_SYSTEM = """당신은 사용자의 의사결정 코파일럿입니다.
-
-# 임무
-주어진 상황에 대해 **사용자라면 어떻게 결정할지** 추천.
-사용자 Profile, DecisionPatterns, 관련 Card를 종합해서 답.
-
-# 형식
-1. **추천**: 한 줄로 명확히
-2. **근거**: Profile/Patterns/Card 인용 (``[source]`` 형식)
-3. **대안**: 1-2개 + 트레이드오프
-4. **추가 고려**: 사용자가 자체 판단할 부분
-
-# 원칙
-- Profile/Patterns가 있으면 **반드시 그것 기반으로** 추천 (사용자 voice).
-- 자료가 부족하면 솔직히 "추가 정보 필요" 명시.
-- 외부 일반론 X — 사용자 자료만."""
+_DECIDE_RECIPE_NAME = "decide"  # 007-me-recipes — decide() wrapper
 
 
 @dataclass
@@ -345,58 +305,33 @@ def decide(
     store: VectorStore | None = None,
     vault_path: Path | None = None,
 ) -> DecideResult:
-    """의사결정 코파일럿."""
+    """의사결정 코파일럿 (007-me-recipes wrapper).
+
+    내부적으로 ``recipes.pipeline.generate("decide", ...)`` 를 호출한다.
+    외부 시그니처와 ``DecideResult`` 반환은 SC-005 회귀 가드로 보존.
+    """
     if not situation.strip():
         raise ValueError("situation은 빈 문자열일 수 없음")
 
-    profile_text = _load_profile_text(vault_path)
-    profile_used = bool(profile_text)
+    from synapse_memory.recipes import generate as recipes_generate
 
     store = store or open_vector_store()
-    q_vec = embed_query(situation)
-    results = store.query(q_vec, top_k=top_k)
 
-    card_blocks: list[str] = []
-    source_ids: list[str] = []
-    for rec, dist in results:
-        cid = rec.metadata.get("card_id") or rec.id
-        card_blocks.append(
-            f"---\n[{cid}] (거리={dist:.3f})\n{rec.document[:1200]}"
-        )
-        source_ids.append(cid)
-
-    sections = [f"# 의사결정 상황\n{situation}"]
-    if profile_text:
-        sections.append(f"# 사용자 Profile (90_System/AI/)\n{profile_text}")
-    else:
-        sections.append(
-            "# 사용자 Profile\n(없음 — `me update-profile`로 만든 뒤 진실원본으로 promote 필요)"
-        )
-    if card_blocks:
-        sections.append("# 관련 Card\n" + "\n\n".join(card_blocks))
-    else:
-        sections.append("# 관련 Card\n(매칭 없음)")
-    sections.append("# 지시\n위 자료로 사용자 voice 기반 추천.")
-    prompt = "\n\n".join(sections)
-
-    answer = ai_api.complete(
-        prompt,
-        system=DECIDE_SYSTEM,
-        model=model,
-        env=ai_env,
-        timeout=120,
-    )
-    answer = strip_meta_prefix(answer)
-    _record_last_answer(
-        command="me.decide",
-        query=situation,
-        source_ids=source_ids,
+    result = recipes_generate(
+        _DECIDE_RECIPE_NAME,
+        inputs={"situation": situation},
+        vault_path=vault_path,
+        store=store,
+        ai_env=ai_env,
+        model_override=model,
+        top_k_override=top_k,
+        disable_save=True,
     )
     return DecideResult(
         situation=situation,
-        answer=answer,
-        profile_used=profile_used,
-        source_ids=source_ids,
+        answer=result.answer_markdown,
+        profile_used=result.profile_used,
+        source_ids=result.source_ids,
     )
 
 

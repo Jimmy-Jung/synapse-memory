@@ -433,7 +433,7 @@ def test_by_distance_explicit(today: _datetime.date) -> None:
     ]
     with (
         patch.object(me_mod, "embed_query", return_value=[0.0]),
-        patch.object(me_mod.ai_api, "complete", return_value="CLAUDE_ANSWER_DISTANCE"),
+        patch("synapse_memory.recipes.pipeline.ai_api_complete", return_value="CLAUDE_ANSWER_DISTANCE"),
     ):
         result = what_did_i_think("x", store=store, by="distance", today=today)
     assert result.answer == "CLAUDE_ANSWER_DISTANCE"
@@ -508,8 +508,9 @@ def test_distance_regression_default(today: _datetime.date) -> None:
     ]
     with (
         patch.object(me_mod, "embed_query", return_value=[0.0]),
-        patch.object(
-            me_mod.ai_api, "complete", return_value="**핵심.** 자세한 정리…"
+        patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="**핵심.** 자세한 정리…",
         ) as mock_ai,
     ):
         result = what_did_i_think("x", store=store)  # by 인자 미지정 → "distance"
@@ -536,7 +537,7 @@ def test_no_raw_in_prompt(today: _datetime.date) -> None:
     ]
     with (
         patch.object(me_mod, "embed_query", return_value=[0.0]),
-        patch.object(me_mod.ai_api, "complete") as mock_ai,
+        patch("synapse_memory.recipes.pipeline.ai_api_complete") as mock_ai,
     ):
         what_did_i_think("x", store=store, by="time", today=today)
     assert mock_ai.call_count == 0, (
