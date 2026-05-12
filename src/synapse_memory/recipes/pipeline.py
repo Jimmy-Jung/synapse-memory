@@ -248,6 +248,7 @@ def _retrieve_matches(
     rag_top_k = top_k_override or recipe.rag_top_k
     rag_query = _build_rag_query(recipe, inputs)
     query_embedding = embed_query(rag_query)
+    rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
 
     if rag_mode == "hybrid":
         try:
@@ -256,7 +257,7 @@ def _retrieve_matches(
                 query_embedding=query_embedding,
                 store=store,
                 top_k=rag_top_k,
-                where=recipe.rag_filter,
+                where=rag_filter,
             )
         except BM25IndexError as exc:
             raise _hybrid_unavailable_error() from exc
@@ -267,7 +268,7 @@ def _retrieve_matches(
             store.query(
                 query_embedding,
                 top_k=rag_top_k,
-                where=recipe.rag_filter,
+                where=rag_filter,
             )
         )
     except TypeError:

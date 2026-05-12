@@ -282,7 +282,7 @@ class _PrecomputedResultStore:
     def __init__(self, results: list[tuple[VectorRecord, float]]) -> None:
         self._results = results
 
-    def query(self, *_args, **_kwargs) -> list[tuple[VectorRecord, float]]:
+    def query(self, *_args: object, **_kwargs: object) -> list[tuple[VectorRecord, float]]:
         return list(self._results)
 
 
@@ -371,7 +371,7 @@ def _record_last_answer(
         for source_id in source_ids
     )
     ref = new_answer_reference(
-        command=command,  # type: ignore[arg-type]
+        command=command,
         query=query,
         citations=citations,
     )
