@@ -356,6 +356,77 @@ def test_pipeline_generate_hybrid_preserves_domain_tags(tmp_path: Path) -> None:
     assert result.domain_source == "tags"
 
 
+def test_pipeline_rag_mode_override_dense_wins_over_hybrid_recipe(tmp_path: Path) -> None:
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_options(tmp_path, rag_mode="hybrid")
+    store = _StoreStub()
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        return_value=[0.1],
+    ), mock.patch("synapse_memory.recipes.pipeline.hybrid_search") as mocked_hybrid:
+        result = generate(
+            "echo",
+            inputs={"topic": "override"},
+            vault_path=vault,
+            store=store,
+            builtin_dir=builtin,
+            dry_run=True,
+            rag_mode_override="dense",
+        )
+
+    mocked_hybrid.assert_not_called()
+    assert store.queries
+    assert result.rag_mode == "dense"
+
+
+def test_pipeline_rag_mode_override_hybrid_wins_over_dense_recipe(tmp_path: Path) -> None:
+    from synapse_memory.rag.hybrid import RetrievalHit
+    from synapse_memory.rag.vector_store import VectorRecord
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_options(tmp_path, rag_mode="dense")
+    record = VectorRecord(
+        id="card_project:override",
+        document="override hybrid document",
+        embedding=[],
+        metadata={"source_kind": "card_project", "card_id": "override"},
+    )
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        return_value=[0.1],
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.hybrid_search",
+        return_value=[
+            RetrievalHit(
+                record=record,
+                dense_rank=1,
+                dense_distance=0.1,
+                bm25_rank=None,
+                bm25_score=None,
+                rrf_score=0.01,
+            )
+        ],
+    ) as mocked_hybrid:
+        result = generate(
+            "echo",
+            inputs={"topic": "override"},
+            vault_path=vault,
+            store=_StoreStub(),
+            builtin_dir=builtin,
+            dry_run=True,
+            rag_mode_override="hybrid",
+        )
+
+    mocked_hybrid.assert_called_once()
+    assert result.source_ids == ["override"]
+    assert result.rag_mode == "hybrid"
+
+
 def test_pipeline_generate_records_last_answer(tmp_path: Path) -> None:
     """FR-011 — every successful AI call updates last_answer."""
     from synapse_memory.recipes.pipeline import generate

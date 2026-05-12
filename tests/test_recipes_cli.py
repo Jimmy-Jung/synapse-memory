@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -39,6 +40,22 @@ def test_parser_registers_me_generate_subcommand() -> None:
     assert args.action == "generate"
     assert args.recipe == "weekly_report"
     assert "period=2026-W19" in args.input
+
+
+def test_parser_registers_me_generate_rag_mode_override() -> None:
+    parser = cli_mod.build_parser()
+    args = parser.parse_args(
+        [
+            "me",
+            "generate",
+            "weekly_report",
+            "--input",
+            "period=2026-W19",
+            "--rag-mode",
+            "hybrid",
+        ]
+    )
+    assert args.rag_mode == "hybrid"
 
 
 def test_me_generate_weekly_report_invocation(
@@ -98,6 +115,49 @@ def test_me_generate_weekly_report_invocation(
     assert "matched=" in captured.err
     assert "[saved]" in captured.out
     assert "30_Creative/Reports" in captured.out
+
+
+def test_me_generate_passes_rag_mode_override(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
+    fake_result = SimpleNamespace(
+        recipe_name="weekly_report",
+        answer_markdown="## report",
+        saved_path=None,
+        source_ids=[],
+        profile_used=True,
+        locale_source="profile",
+        locale="한국어",
+        domain_source="default",
+        domain="generic",
+        rag_mode="hybrid",
+    )
+
+    with mock.patch("synapse_memory.cli.open_vector_store", return_value=None), mock.patch(
+        "synapse_memory.recipes.generate",
+        return_value=fake_result,
+    ) as mocked_generate:
+        rc = cli_mod.main(
+            [
+                "me",
+                "generate",
+                "weekly_report",
+                "--input",
+                "period=2026-W19",
+                "--rag-mode",
+                "hybrid",
+                "--vault",
+                str(fixture_vault),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert mocked_generate.call_args.kwargs["rag_mode_override"] == "hybrid"
+    assert "rag_mode=hybrid" in captured.err
 
 
 def test_me_generate_missing_required_input_exits_with_code(

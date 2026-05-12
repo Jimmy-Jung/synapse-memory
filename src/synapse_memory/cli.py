@@ -637,6 +637,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
             today=today_resolved,
             cli_language=args.language,
             cli_domain=args.domain,
+            rag_mode_override=args.rag_mode,
             dry_run=args.dry_run,
         )
     except RecipeNotFoundError as exc:
@@ -676,6 +677,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     sys.stderr.write(
         f"[me.generate.{result.recipe_name}] "
         f"source={recipe_source} "
+        f"rag_mode={result.rag_mode} "
         f"locale={result.locale_source}:{result.locale} "
         f"domain={result.domain_source}:{result.domain} "
         f"profile_used={result.profile_used} "
@@ -1792,6 +1794,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_gen.add_argument("--language", default=None, help="locale precedence 0 순위")
     p_gen.add_argument("--domain", default=None, help="domain precedence 0 순위")
+    p_gen.add_argument(
+        "--rag-mode",
+        choices=("dense", "hybrid"),
+        default=None,
+        help="recipe rag_mode 기본값 override",
+    )
     p_gen.add_argument("--model", default=None, help="recipe 의 model 기본값 override")
     p_gen.add_argument("--vault", default=None, help="vault 경로 override")
     p_gen.add_argument(

@@ -32,6 +32,7 @@ from synapse_memory.recipes.recipe import (
     GenerationContext,
     GenerationRecipe,
     GenerationResult,
+    RecipeRagMode,
 )
 from synapse_memory.recipes.registry import RecipeRegistry
 from synapse_memory.storage.last_response import (
@@ -211,12 +212,21 @@ def _build_rag_query(recipe: GenerationRecipe, inputs: dict[str, str]) -> str:
     return "\n".join(parts)
 
 
+def _resolve_rag_mode(
+    *,
+    recipe: GenerationRecipe,
+    override: RecipeRagMode | None,
+) -> RecipeRagMode:
+    return override or recipe.rag_mode
+
+
 def _retrieve_matches(
     *,
     recipe: GenerationRecipe,
     inputs: dict[str, str],
     store: Any,
     top_k_override: int | None,
+    rag_mode: RecipeRagMode,
 ) -> list[tuple[Any, float]]:
     if store is None:
         return []
@@ -225,7 +235,7 @@ def _retrieve_matches(
     rag_query = _build_rag_query(recipe, inputs)
     query_embedding = embed_query(rag_query)
 
-    if recipe.rag_mode == "hybrid":
+    if rag_mode == "hybrid":
         hits = hybrid_search(
             rag_query,
             query_embedding=query_embedding,
@@ -267,6 +277,7 @@ def generate(
     disable_save: bool = False,
     top_k_override: int | None = None,
     require_matched: bool = False,
+    rag_mode_override: RecipeRagMode | None = None,
 ) -> GenerationResult:
     """Recipe 1 회 실행 — orchestrator entry point.
 
@@ -280,6 +291,7 @@ def generate(
 
     registry = _make_registry(vault, builtin)
     recipe = registry.get(recipe_name)
+    rag_mode = _resolve_rag_mode(recipe=recipe, override=rag_mode_override)
 
     _validate_inputs(recipe, inputs)
 
@@ -306,6 +318,7 @@ def generate(
         inputs=inputs,
         store=store,
         top_k_override=top_k_override,
+        rag_mode=rag_mode,
     )
 
     if require_matched and not matched:
@@ -347,7 +360,7 @@ def generate(
         locale_source=locale_src,
         domain=domain,
         domain_source=domain_src,
-        rag_mode=recipe.rag_mode,
+        rag_mode=rag_mode,
         matched_records=matched,
         today=today_resolved,
         rendered_system_prompt=system_rendered,
@@ -374,7 +387,7 @@ def generate(
             locale_source=locale_src,
             domain=domain,
             domain_source=domain_src,
-            rag_mode=recipe.rag_mode,
+            rag_mode=rag_mode,
         )
 
     answer = ai_api_complete(
@@ -419,6 +432,6 @@ def generate(
         locale_source=locale_src,
         domain=domain,
         domain_source=domain_src,
-        rag_mode=recipe.rag_mode,
+        rag_mode=rag_mode,
         last_answer_ref=last_ref,
     )
