@@ -74,17 +74,17 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 ### Test-First (RED)
 
-- [ ] T017 [P] [US1] Write failing test `tests/test_recipes_generate.py::test_weekly_report_end_to_end` using `tests/fixtures/recipes_vault/` (ProjectCard 2 건 + Profile.md + mocked `ai_api.complete`) — verify saved path, profile_used=True, source_ids 비어있지 않음, last_answer 갱신
-- [ ] T018 [P] [US1] Write failing test `tests/test_recipes_cli.py::test_me_generate_weekly_report` invoking CLI via subprocess — verify stdout markdown + stderr observability line (`locale=… domain=… profile_used=… matched=… duration=…`) + exit code 0
+- [X] T017 [P] [US1] Write failing test `tests/test_recipes_generate.py::test_weekly_report_end_to_end` using `tests/fixtures/recipes_vault/` (ProjectCard 2 건 + Profile.md + mocked `ai_api.complete`) — verify saved path, profile_used=True, source_ids 비어있지 않음, last_answer 갱신
+- [X] T018 [P] [US1] Write failing test `tests/test_recipes_cli.py::test_me_generate_weekly_report` invoking CLI via subprocess — verify stdout markdown + stderr observability line (`locale=… domain=… profile_used=… matched=… duration=…`) + exit code 0
 
 ### Implementation (GREEN)
 
-- [ ] T019 [P] [US1] Create builtin recipe `src/synapse_memory/recipes/builtin/weekly_report.md` (frontmatter + system prompt, ≤ 32KB) per [research.md R-2](./research.md) and [quickstart.md §3](./quickstart.md) expected output
-- [ ] T020 [US1] Build `tests/fixtures/recipes_vault/` content — `90_System/AI/Profile.md` with preferred_lang/domain frontmatter, `90_System/AI/DecisionPatterns.md`, 2 ProjectCard markdown files under `20_Reference/Projects/`, empty `30_Creative/Reports/`
-- [ ] T021 [US1] Add `me generate <recipe> [--key=value ...] [--language] [--domain] [--model] [--vault] [--today] [--dry-run]` subcommand in `src/synapse_memory/cli.py` invoking `recipes.pipeline.generate()` — depends on T014
-- [ ] T022 [US1] Add TTY guard + 3-second notice + `SYNAPSE_FROM_AGENT=1` bypass for `me generate` in `src/synapse_memory/cli.py` (constitution Principle IV) — depends on T021
-- [ ] T023 [US1] Emit single-line observability log to stderr after each successful `me generate` invocation: `[me.generate.<name>] locale=<src:value> domain=<src:value> profile_used=<bool> matched=<count> duration=<ms>` — depends on T021
-- [ ] T024 [US1] Implement deterministic filename rule in `pipeline.save_result()` per [research.md R-5](./research.md): `{display_name} - {primary_input} ({YYYY-MM-DD}).md` with OS-safe normalization and timestamp-suffix collision fallback — depends on T014
+- [X] T019 [P] [US1] Create builtin recipe `src/synapse_memory/recipes/builtin/weekly_report.md` (frontmatter + system prompt, ≤ 32KB) per [research.md R-2](./research.md) and [quickstart.md §3](./quickstart.md) expected output
+- [X] T020 [US1] Build `tests/fixtures/recipes_vault/` content — `90_System/AI/Profile.md` with preferred_lang/domain frontmatter, `90_System/AI/DecisionPatterns.md`, 2 ProjectCard markdown files under `20_Reference/Projects/`, empty `30_Creative/Reports/`
+- [X] T021 [US1] Add `me generate <recipe> [--key=value ...] [--language] [--domain] [--model] [--vault] [--today] [--dry-run]` subcommand in `src/synapse_memory/cli.py` invoking `recipes.pipeline.generate()` — depends on T014
+- [X] T022 [US1] Add TTY guard + 3-second notice + `SYNAPSE_FROM_AGENT=1` bypass for `me generate` in `src/synapse_memory/cli.py` (constitution Principle IV) — depends on T021
+- [X] T023 [US1] Emit single-line observability log to stderr after each successful `me generate` invocation: `[me.generate.<name>] locale=<src:value> domain=<src:value> profile_used=<bool> matched=<count> duration=<ms>` — depends on T021
+- [X] T024 [US1] Implement deterministic filename rule in `pipeline.save_result()` per [research.md R-5](./research.md): `{display_name} - {primary_input} ({YYYY-MM-DD}).md` with OS-safe normalization and timestamp-suffix collision fallback — depends on T014
 
 **Checkpoint**: US1 fully functional. `synapse-memory me generate weekly_report --period=2026-W19` 가 fixture 에서 작동.
 

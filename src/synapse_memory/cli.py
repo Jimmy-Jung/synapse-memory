@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import datetime
 import os
 import stat
 import sys
@@ -542,6 +543,97 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     print(f"  매칭 ProjectCard ({len(result.project_card_ids)}):")
     for pid in result.project_card_ids:
         print(f"    - {pid}")
+    return 0
+
+
+def _parse_input_kv(items: list[str]) -> dict[str, str]:
+    """``--input key=value`` 들을 dict 로 변환."""
+    out: dict[str, str] = {}
+    for raw in items or []:
+        if "=" not in raw:
+            raise ValueError(f"--input must be key=value, got '{raw}'")
+        k, _, v = raw.partition("=")
+        k = k.strip()
+        if not k:
+            raise ValueError(f"--input key empty: '{raw}'")
+        out[k] = v
+    return out
+
+
+def cmd_me_generate(args: argparse.Namespace) -> int:
+    """Recipe-based generator (007-me-recipes) — me generate <recipe>."""
+    from synapse_memory.recipes import (
+        InputValidationError,
+        RecipeNotFoundError,
+        RecipePromptTooLargeError,
+        RecipeValidationError,
+        generate as recipes_generate,
+    )
+
+    _interactive_guard(f"me generate {args.recipe}", f"generate-{args.recipe}")
+
+    try:
+        inputs = _parse_input_kv(args.input or [])
+    except ValueError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+
+    vault_path = Path(args.vault).expanduser().resolve() if args.vault else None
+    today_resolved: datetime.date | None
+    if args.today:
+        try:
+            today_resolved = datetime.date.fromisoformat(args.today)
+        except ValueError as exc:
+            print(f"{FAIL} --today must be YYYY-MM-DD: {exc}", file=sys.stderr)
+            return 1
+    else:
+        today_resolved = None
+
+    store = None
+    try:
+        store = open_vector_store()
+    except (VectorStoreError, EmbeddingUnavailableError):
+        store = None  # recipe 가 RAG 없이도 동작 가능
+
+    t0 = time.monotonic()
+    try:
+        result = recipes_generate(
+            args.recipe,
+            inputs=inputs,
+            vault_path=vault_path,
+            store=store,
+            today=today_resolved,
+            cli_language=args.language,
+            cli_domain=args.domain,
+            dry_run=args.dry_run,
+        )
+    except RecipeNotFoundError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 2
+    except InputValidationError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 3
+    except (RecipeValidationError, RecipePromptTooLargeError) as exc:
+        print(f"{FAIL} recipe 검증 실패: {exc}", file=sys.stderr)
+        return 4
+    except (EmbeddingError, AIError) as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 10
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    sys.stdout.write(result.answer_markdown.rstrip() + "\n")
+    if result.saved_path:
+        sys.stdout.write(f"\n[saved] {result.saved_path}\n")
+    sys.stdout.flush()
+    sys.stderr.write(
+        f"[me.generate.{result.recipe_name}] "
+        f"locale={result.locale_source}:{result.locale} "
+        f"domain={result.domain_source}:{result.domain} "
+        f"profile_used={result.profile_used} "
+        f"matched={len(result.source_ids)} "
+        f"duration={duration_ms}ms\n"
+    )
+    sys.stderr.flush()
     return 0
 
 
@@ -1473,6 +1565,34 @@ def build_parser() -> argparse.ArgumentParser:
     p_dec.add_argument("--top-k", type=int, default=6)
     p_dec.add_argument("--model", default="sonnet")
     p_dec.set_defaults(func=cmd_me_decide)
+
+    p_gen = me_sub.add_parser(
+        "generate",
+        help="recipe 기반 결과물 생성 (007-me-recipes: weekly_report / journal / ...)",
+    )
+    p_gen.add_argument("recipe", help="recipe 이름 (me recipes list 로 확인 — 추후)")
+    p_gen.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="recipe input_schema 의 key=value (여러 번 지정 가능)",
+    )
+    p_gen.add_argument("--language", default=None, help="locale precedence 0 순위")
+    p_gen.add_argument("--domain", default=None, help="domain precedence 0 순위")
+    p_gen.add_argument("--model", default=None, help="recipe 의 model 기본값 override")
+    p_gen.add_argument("--vault", default=None, help="vault 경로 override")
+    p_gen.add_argument(
+        "--today",
+        default=None,
+        help="YYYY-MM-DD — {today} placeholder + 파일명 날짜 override (테스트용)",
+    )
+    p_gen.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="LLM 호출·저장·last_answer 생략. system/user prompt 미리보기만",
+    )
+    p_gen.set_defaults(func=cmd_me_generate)
 
     p_daily = sub.add_parser("daily", help="일일 통합 파이프라인 (5분 워크플로)")
     p_daily.add_argument(
