@@ -351,6 +351,7 @@ synapse-memory me update-profile --facts-only --sample-lines 200
 synapse-memory daily
 synapse-memory daily --profile-facts-only
 synapse-memory daily --dry-run
+synapse-memory daily --resume-from classify
 ```
 
 가능한 단계는 다음과 같습니다.
@@ -362,6 +363,7 @@ classify
 generate
 index
 update_profile
+report
 ```
 
 특정 단계만 실행하거나 제외할 수 있습니다.
@@ -370,6 +372,15 @@ update_profile
 synapse-memory daily --only collect_obsidian,index
 synapse-memory daily --skip update_profile
 ```
+
+실패한 단계부터 재개할 수 있습니다.
+
+```bash
+synapse-memory daily --resume-from classify
+synapse-memory daily --dry-run --resume-from index
+```
+
+`--resume-from` 대상 이전 단계는 실행하지 않고 `resume before <stage>` 이유로 건너뜀 처리됩니다. 실행 중 upstream stage가 실패하면 해당 stage에 의존하는 downstream stage는 `requires <stage>` 이유로 건너뜁니다. daily 종료 시 `90_System/AI/DailyReports/YYYY-MM-DD.md`에 stage별 status, elapsed, skip reason, 실패 stage와 재개 명령이 기록됩니다.
 
 모델 관련 옵션:
 

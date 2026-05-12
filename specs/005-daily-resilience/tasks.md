@@ -17,9 +17,9 @@
 
 **Purpose**: Create daily resilience scaffolding without changing behavior.
 
-- [ ] T001 [P] Create `tests/test_daily_cli.py` with module docstring and CLI runner helpers
-- [ ] T002 [P] Add DailyReport fixture helpers to `tests/test_daily.py`
-- [ ] T003 [P] Create `.github/workflows/ci.yml` shell with checkout/setup-python steps
+- [X] T001 [P] Create `tests/test_daily_cli.py` with module docstring and CLI runner helpers
+- [X] T002 [P] Add DailyReport fixture helpers to `tests/test_daily.py`
+- [X] T003 [P] Create `.github/workflows/ci.yml` shell with checkout/setup-python steps
 
 ---
 
@@ -27,11 +27,11 @@
 
 **Purpose**: Core stage model and result types used by all stories.
 
-- [ ] T004 [P] Write failing `DailyStage` validation/order tests in `tests/test_daily.py`
-- [ ] T005 [P] Write failing `StageResult` status property tests in `tests/test_daily.py`
-- [ ] T006 Implement `DailyStage`, `StageStatus`, and extended `StepResult` in `src/synapse_memory/daily.py`
-- [ ] T007 Implement stage registry validation helper in `src/synapse_memory/daily.py`
-- [ ] T008 Run foundational tests with `python3 -m pytest tests/test_daily.py -q`
+- [X] T004 [P] Write failing `DailyStage` validation/order tests in `tests/test_daily.py`
+- [X] T005 [P] Write failing `StageResult` status property tests in `tests/test_daily.py`
+- [X] T006 Implement `DailyStage`, `StageStatus`, and extended `StepResult` in `src/synapse_memory/daily.py`
+- [X] T007 Implement stage registry validation helper in `src/synapse_memory/daily.py`
+- [X] T008 Run foundational tests with `python3 -m pytest tests/test_daily.py -q`
 
 **Checkpoint**: Stage metadata and result objects are deterministic and testable.
 
@@ -45,16 +45,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] Write failing dependency skip test for classify failure in `tests/test_daily.py`
-- [ ] T010 [P] [US1] Write failing skip reason test for downstream stages in `tests/test_daily.py`
-- [ ] T011 [P] [US1] Write failing CLI summary status test in `tests/test_daily_cli.py`
+- [X] T009 [P] [US1] Write failing dependency skip test for classify failure in `tests/test_daily.py`
+- [X] T010 [P] [US1] Write failing skip reason test for downstream stages in `tests/test_daily.py`
+- [X] T011 [P] [US1] Write failing CLI summary status test in `tests/test_daily_cli.py`
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Refactor `run_daily()` to iterate `DailyStage` registry in `src/synapse_memory/daily.py`
-- [ ] T013 [US1] Implement upstream failure skip logic in `src/synapse_memory/daily.py`
-- [ ] T014 [US1] Update `cmd_daily()` summary output for success/failed/skipped in `src/synapse_memory/cli.py`
-- [ ] T015 [US1] Run US1 tests with `python3 -m pytest tests/test_daily.py tests/test_daily_cli.py -q`
+- [X] T012 [US1] Refactor `run_daily()` to iterate `DailyStage` registry in `src/synapse_memory/daily.py`
+- [X] T013 [US1] Implement upstream failure skip logic in `src/synapse_memory/daily.py`
+- [X] T014 [US1] Update `cmd_daily()` summary output for success/failed/skipped in `src/synapse_memory/cli.py`
+- [X] T015 [US1] Run US1 tests with `python3 -m pytest tests/test_daily.py tests/test_daily_cli.py -q`
 
 **Checkpoint**: User Story 1 is independently usable as the MVP.
 
@@ -68,17 +68,17 @@
 
 ### Tests for User Story 2
 
-- [ ] T016 [P] [US2] Write failing `run_daily(resume_from=\"classify\")` test in `tests/test_daily.py`
-- [ ] T017 [P] [US2] Write failing unknown resume stage test in `tests/test_daily.py`
-- [ ] T018 [P] [US2] Write failing CLI `--resume-from` exit code tests in `tests/test_daily_cli.py`
-- [ ] T019 [P] [US2] Write failing dry-run resume output test in `tests/test_daily.py`
+- [X] T016 [P] [US2] Write failing `run_daily(resume_from=\"classify\")` test in `tests/test_daily.py`
+- [X] T017 [P] [US2] Write failing unknown resume stage test in `tests/test_daily.py`
+- [X] T018 [P] [US2] Write failing CLI `--resume-from` exit code tests in `tests/test_daily_cli.py`
+- [X] T019 [P] [US2] Write failing dry-run resume output test in `tests/test_daily.py`
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Add `resume_from` parameter and validation to `run_daily()` in `src/synapse_memory/daily.py`
-- [ ] T021 [US2] Add `--resume-from` argparse wiring in `src/synapse_memory/cli.py`
-- [ ] T022 [US2] Ensure invalid resume returns exit code 2 before execution in `src/synapse_memory/cli.py`
-- [ ] T023 [US2] Run US2 tests with `python3 -m pytest tests/test_daily.py tests/test_daily_cli.py -q`
+- [X] T020 [US2] Add `resume_from` parameter and validation to `run_daily()` in `src/synapse_memory/daily.py`
+- [X] T021 [US2] Add `--resume-from` argparse wiring in `src/synapse_memory/cli.py`
+- [X] T022 [US2] Ensure invalid resume returns exit code 2 before execution in `src/synapse_memory/cli.py`
+- [X] T023 [US2] Run US2 tests with `python3 -m pytest tests/test_daily.py tests/test_daily_cli.py -q`
 
 **Checkpoint**: User Stories 1 and 2 work independently.
 
@@ -92,13 +92,13 @@
 
 ### Tests for User Story 3
 
-- [ ] T024 [P] [US3] Write failing workflow presence/trigger tests in `tests/test_daily_cli.py`
-- [ ] T025 [P] [US3] Write failing workflow command tests for pytest/ruff/mypy in `tests/test_daily_cli.py`
+- [X] T024 [P] [US3] Write failing workflow presence/trigger tests in `tests/test_daily_cli.py`
+- [X] T025 [P] [US3] Write failing workflow command tests for pytest/ruff/mypy in `tests/test_daily_cli.py`
 
 ### Implementation for User Story 3
 
-- [ ] T026 [US3] Complete `.github/workflows/ci.yml` with pytest, ruff, and mypy jobs
-- [ ] T027 [US3] Run CI workflow structure tests with `python3 -m pytest tests/test_daily_cli.py -q`
+- [X] T026 [US3] Complete `.github/workflows/ci.yml` with pytest, ruff, and mypy jobs
+- [X] T027 [US3] Run CI workflow structure tests with `python3 -m pytest tests/test_daily_cli.py -q`
 
 **Checkpoint**: CI contract exists and is locally testable.
 
@@ -108,17 +108,17 @@
 
 **Purpose**: Persist observability output, document usage, and run merge gates.
 
-- [ ] T028 [P] Write failing DailyReport render/no-raw-fields tests in `tests/test_daily.py`
-- [ ] T029 Implement DailyReport markdown rendering and write helper in `src/synapse_memory/daily.py`
-- [ ] T030 Integrate report stage into daily stage registry in `src/synapse_memory/daily.py`
-- [ ] T031 [P] Update `docs/commands.md` daily section with `--resume-from`, skip semantics, and report path
-- [ ] T032 [P] Update `commands/synapse-daily.md` with `--resume-from` examples and `SYNAPSE_FROM_AGENT=1`
-- [ ] T033 Run quickstart smoke from `specs/005-daily-resilience/quickstart.md` and save transcript in `specs/005-daily-resilience/quickstart-results.md`
-- [ ] T034 Run ruff on changed files with `uvx ruff check src/synapse_memory/daily.py src/synapse_memory/cli.py tests/test_daily.py tests/test_daily_cli.py`
-- [ ] T035 Run mypy strict with `python3 -m mypy --strict src/synapse_memory/daily.py`
-- [ ] T036 Run full tests with `python3 -m pytest tests/ -W ignore::DeprecationWarning`
-- [ ] T037 Run redaction golden eval and record Pass1/Pass2 F1 in `specs/005-daily-resilience/redaction-eval-results.md`
-- [ ] T038 Review `git diff --check` and remove unrelated changes before commit
+- [X] T028 [P] Write failing DailyReport render/no-raw-fields tests in `tests/test_daily.py`
+- [X] T029 Implement DailyReport markdown rendering and write helper in `src/synapse_memory/daily.py`
+- [X] T030 Integrate report stage into daily stage registry in `src/synapse_memory/daily.py`
+- [X] T031 [P] Update `docs/commands.md` daily section with `--resume-from`, skip semantics, and report path
+- [X] T032 [P] Update `commands/synapse-daily.md` with `--resume-from` examples and `SYNAPSE_FROM_AGENT=1`
+- [X] T033 Run quickstart smoke from `specs/005-daily-resilience/quickstart.md` and save transcript in `specs/005-daily-resilience/quickstart-results.md`
+- [X] T034 Run ruff on changed files with `uvx ruff check src/synapse_memory/daily.py src/synapse_memory/cli.py tests/test_daily.py tests/test_daily_cli.py`
+- [X] T035 Run mypy strict with `python3 -m mypy --strict src/synapse_memory/daily.py`
+- [X] T036 Run full tests with `python3 -m pytest tests/ -W ignore::DeprecationWarning`
+- [X] T037 Run redaction golden eval and record Pass1/Pass2 F1 in `specs/005-daily-resilience/redaction-eval-results.md`
+- [X] T038 Review `git diff --check` and remove unrelated changes before commit
 
 ---
 
