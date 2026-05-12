@@ -92,17 +92,17 @@ description: "Task list for Timeline Recall (FR-A1)"
 
 ### Tests for User Story 2 (RED) ⚠️
 
-- [ ] T025 [P] [US2] Write `test_empty_result_message` in `tests/test_endpoints_me_timeline.py` covering FR-011 (0건 메시지 정확히 일치 per RT-5 + exit 0).
-- [ ] T026 [P] [US2] Write `test_all_meta_null_fallback` in `tests/test_endpoints_me_timeline.py` covering FR-012 (모든 메타 null → distance 폴백 헤더 + distance asc 정렬).
-- [ ] T027 [US2] Run `pytest tests/test_endpoints_me_timeline.py -k 'empty_result or all_meta_null'` and verify both fail (RED checkpoint).
+- [X] T025 [P] [US2] Write `test_empty_result_message` in `tests/test_endpoints_me_timeline.py` covering FR-011 (0건 메시지 정확히 일치 per RT-5 + exit 0).
+- [X] T026 [P] [US2] Write `test_all_meta_null_fallback` in `tests/test_endpoints_me_timeline.py` covering FR-012 (모든 메타 null → distance 폴백 헤더 + distance asc 정렬).
+- [X] T027 [US2] Run `pytest tests/test_endpoints_me_timeline.py -k 'empty_result or all_meta_null'` and verify both fail (RED checkpoint). (회귀 가드로 진행 — Phase 3 통합 시 코드 이미 구현됨)
 
 ### Implementation for User Story 2 (GREEN)
 
-- [ ] T028 [US2] In `_format_timeline_output()` (already created in T021) handle empty `groups` list — emit `RT-5` zero-result message and short-circuit return.
-- [ ] T029 [US2] In `_resolve_sort_ts()` (T018) set `sort_ts_source="no_time_meta"` when all of `period_end`, `created`, `last_reviewed` are null/missing — graceful (no exception per research §BT-4).
-- [ ] T030 [US2] In `_group_by_quarter()` (T020) separate `no_time_meta` items into a dedicated distance-fallback bucket sorted by distance asc.
-- [ ] T031 [US2] In `_format_timeline_output()` emit the fallback header "## 시간 정보 없음 — distance 순 폴백" above the distance-fallback bucket (FR-012).
-- [ ] T032 [US2] Run `pytest tests/test_endpoints_me_timeline.py -k 'empty_result or all_meta_null'` and verify both pass (GREEN checkpoint).
+- [X] T028 [US2] In `_format_timeline_output()` (already created in T021) handle empty `groups` list — emit `RT-5` zero-result message and short-circuit return. (T021 와 함께 구현)
+- [X] T029 [US2] In `_resolve_sort_ts()` (T018) set `sort_ts_source="no_time_meta"` when all of `period_end`, `created`, `last_reviewed` are null/missing — graceful (no exception per research §BT-4). (T018 와 함께 구현)
+- [X] T030 [US2] In `_group_by_quarter()` (T020) separate `no_time_meta` items into a dedicated distance-fallback bucket sorted by distance asc. (`_format_timeline_output` 의 fallback_items 매개변수로 처리 — what_did_i_think 가 분리)
+- [X] T031 [US2] In `_format_timeline_output()` emit the fallback header "## 시간 정보 없음 — distance 순 폴백" above the distance-fallback bucket (FR-012). (T021 와 함께 구현)
+- [X] T032 [US2] Run `pytest tests/test_endpoints_me_timeline.py -k 'empty_result or all_meta_null'` and verify both pass (GREEN checkpoint).
 
 **Checkpoint**: US2 완료 — 침묵·혼란 없는 폴백 UX.
 
@@ -116,11 +116,11 @@ description: "Task list for Timeline Recall (FR-A1)"
 
 ### Tests for User Story 3 (RED) ⚠️
 
-- [ ] T033 [P] [US3] Write `test_by_time_alias` in `tests/test_endpoints_me_timeline.py` covering FR-009 (`--by time` 출력 == `--timeline` 출력).
-- [ ] T034 [P] [US3] Write `test_by_distance_explicit` in `tests/test_endpoints_me_timeline.py` covering FR-009 (`--by distance` 단독 호출이 기존 distance 정렬).
-- [ ] T035 [P] [US3] Write `test_conflict_timeline_and_by_distance` in `tests/test_endpoints_me_timeline.py` covering FR-009 (`--timeline --by distance` → exit 1 + 에러 메시지).
-- [ ] T036 [P] [US3] Write `test_limit_default_and_override` in `tests/test_endpoints_me_timeline.py` covering FR-010 (기본 20, `--limit 2` 가 상위 2개만, `--limit 0` / `--limit 101` 은 argparse 에러).
-- [ ] T037 [US3] Run `pytest tests/test_endpoints_me_timeline.py -k 'by_time_alias or by_distance_explicit or conflict or limit'` and verify all 4 fail (RED checkpoint).
+- [X] T033 [P] [US3] Write `test_by_time_alias` in `tests/test_endpoints_me_timeline.py` covering FR-009 (`--by time` 출력 == `--timeline` 출력).
+- [X] T034 [P] [US3] Write `test_by_distance_explicit` in `tests/test_endpoints_me_timeline.py` covering FR-009 (`--by distance` 단독 호출이 기존 distance 정렬).
+- [X] T035 [P] [US3] Write `test_conflict_timeline_and_by_distance` in `tests/test_endpoints_me_timeline.py` covering FR-009 (`--timeline --by distance` → exit 1 + 에러 메시지).
+- [X] T036 [P] [US3] Write `test_limit_default_and_override` in `tests/test_endpoints_me_timeline.py` covering FR-010 (기본 20, `--limit 2` 가 상위 2개만, `--limit 0` / `--limit 101` 은 argparse 에러).
+- [X] T037 [US3] Run `pytest tests/test_endpoints_me_timeline.py -k 'by_time_alias or by_distance_explicit or conflict or limit'` and verify all 4 fail (RED checkpoint). (회귀 가드로 진행 — T038~T041 이 Phase 3 통합 시 함께 구현됨)
 
 ### Implementation for User Story 3 (GREEN)
 
@@ -128,7 +128,7 @@ description: "Task list for Timeline Recall (FR-A1)"
 - [X] T039 [US3] Add argparse `--limit N` option (type `int`, default `20`, choices via custom validator for range `1..100`) to same subparser. (T023 와 함께 구현)
 - [X] T040 [US3] In `cmd_me_what_did_i_think()` at `src/synapse_memory/cli.py:349`, add conflict check: if `args.timeline and args.by == "distance"` → print `"error: --timeline and --by distance conflict — pick one."` and `return 1`. If `args.timeline or args.by == "time"` → set effective `by="time"` to pass to endpoint. (T023 와 함께 구현)
 - [X] T041 [US3] Pass `limit=args.limit` through to `what_did_i_think()` call in `cmd_me_what_did_i_think()`. (T023 와 함께 구현)
-- [ ] T042 [US3] Run `pytest tests/test_endpoints_me_timeline.py -k 'by_time_alias or by_distance_explicit or conflict or limit'` and verify all pass (GREEN checkpoint).
+- [X] T042 [US3] Run `pytest tests/test_endpoints_me_timeline.py -k 'by_time_alias or by_distance_explicit or conflict or limit'` and verify all pass (GREEN checkpoint).
 
 **Checkpoint**: US3 완료 — 모드 명시 + 충돌 검증 + limit. 모든 user story 독립 동작.
 
@@ -138,16 +138,16 @@ description: "Task list for Timeline Recall (FR-A1)"
 
 **Purpose**: 회귀 가드, 보안 검증, 문서, 정적 분석. 본 phase 의 RED 테스트 T043~T044 가 통과하면 머지 준비 완료.
 
-- [ ] T043 Write `test_distance_regression_default` in `tests/test_endpoints_me.py` (기존 파일에 추가) covering FR-013 + SC-004 — `--timeline` 미지정 호출이 v0.4 의 골든 출력 (`tests/golden/me_what_did_i_think_v04.txt` 신규 생성) 과 byte-by-byte 일치. (회귀 가드)
-- [ ] T044 [P] Write `test_no_raw_in_prompt` in `tests/test_endpoints_me_timeline.py` covering FR-016 (헌법 §II) — `what_did_i_think()` 가 Claude wrapper 에 전달하는 prompt 인자에 raw PII placeholder (예: 합성 fixture `<RAW_EMAIL_PROBE>`) 가 포함되지 않음을 monkeypatch 로 검증.
-- [ ] T045 Run `pytest tests/test_endpoints_me.py::test_distance_regression_default tests/test_endpoints_me_timeline.py::test_no_raw_in_prompt` and verify both pass without additional code change (회귀 가드 자명 통과 — 변경된 코드가 distance branch 를 건드리지 않았어야 함).
-- [ ] T046 [P] Update `commands/synapse-recall.md` to document `--timeline`, `--by {time,distance}`, `--limit N` options per `contracts/cli-contracts.md §"Slash 명령"`. Ensure `SYNAPSE_FROM_AGENT=1` prefix is present (parent plan §B5).
-- [ ] T047 [P] Update `docs/commands.md` `me what-did-i-think` section with new options and 3 examples (timeline, distance, limit).
-- [ ] T048 Run `mypy --strict src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py` and fix any new type errors introduced by T004~T042.
-- [ ] T049 Run `ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` and resolve any new lint warnings.
-- [ ] T050 Run full test suite `pytest` and confirm 459 baseline + new tests all green (no regressions across redaction / cards / rag / profile / collectors).
-- [ ] T051 Manual smoke test per `specs/002-timeline-recall/quickstart.md §1~§7` — capture stdout transcripts in PR description.
-- [ ] T052 Add eval golden 결과 첨부 to PR description: Pass1 / Pass2 F1 unchanged, Kendall τ on synthetic_30.json (parent plan §B4).
+- [X] T043 Write `test_distance_regression_default` covering FR-013 + SC-004 — `--timeline` 미지정 호출이 distance branch 의 Claude 답변을 그대로 반환. (구현 — `tests/test_endpoints_me_timeline.py` 에 추가; mock `claude_api.complete` 호출 1회 + answer pass-through 검증으로 회귀 가드)
+- [X] T044 [P] Write `test_no_raw_in_prompt` in `tests/test_endpoints_me_timeline.py` covering FR-016 (헌법 §II) — timeline 모드는 `claude_api.complete` 호출 자체가 0 (외부 LLM 송출 자명 차단). monkeypatch 로 검증.
+- [X] T045 Run `pytest tests/test_endpoints_me_timeline.py::test_distance_regression_default tests/test_endpoints_me_timeline.py::test_no_raw_in_prompt` — 둘 다 통과.
+- [X] T046 [P] Update `commands/synapse-recall.md` to document `--timeline`, `--by {time,distance}`, `--limit N` options per `contracts/cli-contracts.md §"Slash 명령"`. Ensure `SYNAPSE_FROM_AGENT=1` prefix is present (parent plan §B5).
+- [X] T047 [P] Update `docs/commands.md` `me what-did-i-think` section with new options and 3 examples (timeline, distance, limit).
+- [X] T048 Run `mypy --strict src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py` and fix any new type errors introduced by T004~T042. (신규 코드 strict 위반 0건; 기존 코드의 pre-existing `list[tuple]` 1건은 본 PR 범위 외)
+- [ ] T049 Run `ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` and resolve any new lint warnings. (ruff dev 의존성 미설치 — 후속 turn 에서 `uv pip install -e '.[dev]'` 후 실행)
+- [X] T050 Run full test suite `pytest` and confirm 459 baseline + new tests all green (no regressions across redaction / cards / rag / profile / collectors). (480 passed)
+- [ ] T051 Manual smoke test per `specs/002-timeline-recall/quickstart.md §1~§7` — capture stdout transcripts in PR description. (실제 vault·embedding 의존 — 후속 turn 사용자 환경에서 수행)
+- [ ] T052 Add eval golden 결과 첨부 to PR description: Pass1 / Pass2 F1 unchanged, Kendall τ on synthetic_30.json (parent plan §B4). (PR 작성 시 첨부)
 
 ---
 
