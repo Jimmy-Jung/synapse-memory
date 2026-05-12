@@ -22,7 +22,7 @@ from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
 
 
-def _claude_env() -> ClaudeEnvironment:
+def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(
         claude_path="/opt/homebrew/bin/claude",
         claude_version="2.1.x",
@@ -70,7 +70,7 @@ class TestAsk:
     def test_no_results_returns_helpful_message(self) -> None:
         store = self._setup_store([])
         with patch.object(ask_mod, "embed_query", return_value=[0.0]):
-            result = ask("질문", store=store, claude_env=_claude_env())
+            result = ask("질문", store=store, ai_env=_ai_env())
         assert "rag index" in result.answer.lower()
         assert result.sources == []
 
@@ -83,11 +83,11 @@ class TestAsk:
         with patch.object(
             ask_mod, "embed_query", return_value=[0.0]
         ), patch.object(
-            ask_mod.claude_api,
+            ask_mod.ai_api,
             "complete",
             return_value="당신은 단심앱을 만들었습니다 [dansim].",
         ):
-            result = ask("뭐 만들었어?", store=store, claude_env=_claude_env())
+            result = ask("뭐 만들었어?", store=store, ai_env=_ai_env())
 
         assert "단심앱" in result.answer
         assert len(result.sources) == 2
@@ -105,11 +105,11 @@ class TestAsk:
         with patch.object(
             ask_mod, "embed_query", return_value=[0.0]
         ), patch.object(
-            ask_mod.claude_api,
+            ask_mod.ai_api,
             "complete",
             return_value="단심앱입니다 [dansim].",
         ):
-            ask("뭐 만들었어?", store=store, claude_env=_claude_env())
+            ask("뭐 만들었어?", store=store, ai_env=_ai_env())
 
         ref = load_last_answer()
         assert ref is not None
@@ -124,11 +124,11 @@ class TestAsk:
         with patch.object(
             ask_mod, "embed_query", return_value=[0.0]
         ), patch.object(
-            ask_mod.claude_api,
+            ask_mod.ai_api,
             "complete",
             return_value="Note: I will answer from the cards.\n\n단심앱입니다 [dansim].",
         ):
-            result = ask("뭐 만들었어?", store=store, claude_env=_claude_env())
+            result = ask("뭐 만들었어?", store=store, ai_env=_ai_env())
 
         assert result.answer == "단심앱입니다 [dansim]."
 
@@ -138,7 +138,7 @@ class TestAsk:
             ask(
                 "q",
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 where={"source_kind": "card_project"},
             )
         kwargs = store.query.call_args.kwargs
@@ -147,7 +147,7 @@ class TestAsk:
     def test_top_k_passed(self) -> None:
         store = self._setup_store([])
         with patch.object(ask_mod, "embed_query", return_value=[0.0]):
-            ask("q", top_k=10, store=store, claude_env=_claude_env())
+            ask("q", top_k=10, store=store, ai_env=_ai_env())
         assert store.query.call_args.kwargs["top_k"] == 10
 
     def test_claude_receives_context(self) -> None:
@@ -158,9 +158,9 @@ class TestAsk:
         with patch.object(
             ask_mod, "embed_query", return_value=[0.0]
         ), patch.object(
-            ask_mod.claude_api, "complete", return_value="답변"
+            ask_mod.ai_api, "complete", return_value="답변"
         ) as mock_complete:
-            ask("문의", store=store, claude_env=_claude_env())
+            ask("문의", store=store, ai_env=_ai_env())
 
         prompt = mock_complete.call_args.args[0]
         assert "문의" in prompt

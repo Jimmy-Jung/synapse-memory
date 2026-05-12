@@ -20,7 +20,6 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 # 단계 이름 — CLI --only에서 사용
@@ -66,7 +65,7 @@ def _run_step(
     t0 = time.monotonic()
     try:
         summary = func() or ""
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         elapsed = time.monotonic() - t0
         on_log(f"  실패: {exc}")
         return StepResult(name=name, elapsed=elapsed, error=str(exc))
@@ -92,7 +91,7 @@ def run_daily(
     Args:
         only: 이 단계 이름들만 실행. None이면 전체.
         skip: 제외할 단계.
-        classify_model / generate_model / profile_model: 단계별 Claude 모델.
+        classify_model / generate_model / profile_model: 단계별 AI 모델.
         profile_sample_lines: update-profile의 history 분석 줄 수.
         profile_facts_only: DecisionPattern 추출 skip.
         dry_run: True면 단계 이름만 출력.
@@ -141,12 +140,12 @@ def run_daily(
         )
         from synapse_memory.clusters import identify_clusters
         from synapse_memory.collectors.obsidian import get_vault_path as obs_path
-        from synapse_memory.llm import detect_claude_environment
+        from synapse_memory.llm import detect_ai_environment
 
         def step():
-            env = detect_claude_environment(model=classify_model)
+            env = detect_ai_environment(model=classify_model)
             if not env.ready:
-                raise RuntimeError("Claude CLI 미설치")
+                raise RuntimeError("AI provider 미설치")
             clusters = identify_clusters()
             existing = load_classifications()
             new_clusters = [c for c in clusters if c.cluster_id not in existing]
@@ -157,10 +156,10 @@ def run_daily(
             for c in new_clusters:
                 try:
                     cls = classify_cluster(
-                        c, obs_root=obs_root, claude_env=env, model=classify_model
+                        c, obs_root=obs_root, ai_env=env, model=classify_model
                     )
                     cls_dict[c.cluster_id] = cls
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     on_log(f"    {c.cluster_id} 실패: {exc}")
             save_classifications(cls_dict)
             return f"신규 {len(new_clusters)}개 분류"
@@ -178,12 +177,12 @@ def run_daily(
         from synapse_memory.cards.project import projects_dir, save_project_card
         from synapse_memory.clusters import identify_clusters
         from synapse_memory.collectors.obsidian import get_vault_path as obs_path
-        from synapse_memory.llm import detect_claude_environment
+        from synapse_memory.llm import detect_ai_environment
 
         def step():
-            env = detect_claude_environment(model=generate_model)
+            env = detect_ai_environment(model=generate_model)
             if not env.ready:
-                raise RuntimeError("Claude CLI 미설치")
+                raise RuntimeError("AI provider 미설치")
             classifications = load_classifications()
             if not classifications:
                 return "classifications 비어있음"
@@ -204,12 +203,12 @@ def run_daily(
                             clusters[cid],
                             candidate_name=cls.candidate_name,
                             obs_root=obs_root,
-                            claude_env=env,
+                            ai_env=env,
                             model=generate_model,
                         )
                         save_project_card(card)
                         created += 1
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         on_log(f"    {cid} 실패: {exc}")
                 else:
                     target = companies_dir() / f"{cid}.md"
@@ -220,12 +219,12 @@ def run_daily(
                             clusters[cid],
                             candidate_name=cls.candidate_name,
                             obs_root=obs_root,
-                            claude_env=env,
+                            ai_env=env,
                             model=generate_model,
                         )
                         save_company_card(card_c)
                         created += 1
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         on_log(f"    {cid} 실패: {exc}")
             return f"신규 Card {created}개 생성"
 
@@ -245,7 +244,7 @@ def run_daily(
 
     # 6. update profile (today's history → MemoryInbox PR)
     if "update_profile" in selected:
-        from synapse_memory.llm import detect_claude_environment
+        from synapse_memory.llm import detect_ai_environment
         from synapse_memory.profile.extract import (
             extract_decision_patterns,
             extract_profile_facts,
@@ -253,20 +252,20 @@ def run_daily(
         )
 
         def step():
-            env = detect_claude_environment(model=profile_model)
+            env = detect_ai_environment(model=profile_model)
             if not env.ready:
-                raise RuntimeError("Claude CLI 미설치")
+                raise RuntimeError("AI provider 미설치")
             facts = extract_profile_facts(
                 sample_lines=profile_sample_lines,
                 model=profile_model,
-                claude_env=env,
+                ai_env=env,
             )
             patterns = []
             if not profile_facts_only:
                 patterns = extract_decision_patterns(
                     sample_lines=profile_sample_lines,
                     model=profile_model,
-                    claude_env=env,
+                    ai_env=env,
                 )
             path = save_profile_update(facts, patterns)
             return f"fact={len(facts)} pattern={len(patterns)} → {path.name}"

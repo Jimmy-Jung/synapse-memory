@@ -24,7 +24,7 @@ def price_usage(
         return PricedUsage(usd=round(max(0.0, provider_usd), 8), pricing_source="provider")
     if provider == "apfel":
         return PricedUsage(usd=0.0, pricing_source="local_unpriced")
-    # Claude Code may expose cost in the envelope. Without that field, do not
-    # pretend current public pricing is known.
+    # Claude Code and Codex may expose cost in their output in the future.
+    # Without that field, do not pretend current public pricing is known.
     _ = (model, input_tokens, output_tokens)
     return PricedUsage(usd=0.0, pricing_source="unknown")

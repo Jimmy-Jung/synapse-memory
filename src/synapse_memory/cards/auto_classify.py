@@ -1,10 +1,10 @@
-"""Cluster → 카테고리 자동 분류 (Claude API).
+"""Cluster → 카테고리 자동 분류 (AI provider).
 
 흐름::
 
     cluster의 sample notes (3-5개)
         ↓ redact_full (Pass 1+2 통과 — 외부 API에 raw 노출 금지)
-        ↓ Claude API (claude.complete_structured)
+        ↓ AI provider (ai_api.complete_structured)
     ClusterClassification (kind / candidate_name / rationale)
 
 분류 카테고리:
@@ -20,20 +20,21 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from synapse_memory.clusters.identify import ProjectCluster
-from synapse_memory.llm import claude as claude_api
+from synapse_memory.llm import ai_api
+from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.redaction import redact_full
 from synapse_memory.storage.l0 import l0_root
 
 VALID_KINDS = ("project", "company", "domain", "life", "skip")
 SAMPLE_NOTES = 5
 SAMPLE_NOTE_CHARS = 1500   # 노트당 최대 문자 (redact 전)
-MAX_RAW_TEXT = 8000         # Claude 입력 총량 제한
+MAX_RAW_TEXT = 8000         # AI provider 입력 총량 제한
 DEFAULT_CLASSIFY_MODEL = "haiku"  # 단순 분류 작업 — haiku로 비용 1/3
 
 CLASSIFY_SYSTEM = (
@@ -64,7 +65,7 @@ class ClusterClassification:
     candidate_name: str
     rationale: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return asdict(self)
 
 
@@ -122,19 +123,19 @@ def classify_cluster(
     cluster: ProjectCluster,
     *,
     obs_root: Path,
-    claude_env: ClaudeEnvironment,
+    ai_env: AIEnvironment,
     apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_CLASSIFY_MODEL,
 ) -> ClusterClassification:
     """단일 cluster 분류.
 
-    sample notes → redact_full → Claude → ClusterClassification.
+    sample notes → redact_full → AI provider → ClusterClassification.
 
     Args:
-        model: 분류용 Claude 모델 (기본 haiku — 단순 분류라 충분).
+        model: 분류용 모델 (기본 haiku — 단순 분류라 충분).
 
     Raises:
-        ClaudeError: Claude 호출 실패 또는 응답 schema 어긋남.
+        AIError: AI provider 호출 실패 또는 응답 schema 어긋남.
     """
     raw_sample = _gather_sample_text(cluster, obs_root)
     redacted_sample = ""
@@ -146,16 +147,17 @@ def classify_cluster(
 
     # json_schema 안 씀 — sonnet에서 빈 응답 만드는 케이스 발견됨.
     # system prompt + complete_structured fallback parser가 처리.
-    response = claude_api.complete_structured(
+    response = ai_api.complete_structured(
         user_prompt,
         system=CLASSIFY_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
     )
 
     if not isinstance(response, dict):
-        from synapse_memory.llm.claude import ClaudeError
-        raise ClaudeError(f"분류 응답이 dict 아님: {type(response).__name__}")
+        from synapse_memory.llm.ai_api import AIError
+
+        raise AIError(f"분류 응답이 dict 아님: {type(response).__name__}")
 
     kind = str(response.get("kind", "skip")).strip().lower()
     if kind not in VALID_KINDS:
@@ -230,8 +232,6 @@ def save_classifications(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
-    try:
+    with suppress(OSError):
         os.chmod(p, L0_FILE_MODE)
-    except OSError:
-        pass
     return p

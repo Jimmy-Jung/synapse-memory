@@ -1,6 +1,6 @@
 """Cluster auto-classify 테스트.
 
-Claude API는 mock — 분류 흐름과 schema 정합성만 검증.
+AI provider API는 mock — 분류 흐름과 schema 정합성만 검증.
 
 저자: JunyoungJung <joony300@gmail.com>
 작성일: 2026-05-10
@@ -27,7 +27,7 @@ from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.llm.claude import ClaudeEnvironment
 
 
-def _claude_env() -> ClaudeEnvironment:
+def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(
         claude_path="/opt/homebrew/bin/claude",
         claude_version="2.1.132",
@@ -102,7 +102,7 @@ class TestClassifyCluster:
     def test_returns_classification(self, obs_root: Path) -> None:
         cluster = self._setup(obs_root)
         with patch(
-            "synapse_memory.cards.auto_classify.claude_api.complete_structured"
+            "synapse_memory.cards.auto_classify.ai_api.complete_structured"
         ) as mock_cs:
             mock_cs.return_value = {
                 "kind": "project",
@@ -112,7 +112,7 @@ class TestClassifyCluster:
             cls = classify_cluster(
                 cluster,
                 obs_root=obs_root,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert cls.cluster_id == "dansim"
@@ -122,7 +122,7 @@ class TestClassifyCluster:
     def test_invalid_kind_falls_back_to_skip(self, obs_root: Path) -> None:
         cluster = self._setup(obs_root)
         with patch(
-            "synapse_memory.cards.auto_classify.claude_api.complete_structured"
+            "synapse_memory.cards.auto_classify.ai_api.complete_structured"
         ) as mock_cs:
             mock_cs.return_value = {
                 "kind": "weirdkind",
@@ -132,23 +132,23 @@ class TestClassifyCluster:
             cls = classify_cluster(
                 cluster,
                 obs_root=obs_root,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert cls.kind == "skip"
 
     def test_non_dict_response_raises(self, obs_root: Path) -> None:
-        from synapse_memory.llm.claude import ClaudeError
+        from synapse_memory.llm.ai_api import AIError
         cluster = self._setup(obs_root)
         with patch(
-            "synapse_memory.cards.auto_classify.claude_api.complete_structured"
+            "synapse_memory.cards.auto_classify.ai_api.complete_structured"
         ) as mock_cs:
             mock_cs.return_value = "not a dict"
-            with pytest.raises(ClaudeError, match="dict 아님"):
+            with pytest.raises(AIError, match="dict 아님"):
                 classify_cluster(
                     cluster,
                     obs_root=obs_root,
-                    claude_env=_claude_env(),
+                    ai_env=_ai_env(),
                     apfel_env=_apfel_disabled(),
                 )
 

@@ -20,9 +20,10 @@ from typing import Literal
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
-from synapse_memory.llm import claude as claude_api
-from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.llm import ai_api
+from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.rag import (
+    VectorRecord,
     VectorStore,
     embed_query,
     open_vector_store,
@@ -115,9 +116,9 @@ def _company_search_query(company: CompanyCard) -> str:
 
 def _build_resume_prompt(
     company: CompanyCard,
-    matched: list[tuple],
+    matched: list[tuple[VectorRecord, float]],
 ) -> str:
-    """CompanyCard + 매칭 ProjectCard들로 Claude user prompt 빌드."""
+    """CompanyCard + 매칭 ProjectCard들로 AI provider prompt 빌드."""
     company_block = company_card_to_text(company)
     project_blocks: list[str] = []
     for rec, dist in matched:
@@ -141,7 +142,7 @@ def draft_resume(
     top_k_projects: int = DEFAULT_PROJECTS_FOR_RESUME,
     model: str = DEFAULT_RESUME_MODEL,
     vault_path: Path | None = None,
-    claude_env: ClaudeEnvironment | None = None,
+    ai_env: AIEnvironment | None = None,
     store: VectorStore | None = None,
     timeout: int = DEFAULT_RESUME_TIMEOUT,
 ) -> ResumeDraft:
@@ -150,14 +151,14 @@ def draft_resume(
     Args:
         company_id: ``20_Reference/Companies/<id>.md`` 파일명 슬러그.
         top_k_projects: 매칭 ProjectCard 수 (이력서에 인용).
-        model: Claude 모델 (sonnet 권장).
+        model: AI 모델 (sonnet 권장).
 
     Returns:
         ResumeDraft (저장 경로, 인용 project_ids, 원문).
 
     Raises:
         FileNotFoundError: CompanyCard 없음.
-        ClaudeError: 호출 실패.
+        AIError: 호출 실패.
         ValueError: 매칭 ProjectCard 0건.
     """
     company = load_company_card(company_id, vault_path=vault_path)
@@ -180,11 +181,11 @@ def draft_resume(
 
     user_prompt = _build_resume_prompt(company, matched)
 
-    raw_text = claude_api.complete(
+    raw_text = ai_api.complete(
         user_prompt,
         system=RESUME_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
         timeout=timeout,
     )
 
@@ -241,7 +242,7 @@ def what_did_i_think(
     *,
     top_k: int = 8,
     model: str = "sonnet",
-    claude_env: ClaudeEnvironment | None = None,
+    ai_env: AIEnvironment | None = None,
     store: VectorStore | None = None,
     by: Literal["time", "distance"] = "distance",
     limit: int = 20,
@@ -320,11 +321,11 @@ def what_did_i_think(
         + "\n\n사용자가 이 주제에 대해 어떻게 생각해왔는지 정리."
     )
 
-    answer = claude_api.complete(
+    answer = ai_api.complete(
         prompt,
         system=WHAT_DID_I_THINK_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
         timeout=120,
     )
     answer = strip_meta_prefix(answer)
@@ -386,7 +387,7 @@ def decide(
     *,
     top_k: int = 6,
     model: str = "sonnet",
-    claude_env: ClaudeEnvironment | None = None,
+    ai_env: AIEnvironment | None = None,
     store: VectorStore | None = None,
     vault_path: Path | None = None,
 ) -> DecideResult:
@@ -424,11 +425,11 @@ def decide(
     sections.append("# 지시\n위 자료로 사용자 voice 기반 추천.")
     prompt = "\n\n".join(sections)
 
-    answer = claude_api.complete(
+    answer = ai_api.complete(
         prompt,
         system=DECIDE_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
         timeout=120,
     )
     answer = strip_meta_prefix(answer)

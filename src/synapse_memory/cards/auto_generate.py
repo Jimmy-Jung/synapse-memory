@@ -1,11 +1,11 @@
-"""Cluster → Project/Company Card 자동 생성 (Claude API).
+"""Cluster → Project/Company Card 자동 생성 (AI provider).
 
 흐름::
 
     1. classify된 project/company cluster 가져옴
     2. cluster의 모든 obsidian 노트 read
     3. redact_full (Pass 1+2) → redacted text
-    4. cluster meta + redacted → Claude → yaml frontmatter + body 초안
+    4. cluster meta + redacted → AI provider → yaml frontmatter + body 초안
     5. parse → ProjectCard/CompanyCard
     6. status="draft", confidence=0.7로 vault에 저장 (검토 후 promote)
 
@@ -22,17 +22,15 @@ from pathlib import Path
 from synapse_memory.cards.company import (
     CompanyCard,
     parse_company_card,
-    save_company_card,
 )
 from synapse_memory.cards.project import (
     ProjectCard,
     parse_project_card,
-    save_project_card,
 )
 from synapse_memory.clusters.identify import ProjectCluster
-from synapse_memory.llm import claude as claude_api
+from synapse_memory.llm import ai_api
+from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.llm.claude import ClaudeEnvironment, ClaudeError
 from synapse_memory.redaction import redact_full
 
 DEFAULT_GENERATE_MODEL = "sonnet"
@@ -229,24 +227,24 @@ def generate_project_card(
     candidate_name: str,
     *,
     obs_root: Path,
-    claude_env: ClaudeEnvironment,
+    ai_env: AIEnvironment,
     apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_GENERATE_MODEL,
 ) -> ProjectCard:
     """cluster → ProjectCard. yaml frontmatter parse까지 수행.
 
     Raises:
-        ClaudeError: 호출 실패 또는 응답 형식 오류.
+        AIError: 호출 실패 또는 응답 형식 오류.
         ValueError: yaml 파싱 실패.
     """
     redacted = _gather_redacted_text(cluster, obs_root, apfel_env=apfel_env)
     user_prompt = _build_user_prompt(cluster, redacted, candidate_name)
 
-    text = claude_api.complete(
+    text = ai_api.complete(
         user_prompt,
         system=PROJECT_CARD_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
         timeout=DEFAULT_GENERATE_TIMEOUT,
     )
 
@@ -256,7 +254,7 @@ def generate_project_card(
         card = parse_project_card(cleaned)
     except ValueError as exc:
         raise ValueError(
-            f"{exc} — Claude 응답 시작 200자: {cleaned[:200]!r}"
+            f"{exc} — AI 응답 시작 200자: {cleaned[:200]!r}"
         ) from exc
 
     today = datetime.date.today().isoformat()
@@ -277,18 +275,18 @@ def generate_company_card(
     candidate_name: str,
     *,
     obs_root: Path,
-    claude_env: ClaudeEnvironment,
+    ai_env: AIEnvironment,
     apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_GENERATE_MODEL,
 ) -> CompanyCard:
     redacted = _gather_redacted_text(cluster, obs_root, apfel_env=apfel_env)
     user_prompt = _build_user_prompt(cluster, redacted, candidate_name)
 
-    text = claude_api.complete(
+    text = ai_api.complete(
         user_prompt,
         system=COMPANY_CARD_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
     )
 
     cleaned = _strip_outer_fence(text)
@@ -296,7 +294,7 @@ def generate_company_card(
         card = parse_company_card(cleaned)
     except ValueError as exc:
         raise ValueError(
-            f"{exc} — Claude 응답 시작 200자: {cleaned[:200]!r}"
+            f"{exc} — AI 응답 시작 200자: {cleaned[:200]!r}"
         ) from exc
 
     today = datetime.date.today().isoformat()

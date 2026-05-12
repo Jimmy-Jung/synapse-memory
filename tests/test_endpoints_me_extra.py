@@ -24,7 +24,7 @@ from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
 
 
-def _claude_env() -> ClaudeEnvironment:
+def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(claude_path="/x/claude", claude_version="2.1", model="sonnet")
 
 
@@ -45,11 +45,11 @@ class TestWhatDidIThink:
             (_rec("이력서-2026", "# 클린 아키텍처 도입"), 0.4),
         ]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api, "complete",
+            me_mod.ai_api, "complete",
             return_value="TCA를 도입했습니다 [dansim].",
         ):
             result = what_did_i_think(
-                "TCA 아키텍처", store=store, claude_env=_claude_env()
+                "TCA 아키텍처", store=store, ai_env=_ai_env()
             )
 
         assert isinstance(result, WhatDidIThinkResult)
@@ -63,11 +63,11 @@ class TestWhatDidIThink:
         store = MagicMock()
         store.query.return_value = [(_rec("dansim", "# 단심"), 0.3)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api,
+            me_mod.ai_api,
             "complete",
             return_value="답변 [dansim].",
         ):
-            what_did_i_think("TCA", store=store, claude_env=_claude_env())
+            what_did_i_think("TCA", store=store, ai_env=_ai_env())
 
         ref = load_last_answer()
         assert ref is not None
@@ -78,22 +78,22 @@ class TestWhatDidIThink:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api,
+            me_mod.ai_api,
             "complete",
             return_value="Insight: 이 답변은 개인 자료를 바탕으로 합니다.\n\n실제 답변 [x]",
         ):
-            result = what_did_i_think("x", store=store, claude_env=_claude_env())
+            result = what_did_i_think("x", store=store, ai_env=_ai_env())
         assert result.answer == "실제 답변 [x]"
 
     def test_empty_topic_raises(self) -> None:
         with pytest.raises(ValueError):
-            what_did_i_think("", store=MagicMock(), claude_env=_claude_env())
+            what_did_i_think("", store=MagicMock(), ai_env=_ai_env())
 
     def test_no_results_returns_help(self) -> None:
         store = MagicMock()
         store.query.return_value = []
         with patch.object(me_mod, "embed_query", return_value=[0.0]):
-            result = what_did_i_think("x", store=store, claude_env=_claude_env())
+            result = what_did_i_think("x", store=store, ai_env=_ai_env())
         assert "rag index" in result.answer.lower()
 
 
@@ -102,12 +102,12 @@ class TestDecide:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api, "complete", return_value="추천: A"
+            me_mod.ai_api, "complete", return_value="추천: A"
         ):
             result = decide(
                 "어떤 회사 지원?",
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 vault_path=tmp_path,
             )
         assert result.profile_used is False
@@ -121,14 +121,14 @@ class TestDecide:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api,
+            me_mod.ai_api,
             "complete",
             return_value="추천: A",
         ):
             decide(
                 "어떤 회사 지원?",
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 vault_path=tmp_path,
             )
 
@@ -141,14 +141,14 @@ class TestDecide:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api,
+            me_mod.ai_api,
             "complete",
             return_value="Analysis: 사용자의 Profile을 검토했습니다.\n\n**추천**: A",
         ):
             result = decide(
                 "어떤 회사 지원?",
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 vault_path=tmp_path,
             )
         assert result.answer == "**추천**: A"
@@ -170,12 +170,12 @@ class TestDecide:
             return "추천"
 
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api, "complete", side_effect=fake_complete
+            me_mod.ai_api, "complete", side_effect=fake_complete
         ):
             result = decide(
                 "결정",
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 vault_path=tmp_path,
             )
         assert result.profile_used is True
@@ -183,7 +183,7 @@ class TestDecide:
 
     def test_empty_situation_raises(self) -> None:
         with pytest.raises(ValueError):
-            decide("", store=MagicMock(), claude_env=_claude_env())
+            decide("", store=MagicMock(), ai_env=_ai_env())
 
 
 class TestLoadProfileText:

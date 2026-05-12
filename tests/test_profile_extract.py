@@ -13,6 +13,9 @@ from unittest.mock import patch
 import pytest
 
 import synapse_memory.profile.extract as ex_mod
+from synapse_memory.llm.ai_api import AIError
+from synapse_memory.llm.apfel import ApfelEnvironment
+from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.profile.extract import (
     MEMORY_INBOX_SUBPATH,
     _read_history_tail,
@@ -25,11 +28,9 @@ from synapse_memory.profile.schema import (
     DecisionPattern,
     ProfileFact,
 )
-from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.llm.claude import ClaudeEnvironment, ClaudeError
 
 
-def _claude_env() -> ClaudeEnvironment:
+def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(
         claude_path="/opt/homebrew/bin/claude", claude_version="2.1", model="sonnet"
     )
@@ -90,7 +91,7 @@ class TestExtractProfileFacts:
         )
 
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value={
                 "facts": [
@@ -109,7 +110,7 @@ class TestExtractProfileFacts:
         ):
             facts = extract_profile_facts(
                 history_path=history,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert len(facts) == 2
@@ -121,7 +122,7 @@ class TestExtractProfileFacts:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value={
                 "facts": [
@@ -132,7 +133,7 @@ class TestExtractProfileFacts:
         ):
             facts = extract_profile_facts(
                 history_path=history,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert len(facts) == 1
@@ -142,7 +143,7 @@ class TestExtractProfileFacts:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value={
                 "facts": [
@@ -152,7 +153,7 @@ class TestExtractProfileFacts:
         ):
             facts = extract_profile_facts(
                 history_path=history,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert facts[0].confidence == 1.0
@@ -161,7 +162,7 @@ class TestExtractProfileFacts:
         with pytest.raises(FileNotFoundError):
             extract_profile_facts(
                 history_path=tmp_path / "missing.jsonl",
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
 
@@ -169,13 +170,13 @@ class TestExtractProfileFacts:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value={"facts": []},
         ):
             facts = extract_profile_facts(
                 history_path=history,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert facts == []
@@ -184,16 +185,15 @@ class TestExtractProfileFacts:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value="not a dict",
-        ):
-            with pytest.raises(ClaudeError):
-                extract_profile_facts(
-                    history_path=history,
-                    claude_env=_claude_env(),
-                    apfel_env=_apfel_disabled(),
-                )
+        ), pytest.raises(AIError):
+            extract_profile_facts(
+                history_path=history,
+                ai_env=_ai_env(),
+                apfel_env=_apfel_disabled(),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ class TestExtractDecisionPatterns:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value={
                 "patterns": [
@@ -221,7 +221,7 @@ class TestExtractDecisionPatterns:
         ):
             patterns = extract_decision_patterns(
                 history_path=history,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert len(patterns) == 1
@@ -232,7 +232,7 @@ class TestExtractDecisionPatterns:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
         with patch.object(
-            ex_mod.claude_api,
+            ex_mod.ai_api,
             "complete_structured",
             return_value={
                 "patterns": [
@@ -249,7 +249,7 @@ class TestExtractDecisionPatterns:
         ):
             patterns = extract_decision_patterns(
                 history_path=history,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert len(patterns) == 1

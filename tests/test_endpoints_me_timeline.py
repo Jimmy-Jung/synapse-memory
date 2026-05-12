@@ -433,7 +433,7 @@ def test_by_distance_explicit(today: _datetime.date) -> None:
     ]
     with (
         patch.object(me_mod, "embed_query", return_value=[0.0]),
-        patch.object(me_mod.claude_api, "complete", return_value="CLAUDE_ANSWER_DISTANCE"),
+        patch.object(me_mod.ai_api, "complete", return_value="CLAUDE_ANSWER_DISTANCE"),
     ):
         result = what_did_i_think("x", store=store, by="distance", today=today)
     assert result.answer == "CLAUDE_ANSWER_DISTANCE"
@@ -497,7 +497,7 @@ def test_limit_default_and_override(today: _datetime.date) -> None:
 
 
 def test_distance_regression_default(today: _datetime.date) -> None:
-    """FR-013 — by 미지정 호출이 v0.4 와 동일하게 Claude 답변을 그대로 반환.
+    """FR-013 — by 미지정 호출이 v0.4 와 동일하게 AI 답변을 그대로 반환.
 
     회귀 가드: timeline 변경이 distance branch 의 동작·answer 형태를 깨지 않음.
     """
@@ -509,12 +509,12 @@ def test_distance_regression_default(today: _datetime.date) -> None:
     with (
         patch.object(me_mod, "embed_query", return_value=[0.0]),
         patch.object(
-            me_mod.claude_api, "complete", return_value="**핵심.** 자세한 정리…"
-        ) as mock_claude,
+            me_mod.ai_api, "complete", return_value="**핵심.** 자세한 정리…"
+        ) as mock_ai,
     ):
         result = what_did_i_think("x", store=store)  # by 인자 미지정 → "distance"
-    # Claude 가 정확히 한 번 호출됨 + answer 가 그대로 전달됨
-    assert mock_claude.call_count == 1
+    # AI provider가 정확히 한 번 호출됨 + answer 가 그대로 전달됨
+    assert mock_ai.call_count == 1
     assert result.answer == "**핵심.** 자세한 정리…"
     assert result.source_ids == ["a", "b"]
 
@@ -525,9 +525,9 @@ def test_distance_regression_default(today: _datetime.date) -> None:
 
 
 def test_no_raw_in_prompt(today: _datetime.date) -> None:
-    """FR-016 — by='time' 모드는 Claude wrapper 를 호출하지 않음 (자명한 prompt 차단).
+    """FR-016 — by='time' 모드는 AI wrapper 를 호출하지 않음 (자명한 prompt 차단).
 
-    Claude 호출이 발생하면 raw PII 가 외부로 나갈 가능성이 생기지만, timeline
+    AI provider 호출이 발생하면 raw PII 가 외부로 나갈 가능성이 생기지만, timeline
     모드는 RAG 결과만 로컬에서 markdown 으로 정리하므로 호출 자체가 0.
     """
     store = MagicMock()
@@ -536,9 +536,9 @@ def test_no_raw_in_prompt(today: _datetime.date) -> None:
     ]
     with (
         patch.object(me_mod, "embed_query", return_value=[0.0]),
-        patch.object(me_mod.claude_api, "complete") as mock_claude,
+        patch.object(me_mod.ai_api, "complete") as mock_ai,
     ):
         what_did_i_think("x", store=store, by="time", today=today)
-    assert mock_claude.call_count == 0, (
-        f"timeline mode must NOT call Claude (got {mock_claude.call_count} call(s))"
+    assert mock_ai.call_count == 0, (
+        f"timeline mode must NOT call AI provider (got {mock_ai.call_count} call(s))"
     )
