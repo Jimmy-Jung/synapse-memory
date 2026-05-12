@@ -122,16 +122,16 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 ### Test-First (RED)
 
-- [ ] T033 [P] [US3] Write failing test `tests/test_recipes_registry.py::test_user_recipe_discovered_without_restart` — write file to fixture user dir mid-test, then `RecipeRegistry.scan()`, assert `diary` in `.recipes`
-- [ ] T034 [P] [US3] Write failing test `tests/test_recipes_registry.py::test_user_overrides_builtin` — both `builtin/journal.md` and `user/journal.md` exist; assert `registry.get("journal").source == "user"`
-- [ ] T035 [P] [US3] Write failing test `tests/test_recipes_registry.py::test_malformed_user_recipe_isolated` — 1 malformed + 2 valid user recipes; assert valid 2 개 정상 load + skipped 리스트에 malformed 1 개 + 다른 recipe 영향 없음
+- [X] T033 [P] [US3] Write failing test `tests/test_recipes_registry.py::test_user_recipe_discovered_without_restart` — write file to fixture user dir mid-test, then `RecipeRegistry.scan()`, assert `diary` in `.recipes` (Phase 2 RED 와 동시 작성, GREEN 후 즉시 통과)
+- [X] T034 [P] [US3] Write failing test `tests/test_recipes_registry.py::test_user_overrides_builtin` — both `builtin/journal.md` and `user/journal.md` exist; assert `registry.get("journal").source == "user"`
+- [X] T035 [P] [US3] Write failing test `tests/test_recipes_registry.py::test_malformed_user_recipe_isolated` — 1 malformed + 2 valid user recipes; assert valid 2 개 정상 load + skipped 리스트에 malformed 1 개 + 다른 recipe 영향 없음
 
 ### Implementation (GREEN)
 
-- [ ] T036 [US3] Extend pipeline `last_answer` metadata to record `source = "builtin"|"user"` and `override = bool` when applicable; persist via existing `AnswerCitation`/`AnswerReference` schema (FR-011) — depends on T014
-- [ ] T037 [P] [US3] Create builtin recipe `src/synapse_memory/recipes/builtin/journal.md` (frontmatter + system prompt, ≤ 32KB) per [quickstart.md §4](./quickstart.md) tone, save_subpath `10_Journal/Drafts`
-- [ ] T038 [P] [US3] Create builtin recipe `src/synapse_memory/recipes/builtin/brainstorm.md` (frontmatter + system prompt, ≤ 32KB) save_subpath `30_Creative/Brainstorms`
-- [ ] T039 [US3] Add quickstart automation fixture script in `tests/fixtures/recipes_vault/diary.md` (the user-recipe example from quickstart §4) used by T033
+- [X] T036 [US3] Extend pipeline `last_answer` metadata to record `source = "builtin"|"user"` and `override = bool` when applicable; persist via existing `AnswerCitation`/`AnswerReference` schema (FR-011) — depends on T014 (minimal: stderr observability line 에 `source=builtin|user` 토큰 추가; last_answer JSON schema 보존)
+- [X] T037 [P] [US3] Create builtin recipe `src/synapse_memory/recipes/builtin/journal.md` (frontmatter + system prompt, ≤ 32KB) per [quickstart.md §4](./quickstart.md) tone, save_subpath `10_Journal/Drafts`
+- [X] T038 [P] [US3] Create builtin recipe `src/synapse_memory/recipes/builtin/brainstorm.md` (frontmatter + system prompt, ≤ 32KB) save_subpath `30_Creative/Brainstorms`
+- [X] T039 [US3] Add quickstart automation fixture script in `tests/fixtures/recipes_vault/diary.md` (the user-recipe example from quickstart §4) used by T033
 
 **Checkpoint**: US3 fully functional. 사용자가 markdown 한 장 추가만으로 새 결과물 종류 사용 가능.
 

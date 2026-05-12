@@ -625,8 +625,25 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     if result.saved_path:
         sys.stdout.write(f"\n[saved] {result.saved_path}\n")
     sys.stdout.flush()
+    # recipe source (builtin vs user) — RecipeRegistry 한 번 더 스캔해 source 표시
+    recipe_source = "?"
+    try:
+        from synapse_memory.collectors.obsidian.mirror import get_vault_path
+        from synapse_memory.recipes.registry import RecipeRegistry
+
+        _vault = vault_path or get_vault_path()
+        _reg = RecipeRegistry(
+            builtin_dir=Path(__file__).resolve().parent / "recipes" / "builtin",
+            user_dir=_vault / "90_System" / "AI" / "recipes",
+        )
+        _reg.scan()
+        recipe_source = _reg.recipes.get(result.recipe_name).source if result.recipe_name in _reg.recipes else "?"
+    except Exception:  # noqa: BLE001 — observability 보조라 silent fallback
+        pass
+
     sys.stderr.write(
         f"[me.generate.{result.recipe_name}] "
+        f"source={recipe_source} "
         f"locale={result.locale_source}:{result.locale} "
         f"domain={result.domain_source}:{result.domain} "
         f"profile_used={result.profile_used} "
