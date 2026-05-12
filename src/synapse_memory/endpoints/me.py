@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
@@ -378,3 +379,110 @@ def decide(
         profile_used=profile_used,
         source_ids=source_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Timeline recall (FR-A1, specs/002-timeline-recall) — module-private types
+# ---------------------------------------------------------------------------
+#
+# 본 섹션은 ``me what-did-i-think --timeline`` 의 시간축 정렬·분기 그룹화
+# 출력에 사용되는 transient 객체와 헬퍼 stub 을 정의한다.
+#
+# - data-model: specs/002-timeline-recall/data-model.md
+# - contracts:  specs/002-timeline-recall/contracts/cli-contracts.md
+# - research:   specs/002-timeline-recall/research.md (RT-1~RT-5)
+#
+# 모든 정렬·그룹화 결과는 stateless · in-memory only · 디스크 영구 저장 없음 (FR-015).
+
+
+_SortTsSource = Literal[
+    "period_end",
+    "today_fallback",
+    "created",
+    "last_reviewed",
+    "no_time_meta",
+]
+
+
+@dataclass(frozen=True)
+class CardWithMeta:
+    """Transient — retrieve 1건당 1개 생성, 정렬·그룹화·출력의 캐리어.
+
+    data-model.md §1 의 schema 와 1:1 일치.
+    """
+
+    card_id: str
+    display_name: str
+    source_kind: Literal["card_project", "card_company"]
+    sort_ts: datetime.datetime
+    sort_ts_source: _SortTsSource
+    created_ts: datetime.datetime
+    distance: float | None
+    citation_text: str
+    body_redacted: str
+
+
+@dataclass(frozen=True)
+class TimelineGroup:
+    """Transient — 같은 (year, quarter) 의 ``CardWithMeta`` 묶음.
+
+    data-model.md §2 와 1:1 일치. ``months_present`` 는 FR-007 의 월 서브헤더
+    트리거 (분기 내 ≥2 카드이면서 등장 월이 ≥2 일 때 출력).
+    """
+
+    quarter_label: str  # 예: "2024 Q3"
+    year: int
+    quarter: int  # 1~4
+    sort_ts: datetime.datetime
+    members: tuple[CardWithMeta, ...]
+    months_present: tuple[int, ...]
+
+
+# --- private helpers (stubs — to be implemented in tasks.md T018~T021) ---
+
+
+def _resolve_sort_ts(
+    metadata: dict[str, str],
+    today: datetime.date,
+    *,
+    distance: float | None = None,
+    document: str = "",
+) -> CardWithMeta:
+    """ChromaDB metadata + today → ``CardWithMeta`` (RT-1 폴백 4단계, RT-2 YYYY-MM 정규화).
+
+    구현 예정 — tasks.md T018. 현재는 stub.
+    """
+    raise NotImplementedError("T018 — implemented in Phase 3 (US1)")
+
+
+def _sort_by_time(items: list[CardWithMeta]) -> list[CardWithMeta]:
+    """``CardWithMeta`` 리스트를 (sort_ts desc, created_ts desc) 로 정렬.
+
+    research §BT-1 stable sort 규약. 구현 예정 — tasks.md T019. 현재는 stub.
+    """
+    raise NotImplementedError("T019 — implemented in Phase 3 (US1)")
+
+
+def _group_by_quarter(items: list[CardWithMeta]) -> list[TimelineGroup]:
+    """정렬된 ``CardWithMeta`` 리스트를 분기 단위 ``TimelineGroup`` 으로 묶음.
+
+    그룹 자체는 ``sort_ts desc`` (FR-006). ``no_time_meta`` 인 항목은 별도
+    distance-fallback 버킷으로 분리 (FR-012, T030).
+
+    구현 예정 — tasks.md T020. 현재는 stub.
+    """
+    raise NotImplementedError("T020 — implemented in Phase 3 (US1)")
+
+
+def _format_timeline_output(
+    groups: list[TimelineGroup],
+    limit: int,
+    *,
+    fallback_items: list[CardWithMeta] | None = None,
+) -> str:
+    """``TimelineGroup`` 리스트 + 폴백 버킷 → stdout markdown 문자열.
+
+    contracts/cli-contracts.md §"Stdout 출력 — --timeline ON" 포맷 준수.
+    구현 예정 — tasks.md T021. 현재는 stub.
+    """
+    raise NotImplementedError("T021 — implemented in Phase 3 (US1)")
