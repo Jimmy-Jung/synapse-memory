@@ -600,6 +600,8 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
         RecipeNotFoundError,
         RecipePromptTooLargeError,
         RecipeValidationError,
+    )
+    from synapse_memory.recipes import (
         generate as recipes_generate,
     )
 
@@ -675,7 +677,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
         )
         _reg.scan()
         recipe_source = _reg.recipes.get(result.recipe_name).source if result.recipe_name in _reg.recipes else "?"
-    except Exception:  # noqa: BLE001 — observability 보조라 silent fallback
+    except Exception:  # observability 보조라 silent fallback
         pass
 
     sys.stderr.write(
@@ -738,7 +740,7 @@ def cmd_me_recipes_list(args: argparse.Namespace) -> int:
     """me recipes list — 모든 recipe 표 출력 (builtin + user)."""
     try:
         reg = _recipes_registry_for_vault(args.vault)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -778,7 +780,7 @@ def cmd_me_recipes_show(args: argparse.Namespace) -> int:
 
     try:
         reg = _recipes_registry_for_vault(args.vault)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 

@@ -19,8 +19,6 @@ from typing import Literal
 
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.endpoints.postprocess import strip_meta_prefix
-from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.rag import (
     VectorRecord,
