@@ -17,10 +17,10 @@
 
 **Purpose**: Confirm the branch has the upstream hybrid dependency and active spec context.
 
-- [ ] T001 Verify `006-raw-rag-hybrid` artifacts are available in the implementation branch: `src/synapse_memory/rag/hybrid.py`, `src/synapse_memory/rag/bm25.py`, `tests/test_rag_hybrid.py`
-- [ ] T002 If T001 fails, merge/rebase onto `006-raw-rag-hybrid` or wait until 006 lands on `main`; do not reimplement 006 inside `specs/008-recipe-hybrid-retrieval/`
-- [ ] T003 Verify active Spec Kit markers point to `specs/008-recipe-hybrid-retrieval/plan.md` in `AGENTS.md` and `CLAUDE.md`
-- [ ] T004 [P] Review existing dense recipe tests in `tests/test_recipes_pipeline.py`, `tests/test_recipes_cli.py`, and `tests/test_recipes_loader.py` before adding new tests
+- [X] T001 Verify `006-raw-rag-hybrid` artifacts are available in the implementation branch: `src/synapse_memory/rag/hybrid.py`, `src/synapse_memory/rag/bm25.py`, `tests/test_rag_hybrid.py`
+- [X] T002 If T001 fails, merge/rebase onto `006-raw-rag-hybrid` or wait until 006 lands on `main`; do not reimplement 006 inside `specs/008-recipe-hybrid-retrieval/`
+- [X] T003 Verify active Spec Kit markers point to `specs/008-recipe-hybrid-retrieval/plan.md` in `AGENTS.md` and `CLAUDE.md`
+- [X] T004 [P] Review existing dense recipe tests in `tests/test_recipes_pipeline.py`, `tests/test_recipes_cli.py`, and `tests/test_recipes_loader.py` before adding new tests
 
 **Checkpoint**: Upstream hybrid dependency and active feature context are clear.
 
@@ -34,18 +34,18 @@
 
 ### Tests First
 
-- [ ] T005 [P] Write RED loader test for valid `rag_mode: dense` and `rag_mode: hybrid` in `tests/test_recipes_loader.py`
-- [ ] T006 [P] Write RED loader test for missing `rag_mode` defaulting to dense in `tests/test_recipes_loader.py`
-- [ ] T007 [P] Write RED loader test for invalid `rag_mode` isolated recipe rejection in `tests/test_recipes_loader.py`
-- [ ] T008 [P] Write RED dataclass/context assertions for `GenerationRecipe.rag_mode` and `GenerationContext.rag_mode` in `tests/test_recipes_pipeline.py`
+- [X] T005 [P] Write RED loader test for valid `rag_mode: dense` and `rag_mode: hybrid` in `tests/test_recipes_loader.py`
+- [X] T006 [P] Write RED loader test for missing `rag_mode` defaulting to dense in `tests/test_recipes_loader.py`
+- [X] T007 [P] Write RED loader test for invalid `rag_mode` isolated recipe rejection in `tests/test_recipes_loader.py`
+- [X] T008 [P] Write RED dataclass/context assertions for `GenerationRecipe.rag_mode` and `GenerationContext.rag_mode` in `tests/test_recipes_pipeline.py`
 
 ### Implementation
 
-- [ ] T009 Add `RecipeRagMode = Literal["dense", "hybrid"]` and `rag_mode` fields to `src/synapse_memory/recipes/recipe.py`
-- [ ] T010 Extend frontmatter parsing and validation for `rag_mode` in `src/synapse_memory/recipes/loader.py`
-- [ ] T011 Update any built-in recipe fixtures only if needed for explicit dense defaults in `src/synapse_memory/recipes/builtin/*.md`
-- [ ] T012 Run `python3 -m pytest tests/test_recipes_loader.py tests/test_recipes_pipeline.py -q`
-- [ ] T013 Commit Phase 2 changes with Conventional Commit message
+- [X] T009 Add `RecipeRagMode = Literal["dense", "hybrid"]` and `rag_mode` fields to `src/synapse_memory/recipes/recipe.py`
+- [X] T010 Extend frontmatter parsing and validation for `rag_mode` in `src/synapse_memory/recipes/loader.py`
+- [X] T011 Update any built-in recipe fixtures only if needed for explicit dense defaults in `src/synapse_memory/recipes/builtin/*.md`
+- [X] T012 Run `python3 -m pytest tests/test_recipes_loader.py tests/test_recipes_pipeline.py -q`
+- [X] T013 Commit Phase 2 changes with Conventional Commit message
 
 **Checkpoint**: Recipe model can represent retrieval mode without changing behavior.
 
@@ -59,22 +59,22 @@
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Write RED pipeline test that `rag_mode: hybrid` calls `synapse_memory.rag.hybrid.hybrid_search` in `tests/test_recipes_pipeline.py`
-- [ ] T015 [P] [US1] Write RED pipeline test that hybrid `RetrievalHit` values are adapted to matched records with metadata/source ids in `tests/test_recipes_pipeline.py`
-- [ ] T016 [P] [US1] Write RED regression test proving missing `rag_mode` still uses dense `store.query` in `tests/test_recipes_pipeline.py`
-- [ ] T017 [P] [US1] Write RED domain-aware hybrid fixture test using matched record tags in `tests/test_recipes_domain.py`
-- [ ] T018 [P] [US1] Write RED prompt-capture test proving hybrid matched records enter the user prompt without raw unredacted markers in `tests/test_recipes_generate.py`
+- [X] T014 [P] [US1] Write RED pipeline test that `rag_mode: hybrid` calls `synapse_memory.rag.hybrid.hybrid_search` in `tests/test_recipes_pipeline.py`
+- [X] T015 [P] [US1] Write RED pipeline test that hybrid `RetrievalHit` values are adapted to matched records with metadata/source ids in `tests/test_recipes_pipeline.py`
+- [X] T016 [P] [US1] Write RED regression test proving missing `rag_mode` still uses dense `store.query` in `tests/test_recipes_pipeline.py`
+- [X] T017 [P] [US1] Write RED domain-aware hybrid fixture test using matched record tags in `tests/test_recipes_domain.py`
+- [X] T018 [P] [US1] Write RED prompt-capture test proving hybrid matched records enter the user prompt without raw unredacted markers in `tests/test_recipes_generate.py`
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Add retrieval-mode resolution helper in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T020 [US1] Add dense query builder reuse for both dense and hybrid paths in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T021 [US1] Call 006 `hybrid_search` when effective mode is hybrid in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T022 [US1] Add adapter from 006 `RetrievalHit` to existing matched-record tuples in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T023 [US1] Preserve source ids, `last_answer`, prompt citation metadata, and tag metadata in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T024 [US1] Add `rag_mode` to `GenerationContext` and returned `GenerationResult` if needed for observability in `src/synapse_memory/recipes/recipe.py`
-- [ ] T025 [US1] Run `python3 -m pytest tests/test_recipes_pipeline.py tests/test_recipes_domain.py tests/test_recipes_generate.py -q`
-- [ ] T026 [US1] Commit Phase 3 changes with Conventional Commit message
+- [X] T019 [US1] Add retrieval-mode resolution helper in `src/synapse_memory/recipes/pipeline.py`
+- [X] T020 [US1] Add dense query builder reuse for both dense and hybrid paths in `src/synapse_memory/recipes/pipeline.py`
+- [X] T021 [US1] Call 006 `hybrid_search` when effective mode is hybrid in `src/synapse_memory/recipes/pipeline.py`
+- [X] T022 [US1] Add adapter from 006 `RetrievalHit` to existing matched-record tuples in `src/synapse_memory/recipes/pipeline.py`
+- [X] T023 [US1] Preserve source ids, `last_answer`, prompt citation metadata, and tag metadata in `src/synapse_memory/recipes/pipeline.py`
+- [X] T024 [US1] Add `rag_mode` to `GenerationContext` and returned `GenerationResult` if needed for observability in `src/synapse_memory/recipes/recipe.py`
+- [X] T025 [US1] Run `python3 -m pytest tests/test_recipes_pipeline.py tests/test_recipes_domain.py tests/test_recipes_generate.py -q`
+- [X] T026 [US1] Commit Phase 3 changes with Conventional Commit message
 
 **Checkpoint**: Hybrid recipe MVP is fully testable independent of CLI override.
 
@@ -88,19 +88,19 @@
 
 ### Tests for User Story 2
 
-- [ ] T027 [P] [US2] Write RED parser test for `me generate <recipe> --rag-mode hybrid` in `tests/test_recipes_cli.py`
-- [ ] T028 [P] [US2] Write RED CLI test proving `--rag-mode hybrid` overrides a dense recipe in `tests/test_recipes_cli.py`
-- [ ] T029 [P] [US2] Write RED CLI test proving `--rag-mode dense` overrides a hybrid recipe in `tests/test_recipes_cli.py`
-- [ ] T030 [P] [US2] Write RED CLI invalid-choice test for `--rag-mode invalid` in `tests/test_recipes_cli.py`
+- [X] T027 [P] [US2] Write RED parser test for `me generate <recipe> --rag-mode hybrid` in `tests/test_recipes_cli.py`
+- [X] T028 [P] [US2] Write RED CLI test proving `--rag-mode hybrid` overrides a dense recipe in `tests/test_recipes_cli.py`
+- [X] T029 [P] [US2] Write RED CLI test proving `--rag-mode dense` overrides a hybrid recipe in `tests/test_recipes_cli.py`
+- [X] T030 [P] [US2] Write RED CLI invalid-choice test for `--rag-mode invalid` in `tests/test_recipes_cli.py`
 
 ### Implementation for User Story 2
 
-- [ ] T031 [US2] Add argparse `--rag-mode {dense,hybrid}` to `me generate` in `src/synapse_memory/cli.py`
-- [ ] T032 [US2] Pass CLI override into `recipes_generate()` from `src/synapse_memory/cli.py`
-- [ ] T033 [US2] Add library-level `rag_mode_override` argument to `generate()` in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T034 [US2] Ensure override is not written back to recipe markdown in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T035 [US2] Run `python3 -m pytest tests/test_recipes_cli.py tests/test_recipes_pipeline.py -q`
-- [ ] T036 [US2] Commit Phase 4 changes with Conventional Commit message
+- [X] T031 [US2] Add argparse `--rag-mode {dense,hybrid}` to `me generate` in `src/synapse_memory/cli.py`
+- [X] T032 [US2] Pass CLI override into `recipes_generate()` from `src/synapse_memory/cli.py`
+- [X] T033 [US2] Add library-level `rag_mode_override` argument to `generate()` in `src/synapse_memory/recipes/pipeline.py`
+- [X] T034 [US2] Ensure override is not written back to recipe markdown in `src/synapse_memory/recipes/pipeline.py`
+- [X] T035 [US2] Run `python3 -m pytest tests/test_recipes_cli.py tests/test_recipes_pipeline.py -q`
+- [X] T036 [US2] Commit Phase 4 changes with Conventional Commit message
 
 **Checkpoint**: Users can compare dense and hybrid behavior without editing recipes.
 
@@ -114,19 +114,19 @@
 
 ### Tests for User Story 3
 
-- [ ] T037 [P] [US3] Write RED pipeline test that missing BM25 sidecar raises a recipe-level hybrid availability error in `tests/test_recipes_pipeline.py`
-- [ ] T038 [P] [US3] Write RED CLI test that hybrid-unavailable stderr includes `synapse-memory rag index --include-raw` in `tests/test_recipes_cli.py`
-- [ ] T039 [P] [US3] Write RED test proving hybrid-unavailable does not call dense fallback after failure in `tests/test_recipes_pipeline.py`
-- [ ] T040 [P] [US3] Write RED regression test keeping `me what-did-i-think --timeline` outside recipe pipeline in `tests/test_endpoints_me_extra.py`
+- [X] T037 [P] [US3] Write RED pipeline test that missing BM25 sidecar raises a recipe-level hybrid availability error in `tests/test_recipes_pipeline.py`
+- [X] T038 [P] [US3] Write RED CLI test that hybrid-unavailable stderr includes `synapse-memory rag index --include-raw` in `tests/test_recipes_cli.py`
+- [X] T039 [P] [US3] Write RED test proving hybrid-unavailable does not call dense fallback after failure in `tests/test_recipes_pipeline.py`
+- [X] T040 [P] [US3] Write RED regression test keeping `me what-did-i-think --timeline` outside recipe pipeline in `tests/test_endpoints_me_extra.py`
 
 ### Implementation for User Story 3
 
-- [ ] T041 [US3] Define `RecipeHybridUnavailableError` or equivalent user-facing error in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T042 [US3] Catch 006 BM25/hybrid availability errors and re-raise with remediation text in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T043 [US3] Map hybrid availability errors to non-zero CLI stderr in `src/synapse_memory/cli.py`
-- [ ] T044 [US3] Ensure dense fallback is not executed after hybrid path selection in `src/synapse_memory/recipes/pipeline.py`
-- [ ] T045 [US3] Run `python3 -m pytest tests/test_recipes_pipeline.py tests/test_recipes_cli.py tests/test_endpoints_me_extra.py -q`
-- [ ] T046 [US3] Commit Phase 5 changes with Conventional Commit message
+- [X] T041 [US3] Define `RecipeHybridUnavailableError` or equivalent user-facing error in `src/synapse_memory/recipes/pipeline.py`
+- [X] T042 [US3] Catch 006 BM25/hybrid availability errors and re-raise with remediation text in `src/synapse_memory/recipes/pipeline.py`
+- [X] T043 [US3] Map hybrid availability errors to non-zero CLI stderr in `src/synapse_memory/cli.py`
+- [X] T044 [US3] Ensure dense fallback is not executed after hybrid path selection in `src/synapse_memory/recipes/pipeline.py`
+- [X] T045 [US3] Run `python3 -m pytest tests/test_recipes_pipeline.py tests/test_recipes_cli.py tests/test_endpoints_me_extra.py -q`
+- [X] T046 [US3] Commit Phase 5 changes with Conventional Commit message
 
 **Checkpoint**: Hybrid readiness failures are honest, actionable, and regression-covered.
 
@@ -136,18 +136,18 @@
 
 **Purpose**: Update user/developer docs, quickstart, and final regression gates.
 
-- [ ] T047 [P] Document `rag_mode` frontmatter and `--rag-mode` in `docs/commands.md`
-- [ ] T048 [P] Document recipe retrieval mode architecture in `docs/architecture.md`
-- [ ] T049 [P] Add `rag_mode=<dense|hybrid>` interpretation to `docs/development.md`
-- [ ] T050 [P] Update `specs/008-recipe-hybrid-retrieval/quickstart.md` after actual smoke output is known
-- [ ] T051 Add `rag_mode=<mode>` to `me.generate.<recipe>` stderr observability in `src/synapse_memory/cli.py`
-- [ ] T052 Run quickstart smoke on an isolated fixture vault and capture results in `specs/008-recipe-hybrid-retrieval/quickstart-results.md`
-- [ ] T053 Run `python3 -m pytest tests/test_endpoints_me.py tests/test_endpoints_me_extra.py -q`
-- [ ] T054 Run `python3 -m pytest tests/test_recipes_loader.py tests/test_recipes_registry.py tests/test_recipes_locale.py tests/test_recipes_domain.py tests/test_recipes_pipeline.py tests/test_recipes_generate.py tests/test_recipes_cli.py tests/test_recipes_sc_acceptance.py -q`
-- [ ] T055 Run `python3 -m pytest`
-- [ ] T056 Run `git diff --check`
-- [ ] T057 Review diff for redaction boundary and no Co-Authored-By lines before final commit
-- [ ] T058 Commit Phase 6 changes with Conventional Commit message
+- [X] T047 [P] Document `rag_mode` frontmatter and `--rag-mode` in `docs/commands.md`
+- [X] T048 [P] Document recipe retrieval mode architecture in `docs/architecture.md`
+- [X] T049 [P] Add `rag_mode=<dense|hybrid>` interpretation to `docs/development.md`
+- [X] T050 [P] Update `specs/008-recipe-hybrid-retrieval/quickstart.md` after actual smoke output is known
+- [X] T051 Add `rag_mode=<mode>` to `me.generate.<recipe>` stderr observability in `src/synapse_memory/cli.py`
+- [X] T052 Run quickstart smoke on an isolated fixture vault and capture results in `specs/008-recipe-hybrid-retrieval/quickstart-results.md`
+- [X] T053 Run `python3 -m pytest tests/test_endpoints_me.py tests/test_endpoints_me_extra.py -q`
+- [X] T054 Run `python3 -m pytest tests/test_recipes_loader.py tests/test_recipes_registry.py tests/test_recipes_locale.py tests/test_recipes_domain.py tests/test_recipes_pipeline.py tests/test_recipes_generate.py tests/test_recipes_cli.py tests/test_recipes_sc_acceptance.py -q`
+- [X] T055 Run `python3 -m pytest`
+- [X] T056 Run `git diff --check`
+- [X] T057 Review diff for redaction boundary and no Co-Authored-By lines before final commit
+- [X] T058 Commit Phase 6 changes with Conventional Commit message
 
 ---
 

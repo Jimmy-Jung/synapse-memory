@@ -63,6 +63,24 @@ graph TD
 
 중요한 점은 raw에서 바로 `ask`나 `me`로 가지 않는다는 것입니다. 사용자가 검토한 Card와 Profile이 검색과 의사결정의 주 재료입니다.
 
+## Recipe Retrieval Mode
+
+`me generate <recipe>` 는 recipe markdown 을 실행 단위로 삼습니다. 각 recipe 는
+frontmatter 에 `rag_mode: dense | hybrid` 를 선언할 수 있고, 생략 시 기존 dense
+vector 검색이 유지됩니다.
+
+- `dense`: recipe pipeline 이 query embedding 을 만들고 Chroma store 의 `query()` 결과를
+  기존 matched-record 형태로 downstream prompt, domain inference, last_answer 에 전달합니다.
+- `hybrid`: 006 raw-rag-hybrid 의 `hybrid_search` 를 호출해 dense 결과와 BM25 sidecar
+  결과를 RRF(k=60)로 결합합니다. pipeline 은 `RetrievalHit` 을 기존 matched-record tuple 로
+  변환하므로 prompt composition, `tags` 기반 domain inference, citation 저장 경로는 동일합니다.
+- BM25 sidecar 또는 vector store 가 없으면 dense fallback 없이 실패합니다. 사용자에게는
+  `synapse-memory rag index --include-raw` 재색인 안내가 표시됩니다.
+
+이 경로도 raw를 직접 외부 LLM에 보내지 않습니다. hybrid 결과는 006 인덱싱 단계에서 만든
+redacted document 를 소비하고, timeline recall(`--timeline`, `--by time`)은 recipe pipeline 을
+우회하는 기존 정책을 유지합니다.
+
 ## 모듈 구조
 
 ```text

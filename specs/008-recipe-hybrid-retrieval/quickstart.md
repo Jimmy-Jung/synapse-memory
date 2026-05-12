@@ -22,7 +22,7 @@ Expected key stdout:
 ```text
 인덱싱 시작 (rebuild=True, include_raw=True)
 ...
-BM25 sidecar: documents=N
+bm25=N
 ```
 
 ## 2. Mark a recipe as hybrid
@@ -108,6 +108,8 @@ synapse-memory rag index --include-raw
 ```
 
 The command must fail non-zero and must not silently fall back to dense.
+
+Actual smoke captured on 2026-05-12 is in [quickstart-results.md](./quickstart-results.md).
 
 ## 6. Regression check
 

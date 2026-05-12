@@ -311,6 +311,7 @@ synapse-memory ask "당근마켓 경험" --hybrid
 
 ```bash
 synapse-memory me generate weekly_report --input period=2026-W19
+synapse-memory me generate weekly_report --input period=2026-W19 --rag-mode hybrid
 synapse-memory me generate journal --input date=2026-05-12
 synapse-memory me generate brainstorm --input topic="시간관리"
 synapse-memory me generate resume --input company_id=danggeun --language en
@@ -319,6 +320,20 @@ synapse-memory me generate resume --input company_id=danggeun --language en
 Recipe markdown 기반 generator. 빌트인 6종 (`resume` / `weekly_report` / `journal` /
 `brainstorm` / `decide` / `recall`) + 사용자 vault `90_System/AI/recipes/` 에 추가한
 markdown 도 자동 발견. 5분 워크스루는 [quickstart.md](../specs/007-me-recipes/quickstart.md) 참고.
+
+Recipe frontmatter 에 `rag_mode: dense | hybrid` 를 선택적으로 둘 수 있습니다.
+생략하면 기존과 동일하게 `dense` 입니다. `hybrid` 는 dense vector 결과와 BM25 keyword
+결과를 006 raw-rag-hybrid 의 RRF(k=60) 정책으로 결합하며, BM25 sidecar 가 없으면
+`synapse-memory rag index --include-raw` 안내와 함께 실패합니다. `--rag-mode dense|hybrid`
+는 해당 호출에서만 recipe 기본값을 override 하고 recipe markdown 은 수정하지 않습니다.
+
+| 옵션 | 동작 |
+|---|---|
+| `--input KEY=VALUE` | recipe input_schema 값. 여러 번 지정 가능 |
+| `--language LANG` | locale 수동 override |
+| `--domain DOMAIN` | domain 수동 override |
+| `--rag-mode dense\|hybrid` | recipe retrieval mode 일회성 override |
+| `--dry-run` | LLM 호출, 저장, last_answer 갱신 없이 prompt preview 출력 |
 
 ### `me recipes list` · `me recipes show <recipe>`
 
