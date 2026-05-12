@@ -36,8 +36,13 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
+import time
 from dataclasses import dataclass
 from typing import Any
+
+from synapse_memory.cost.events import append_cost_event, build_cost_event
+from synapse_memory.cost.pricing import price_usage
 
 # ---------------------------------------------------------------------------
 # 상수
@@ -211,6 +216,9 @@ def _run_apfel(
     timeout: int = DEFAULT_TIMEOUT_SEC,
 ) -> str:
     """공통 subprocess 실행. 호출 측에서 ready 체크 선행 필요."""
+    started = time.monotonic()
+    prompt_text = _prompt_from_args(args)
+    input_text = f"{prompt_text}\n{stdin_text or ''}".strip()
     try:
         result = subprocess.run(
             args,
@@ -221,17 +229,97 @@ def _run_apfel(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
+        elapsed = time.monotonic() - started
+        _record_apfel_cost(
+            args=args,
+            input_text=input_text,
+            output_text="",
+            status="timeout",
+            elapsed_s=elapsed,
+            error_kind="timeout",
+        )
         raise ApfelError(f"apfel 호출 타임아웃 ({timeout}s)") from exc
     except OSError as exc:
+        elapsed = time.monotonic() - started
+        _record_apfel_cost(
+            args=args,
+            input_text=input_text,
+            output_text="",
+            status="error",
+            elapsed_s=elapsed,
+            error_kind="os_error",
+        )
         raise ApfelError(f"apfel 실행 실패: {exc}") from exc
+    elapsed = time.monotonic() - started
 
     if result.returncode != 0:
+        _record_apfel_cost(
+            args=args,
+            input_text=input_text,
+            output_text="",
+            status="error",
+            elapsed_s=elapsed,
+            error_kind="nonzero_exit",
+        )
         stderr = result.stderr.strip() or "(no stderr)"
         raise ApfelError(
             f"apfel 비정상 종료 exit={result.returncode}: {stderr}"
         )
 
+    _record_apfel_cost(
+        args=args,
+        input_text=input_text,
+        output_text=result.stdout,
+        status="success",
+        elapsed_s=elapsed,
+    )
     return result.stdout.rstrip("\n")
+
+
+def _record_apfel_cost(
+    *,
+    args: list[str],
+    input_text: str,
+    output_text: str,
+    status: str,
+    elapsed_s: float,
+    error_kind: str | None = None,
+) -> None:
+    model = _model_from_apfel_args(args)
+    input_tokens = estimate_tokens(input_text)
+    output_tokens = estimate_tokens(output_text)
+    priced = price_usage(
+        provider="apfel",
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )
+    try:
+        append_cost_event(
+            build_cost_event(
+                provider="apfel",
+                model=model,
+                status=status,  # type: ignore[arg-type]
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                usd=priced.usd,
+                pricing_source=priced.pricing_source,
+                elapsed_s=elapsed_s,
+                error_kind=error_kind,
+            )
+        )
+    except Exception as exc:
+        print(f"⚠ cost event 기록 실패: {exc}", file=sys.stderr)
+
+
+def _prompt_from_args(args: list[str]) -> str:
+    if not args:
+        return ""
+    return args[-1]
+
+
+def _model_from_apfel_args(_args: list[str]) -> str:
+    return "apple-foundationmodel"
 
 
 def complete(

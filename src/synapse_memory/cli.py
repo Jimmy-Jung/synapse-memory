@@ -60,6 +60,12 @@ from synapse_memory.collectors.obsidian import (
     get_vault_path,
 )
 from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault
+from synapse_memory.cost.events import command_context
+from synapse_memory.cost.summary import (
+    load_summary,
+    render_summary_json,
+    render_summary_table,
+)
 from synapse_memory.daily import STEPS, run_daily
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.endpoints.me import (
@@ -624,6 +630,24 @@ def cmd_feedback(args: argparse.Namespace) -> int:
     )
     refs = ", ".join(e.target_ref for e in events)
     print(f"  → next index will apply updated feedback_score: {refs}")
+    return 0
+
+
+def cmd_cost_summary(args: argparse.Namespace) -> int:
+    """최근 cost event 집계."""
+    if args.days < 1:
+        print("--days must be >= 1", file=sys.stderr)
+        return 1
+    try:
+        summary = load_summary(days=args.days, by=args.by)
+    except (OSError, ValueError) as exc:
+        print(f"{FAIL} cost summary 실패: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(render_summary_json(summary))
+    else:
+        print(render_summary_table(summary))
     return 0
 
 
@@ -1378,6 +1402,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_fb_pattern.add_argument("target_ref", help="pattern id")
     add_feedback_action_args(p_fb_pattern)
 
+    p_cost = sub.add_parser("cost", help="비용/토큰 관측")
+    cost_sub = p_cost.add_subparsers(dest="action", required=True, metavar="ACTION")
+    p_cost_summary = cost_sub.add_parser("summary", help="최근 비용 요약")
+    p_cost_summary.add_argument("--days", type=int, default=30)
+    p_cost_summary.add_argument("--by", choices=("command", "model"), default="command")
+    p_cost_summary.add_argument("--json", action="store_true", help="JSON 출력")
+    p_cost_summary.set_defaults(func=cmd_cost_summary)
+
     p_me = sub.add_parser("me", help="클론 모드 endpoints")
     me_sub = p_me.add_subparsers(dest="action", required=True, metavar="ACTION")
     p_resume = me_sub.add_parser(
@@ -1475,7 +1507,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return int(args.func(args))
+    with command_context(_command_name(args)):
+        return int(args.func(args))
+
+
+def _command_name(args: argparse.Namespace) -> str:
+    cmd = str(getattr(args, "cmd", "unknown") or "unknown")
+    parts = [cmd]
+    for attr in ("source", "kind", "action", "feedback_target"):
+        value = getattr(args, attr, None)
+        if isinstance(value, str) and value:
+            parts.append(value.replace("-", "_"))
+    return ".".join(parts)
 
 
 if __name__ == "__main__":

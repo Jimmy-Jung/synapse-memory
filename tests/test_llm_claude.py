@@ -213,6 +213,26 @@ class TestComplete:
             mock_run.return_value = _mock_proc(stdout=_mock_envelope("응답"))
             assert complete("p", env=_ready_env()) == "응답"
 
+    def test_records_cost_event_on_success(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        monkeypatch.setenv("SYNAPSE_L0_ROOT", str(tmp_path / "private"))
+        monkeypatch.setenv("SYNAPSE_COMMAND", "ask")
+        with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(stdout=_mock_envelope("응답"))
+            assert complete("prompt text", env=_ready_env()) == "응답"
+
+        log = tmp_path / "private" / "cost.jsonl"
+        data = json.loads(log.read_text(encoding="utf-8"))
+        assert data["command"] == "ask"
+        assert data["provider"] == "claude"
+        assert data["model"] == "sonnet"
+        assert data["status"] == "success"
+        assert data["usd"] == 0.001
+        assert "prompt text" not in log.read_text(encoding="utf-8")
+
     def test_returns_result_from_event_stream(self) -> None:
         """Claude Code 2.1+ may return a JSON event array instead of one dict."""
         with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
@@ -229,6 +249,36 @@ class TestComplete:
             mock_run.return_value = _mock_proc(returncode=1, stderr="permission denied")
             with pytest.raises(ClaudeError, match="permission denied"):
                 complete("p", env=_ready_env())
+
+    def test_records_cost_event_on_nonzero_exit(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        monkeypatch.setenv("SYNAPSE_L0_ROOT", str(tmp_path / "private"))
+        with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(returncode=1, stderr="permission denied")
+            with pytest.raises(ClaudeError, match="permission denied"):
+                complete("p", env=_ready_env())
+
+        data = json.loads((tmp_path / "private" / "cost.jsonl").read_text(encoding="utf-8"))
+        assert data["status"] == "error"
+        assert data["error_kind"] == "nonzero_exit"
+
+    def test_cost_logging_failure_does_not_change_success(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(
+            "synapse_memory.llm.claude.append_cost_event",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+        )
+        with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(stdout=_mock_envelope("응답"))
+            assert complete("p", env=_ready_env()) == "응답"
+
+        assert "cost event 기록 실패" in capsys.readouterr().err
 
     def test_envelope_is_error(self) -> None:
         with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
