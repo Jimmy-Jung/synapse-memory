@@ -124,7 +124,7 @@
 - [X] T041 [P] Add synthetic NDCG/top-1 eval helper or deterministic test assertions for `tests/golden/raw_rag_hybrid/synthetic_queries.json`
 - [X] T042 [P] Update `docs/commands.md` with `rag index --include-raw`, `ask --hybrid`, and `me what-did-i-think --hybrid`
 - [X] T043 [P] Update slash command docs in `commands/` for affected commands
-- [ ] T044 Run quickstart smoke from `specs/006-raw-rag-hybrid/quickstart.md` and save transcript in `specs/006-raw-rag-hybrid/quickstart-results.md`
+- [X] T044 Run quickstart smoke from `specs/006-raw-rag-hybrid/quickstart.md` and save transcript in `specs/006-raw-rag-hybrid/quickstart-results.md`
 - [X] T045 Run scoped ruff on changed files
 - [X] T046 Run mypy strict on changed RAG/endpoints modules
 - [X] T047 Run full tests with `python3 -m pytest tests/ -W ignore::DeprecationWarning`
