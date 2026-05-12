@@ -19,6 +19,7 @@ from synapse_memory.endpoints.me import (
     what_did_i_think,
 )
 from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.rag.hybrid import RetrievalHit
 from synapse_memory.rag.vector_store import VectorRecord
 from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
@@ -95,6 +96,88 @@ class TestWhatDidIThink:
         with patch.object(me_mod, "embed_query", return_value=[0.0]):
             result = what_did_i_think("x", store=store, ai_env=_ai_env())
         assert "rag index" in result.answer.lower()
+
+    def test_hybrid_uses_hybrid_search_order(self) -> None:
+        store = MagicMock()
+        hybrid_record = _rec("danggeun", "# 당근마켓")
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod,
+            "hybrid_search",
+            return_value=[
+                RetrievalHit(
+                    record=hybrid_record,
+                    dense_rank=2,
+                    dense_distance=0.4,
+                    bm25_rank=1,
+                    bm25_score=3.0,
+                    rrf_score=0.03,
+                )
+            ],
+        ), patch.object(
+            me_mod.ai_api,
+            "complete",
+            return_value="당근마켓을 검토했습니다 [danggeun].",
+        ):
+            result = what_did_i_think(
+                "당근마켓",
+                store=store,
+                ai_env=_ai_env(),
+                hybrid=True,
+            )
+
+        assert result.source_ids == ["danggeun"]
+
+    def test_hybrid_timeline_combination_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            what_did_i_think(
+                "당근마켓",
+                store=MagicMock(),
+                ai_env=_ai_env(),
+                hybrid=True,
+                by="time",
+            )
+
+    def test_hybrid_prompt_uses_redacted_raw_context(self) -> None:
+        store = MagicMock()
+        raw_record = VectorRecord(
+            id="raw_obsidian:abc:0",
+            document="연락처 [EMAIL_1] 당근마켓",
+            embedding=[0.0],
+            metadata={
+                "source_kind": "raw_obsidian",
+                "path": "10_Active/secret.md",
+                "chunk_index": 0,
+                "display_name": "secret.md",
+            },
+        )
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod,
+            "hybrid_search",
+            return_value=[
+                RetrievalHit(
+                    record=raw_record,
+                    dense_rank=None,
+                    dense_distance=None,
+                    bm25_rank=1,
+                    bm25_score=3.0,
+                    rrf_score=0.02,
+                )
+            ],
+        ), patch.object(
+            me_mod.ai_api,
+            "complete",
+            return_value="당근마켓을 검토했습니다 [raw_obsidian:abc:0].",
+        ) as mock_complete:
+            what_did_i_think(
+                "당근마켓",
+                store=store,
+                ai_env=_ai_env(),
+                hybrid=True,
+            )
+
+        prompt = mock_complete.call_args.args[0]
+        assert "user@example.com" not in prompt
+        assert "[EMAIL_1]" in prompt
 
 
 class TestDecide:

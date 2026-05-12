@@ -26,6 +26,7 @@ from synapse_memory.rag import (
     VectorRecord,
     VectorStore,
     embed_query,
+    hybrid_search,
     open_vector_store,
 )
 from synapse_memory.rag.indexer import company_card_to_text
@@ -247,6 +248,7 @@ def what_did_i_think(
     by: Literal["time", "distance"] = "distance",
     limit: int = 20,
     today: datetime.date | None = None,
+    hybrid: bool = False,
 ) -> WhatDidIThinkResult:
     """주제에 대한 과거 사고 회상.
 
@@ -263,10 +265,21 @@ def what_did_i_think(
     """
     if not topic.strip():
         raise ValueError("topic은 빈 문자열일 수 없음")
+    if hybrid and by == "time":
+        raise ValueError("--timeline and --hybrid conflict — pick one.")
 
     store = store or open_vector_store()
     q_vec = embed_query(topic)
-    results = store.query(q_vec, top_k=top_k)
+    if hybrid:
+        hits = hybrid_search(
+            topic,
+            query_embedding=q_vec,
+            store=store,
+            top_k=top_k,
+        )
+        results = [(hit.record, hit.rrf_score) for hit in hits]
+    else:
+        results = store.query(q_vec, top_k=top_k)
 
     if not results:
         if by == "time":

@@ -27,6 +27,7 @@ from synapse_memory.rag import (
     VectorRecord,
     VectorStore,
     embed_query,
+    hybrid_search,
     open_vector_store,
 )
 from synapse_memory.storage.last_response import (
@@ -92,6 +93,7 @@ def ask(
     store: VectorStore | None = None,
     ai_env: AIEnvironment | None = None,
     where: dict[str, object] | None = None,
+    hybrid: bool = False,
 ) -> AskResult:
     """질의 → RAG → AI provider 답변.
 
@@ -114,7 +116,17 @@ def ask(
 
     store = store or open_vector_store()
     q_vec = embed_query(query)
-    results = store.query(q_vec, top_k=top_k, where=where)
+    if hybrid:
+        hits = hybrid_search(
+            query,
+            query_embedding=q_vec,
+            store=store,
+            top_k=top_k,
+            where=where,
+        )
+        results = [(hit.record, hit.rrf_score) for hit in hits]
+    else:
+        results = store.query(q_vec, top_k=top_k, where=where)
 
     if not results:
         return AskResult(
