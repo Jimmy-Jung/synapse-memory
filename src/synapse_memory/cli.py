@@ -66,7 +66,7 @@ from synapse_memory.cost.summary import (
     render_summary_json,
     render_summary_table,
 )
-from synapse_memory.daily import STEPS, run_daily
+from synapse_memory.daily import STEPS, StageStatus, run_daily
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.endpoints.me import (
     decide,
@@ -447,26 +447,36 @@ def cmd_daily(args: argparse.Namespace) -> int:
     only = set(args.only.split(",")) if args.only else None
     skip = set(args.skip.split(",")) if args.skip else None
 
-    result = run_daily(
-        only=only,
-        skip=skip,
-        classify_model=args.classify_model,
-        generate_model=args.generate_model,
-        profile_model=args.profile_model,
-        profile_sample_lines=args.profile_sample_lines,
-        profile_facts_only=args.profile_facts_only,
-        dry_run=args.dry_run,
-    )
+    try:
+        result = run_daily(
+            only=only,
+            skip=skip,
+            resume_from=args.resume_from,
+            classify_model=args.classify_model,
+            generate_model=args.generate_model,
+            profile_model=args.profile_model,
+            profile_sample_lines=args.profile_sample_lines,
+            profile_facts_only=args.profile_facts_only,
+            dry_run=args.dry_run,
+        )
+    except ValueError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 2
 
     if args.dry_run:
         return 0
 
     print("\n" + "=" * 60)
     print(f"Daily 총 시간: {result.total_elapsed:.1f}s")
-    print(f"실행 단계: {len(result.steps)}, 실패: {result.errors}")
+    print(f"실행 단계: {len(result.steps)}, 실패: {result.errors}, 건너뜀: {result.skipped}")
     for s in result.steps:
-        status = OK if s.ok else FAIL
-        print(f"  {status} {s.name:<22} {s.elapsed:>6.1f}s  {s.summary or s.error}")
+        if s.status == StageStatus.SKIPPED:
+            status = "-"
+            detail = f"skipped: {s.skip_reason}"
+        else:
+            status = OK if s.ok else FAIL
+            detail = s.summary or s.error
+        print(f"  {status} {s.name:<22} {s.elapsed:>6.1f}s  {detail}")
     return 1 if result.errors else 0
 
 
@@ -1480,6 +1490,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"이 단계들만 (comma-separated). 가능: {','.join(STEPS)}",
     )
     p_daily.add_argument("--skip", help="제외할 단계 (comma-separated)")
+    p_daily.add_argument(
+        "--resume-from",
+        choices=STEPS,
+        help="지정 stage부터 daily 재개",
+    )
     p_daily.add_argument("--classify-model", default="haiku")
     p_daily.add_argument("--generate-model", default="sonnet")
     p_daily.add_argument("--profile-model", default="sonnet")
