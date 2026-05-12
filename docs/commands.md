@@ -294,6 +294,27 @@ synapse-memory ask "기술 스택 정리" --top-k 8 --model sonnet
 
 자연어 질문을 받고, 관련 Card를 검색한 뒤 Claude로 답변을 합성합니다.
 
+### `me generate <recipe>` (007-me-recipes)
+
+```bash
+synapse-memory me generate weekly_report --input period=2026-W19
+synapse-memory me generate journal --input date=2026-05-12
+synapse-memory me generate brainstorm --input topic="시간관리"
+synapse-memory me generate resume --input company_id=danggeun --language en
+```
+
+Recipe markdown 기반 generator. 빌트인 6종 (`resume` / `weekly_report` / `journal` /
+`brainstorm` / `decide` / `recall`) + 사용자 vault `90_System/AI/recipes/` 에 추가한
+markdown 도 자동 발견. 5분 워크스루는 [quickstart.md](../specs/007-me-recipes/quickstart.md) 참고.
+
+### `me recipes list` · `me recipes show <recipe>`
+
+```bash
+synapse-memory me recipes list                # builtin + user recipe 표
+synapse-memory me recipes list --json         # machine-readable envelope
+synapse-memory me recipes show weekly_report  # input_schema·rag_filter·system_prompt preview
+```
+
 ### `me draft-resume`
 
 ```bash
@@ -302,6 +323,8 @@ synapse-memory me draft-resume danggeun --top-k 6 --model sonnet
 ```
 
 CompanyCard와 매칭되는 ProjectCard를 바탕으로 회사 맞춤 이력서 초안을 vault에 작성합니다.
+007-me-recipes 도입 이후 내부적으로는 `me generate resume --input company_id=…` 와
+동일한 generator pipeline 을 사용하지만 외부 stdout / exit code / 저장 경로는 보존됩니다.
 
 ### `me what-did-i-think`
 

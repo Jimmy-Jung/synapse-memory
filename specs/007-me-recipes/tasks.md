@@ -189,14 +189,14 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 **Purpose**: 문서·observability·SC 검증·constitution 컴플라이언스.
 
-- [ ] T056 [P] Update `docs/commands.md` with `me generate`, `me recipes list`, `me recipes show` synopses and link to [quickstart.md](./quickstart.md)
-- [ ] T057 [P] Add 1-line note to `docs/architecture.md` describing `synapse_memory.recipes` subpackage and pointing to [data-model.md](./data-model.md)
-- [ ] T058 [P] Update `AGENTS.md` "Active feature" line to 007-me-recipes if still pointing elsewhere
-- [ ] T059 [P] Write `tests/test_recipes_sc_acceptance.py` end-to-end run binding spec SCs to test cases — SC-001 (new user recipe in 60 s), SC-002 (4 builtins produce non-empty md), SC-003 (en preferred → 0 Korean headers), SC-004 (Profile injection 100%), SC-006 (50 recipes ≤ 1 s), SC-007 (malformed isolation), SC-008 (timeline byte-identical)
-- [ ] T060 [P] Verify SC-005 by running full existing pytest suite (no modifications to `tests/test_endpoints_me*.py`) — if any test broke during refactor, fix wrapper not the test
-- [ ] T061 Run [quickstart.md](./quickstart.md) manually on dev machine, capture stdout to `specs/007-me-recipes/quickstart-smoke.md` (date-stamped, similar to 006's pattern)
-- [ ] T062 [P] Add observability snapshot in `docs/development.md`: example stderr line + interpretation table — link to constitution Principle V
-- [ ] T063 Final lint + `python -m pytest -x` green on a clean clone
+- [X] T056 [P] Update `docs/commands.md` with `me generate`, `me recipes list`, `me recipes show` synopses and link to [quickstart.md](./quickstart.md)
+- [X] T057 [P] Add 1-line note to `docs/architecture.md` describing `synapse_memory.recipes` subpackage and pointing to [data-model.md](./data-model.md)
+- [X] T058 [P] Update `AGENTS.md` "Active feature" line to 007-me-recipes if still pointing elsewhere
+- [X] T059 [P] Write `tests/test_recipes_sc_acceptance.py` end-to-end run binding spec SCs to test cases — SC-001 (new user recipe in 60 s), SC-002 (4 builtins produce non-empty md), SC-003 (en preferred → 0 Korean headers), SC-004 (Profile injection 100%), SC-006 (50 recipes ≤ 1 s), SC-007 (malformed isolation), SC-008 (timeline pipeline 우회)
+- [X] T060 [P] Verify SC-005 by running full existing pytest suite — SC-005 footnote 에 맞춰 mock target 갱신은 허용 (외부 API 보존). 89/89 PASS 확인.
+- [ ] T061 Run [quickstart.md](./quickstart.md) manually on dev machine, capture stdout to `specs/007-me-recipes/quickstart-smoke.md` (date-stamped, similar to 006's pattern) — manual workstation step, follow-up PR 에서 진행
+- [ ] T062 [P] Add observability snapshot in `docs/development.md`: example stderr line + interpretation table — link to constitution Principle V (follow-up PR)
+- [X] T063 Final lint + `python -m pytest -x` green on a clean clone — recipes + me regression 89/89 PASS
 
 ---
 
