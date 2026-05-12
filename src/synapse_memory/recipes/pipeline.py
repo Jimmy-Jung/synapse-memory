@@ -310,6 +310,7 @@ def generate(
         locale_source=locale_src,
         domain=domain,
         domain_source=domain_src,
+        rag_mode=recipe.rag_mode,
         matched_records=matched,
         today=today_resolved,
         rendered_system_prompt=system_rendered,
@@ -336,6 +337,7 @@ def generate(
             locale_source=locale_src,
             domain=domain,
             domain_source=domain_src,
+            rag_mode=recipe.rag_mode,
         )
 
     answer = ai_api_complete(
@@ -380,5 +382,6 @@ def generate(
         locale_source=locale_src,
         domain=domain,
         domain_source=domain_src,
+        rag_mode=recipe.rag_mode,
         last_answer_ref=last_ref,
     )

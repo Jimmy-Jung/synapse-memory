@@ -56,6 +56,15 @@ def _builtin_recipe_dir(tmp_path: Path) -> Path:
     return d
 
 
+def _builtin_recipe_dir_with_rag_mode(tmp_path: Path, rag_mode: str) -> Path:
+    d = _builtin_recipe_dir(tmp_path)
+    recipe_path = d / "echo.md"
+    text = recipe_path.read_text(encoding="utf-8")
+    text = text.replace("rag_top_k: 3\n", f"rag_top_k: 3\nrag_mode: {rag_mode}\n")
+    recipe_path.write_text(text, encoding="utf-8")
+    return d
+
+
 class _StoreStub:
     def __init__(self, hits: list[tuple[Any, float]] | None = None) -> None:
         self._hits = hits or []
@@ -165,6 +174,27 @@ def test_pipeline_generate_dry_run_skips_llm_and_save(tmp_path: Path) -> None:
     assert result.saved_path is None
     # answer_markdown should expose rendered prompts (preview)
     assert "topic=z" in result.answer_markdown
+    assert result.rag_mode == "dense"
+
+
+def test_pipeline_result_reports_recipe_rag_mode(tmp_path: Path) -> None:
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_rag_mode(tmp_path, "hybrid")
+
+    with mock.patch("synapse_memory.recipes.pipeline.ai_api_complete") as mocked:
+        result = generate(
+            "echo",
+            inputs={"topic": "z"},
+            vault_path=vault,
+            store=None,
+            builtin_dir=builtin,
+            dry_run=True,
+        )
+        mocked.assert_not_called()
+
+    assert result.rag_mode == "hybrid"
 
 
 def test_pipeline_generate_records_last_answer(tmp_path: Path) -> None:

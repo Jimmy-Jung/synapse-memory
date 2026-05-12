@@ -34,6 +34,7 @@ def test_loader_parses_valid_frontmatter(tmp_path: Path) -> None:
         rag_filter:
           source_kind: card_project
         rag_top_k: 10
+        rag_mode: hybrid
         use_profile: true
         save_subpath: 30_Creative/Reports
         locale_aware: true
@@ -50,6 +51,7 @@ def test_loader_parses_valid_frontmatter(tmp_path: Path) -> None:
     assert recipe.input_schema == {"period": "required"}
     assert recipe.rag_filter == {"source_kind": "card_project"}
     assert recipe.rag_top_k == 10
+    assert recipe.rag_mode == "hybrid"
     assert recipe.use_profile is True
     assert recipe.save_subpath == "30_Creative/Reports"
     assert recipe.locale_aware is True
@@ -58,6 +60,66 @@ def test_loader_parses_valid_frontmatter(tmp_path: Path) -> None:
     assert recipe.source == "builtin"
     assert recipe.source_path == p
     assert "{period}" in recipe.system_prompt
+
+
+@pytest.mark.parametrize("mode", ["dense", "hybrid"])
+def test_loader_accepts_valid_rag_mode(tmp_path: Path, mode: str) -> None:
+    from synapse_memory.recipes.loader import parse_recipe
+
+    p = _write(
+        tmp_path / f"{mode}_recipe.md",
+        f"""
+        ---
+        name: {mode}_recipe
+        description: valid rag mode
+        input_schema: {{}}
+        rag_mode: {mode}
+        ---
+
+        body
+        """,
+    )
+    recipe = parse_recipe(p, source="user")
+    assert recipe.rag_mode == mode
+
+
+def test_loader_defaults_missing_rag_mode_to_dense(tmp_path: Path) -> None:
+    from synapse_memory.recipes.loader import parse_recipe
+
+    p = _write(
+        tmp_path / "default_dense.md",
+        """
+        ---
+        name: default_dense
+        description: no rag mode
+        input_schema: {}
+        ---
+
+        body
+        """,
+    )
+    recipe = parse_recipe(p, source="user")
+    assert recipe.rag_mode == "dense"
+
+
+def test_loader_rejects_invalid_rag_mode(tmp_path: Path) -> None:
+    from synapse_memory.recipes.loader import RecipeValidationError, parse_recipe
+
+    p = _write(
+        tmp_path / "invalid_mode.md",
+        """
+        ---
+        name: invalid_mode
+        description: bad rag mode
+        input_schema: {}
+        rag_mode: keyword
+        ---
+
+        body
+        """,
+    )
+    with pytest.raises(RecipeValidationError, match="rag_mode"):
+        parse_recipe(p, source="user")
 
 
 def test_loader_rejects_malformed_yaml(tmp_path: Path) -> None:

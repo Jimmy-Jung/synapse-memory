@@ -18,6 +18,7 @@ import yaml
 from synapse_memory.recipes.recipe import (
     GenerationRecipe,
     InputRequirement,
+    RecipeRagMode,
     RecipeSource,
 )
 
@@ -102,6 +103,15 @@ def _coerce_bool(meta: dict, key: str, default: bool) -> bool:
     return val
 
 
+def _coerce_rag_mode(meta: dict) -> RecipeRagMode:
+    raw = str(meta.get("rag_mode", "dense")).strip().lower()
+    if raw not in {"dense", "hybrid"}:
+        raise RecipeValidationError(
+            f"rag_mode must be 'dense' or 'hybrid', got {meta.get('rag_mode')!r}"
+        )
+    return raw  # type: ignore[return-value]
+
+
 def parse_recipe(path: Path, *, source: RecipeSource) -> GenerationRecipe:
     """Recipe markdown 1 장을 ``GenerationRecipe`` 로 파싱."""
     try:
@@ -146,6 +156,7 @@ def parse_recipe(path: Path, *, source: RecipeSource) -> GenerationRecipe:
         raise RecipeValidationError(f"rag_filter must be mapping or null in {path}")
 
     rag_top_k = _coerce_int(meta, "rag_top_k", 8, lo=1, hi=50)
+    rag_mode = _coerce_rag_mode(meta)
     use_profile = _coerce_bool(meta, "use_profile", True)
     save_subpath = _validate_save_subpath(meta.get("save_subpath"))
     locale_aware = _coerce_bool(meta, "locale_aware", True)
@@ -167,6 +178,7 @@ def parse_recipe(path: Path, *, source: RecipeSource) -> GenerationRecipe:
         input_schema=input_schema,
         rag_filter=rag_filter,
         rag_top_k=rag_top_k,
+        rag_mode=rag_mode,
         use_profile=use_profile,
         save_subpath=save_subpath,
         locale_aware=locale_aware,
