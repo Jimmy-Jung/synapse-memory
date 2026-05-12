@@ -45,7 +45,7 @@ description: "Task list for Timeline Recall (FR-A1)"
 - [X] T004 [P] Add `@dataclass(frozen=True) class CardWithMeta` (fields per `data-model.md §1`) inside `src/synapse_memory/endpoints/me.py` as module-private (not exported in `__all__`).
 - [X] T005 [P] Add `@dataclass(frozen=True) class TimelineGroup` (fields per `data-model.md §2`) inside `src/synapse_memory/endpoints/me.py`.
 - [X] T006 Add private function stubs `_resolve_sort_ts`, `_sort_by_time`, `_group_by_quarter`, `_format_timeline_output` in `src/synapse_memory/endpoints/me.py` raising `NotImplementedError` (stubs to be filled in US1).
-- [ ] T007 Populate `tests/golden/timeline_recall/synthetic_30.json` with 30 query objects per `research.md §BT-3` distribution (1/3 within 1y, 1/3 1-3y, 1/6 ≥3y, 1/6 period_end null). Each query: `{query, expected_card_id_order, cards: [{card_id, source_kind, period_end, created, last_reviewed, status}]}`.
+- [X] T007 Populate `tests/golden/timeline_recall/synthetic_30.json` with 30 query objects per `research.md §BT-3` distribution (1/3 within 1y, 1/3 1-3y, 1/6 ≥3y, 1/6 period_end null). Each query: `{query, expected_card_id_order, cards: [{card_id, source_kind, period_end, created, last_reviewed, status}]}`.
 
 **Checkpoint**: Foundational 완료. T004~T007 머지 후 US1~US3 의 RED 테스트 작성 가능.
 
@@ -59,26 +59,26 @@ description: "Task list for Timeline Recall (FR-A1)"
 
 ### Tests for User Story 1 (RED — implementation 전 실패 확인 필수) ⚠️
 
-- [ ] T008 [P] [US1] Write `test_timeline_basic_sort` in `tests/test_endpoints_me_timeline.py` covering FR-002 (period_end desc 1차, created desc 2차).
-- [ ] T009 [P] [US1] Write `test_period_end_null_active` in `tests/test_endpoints_me_timeline.py` covering FR-003 (active + null period_end → today fallback label "(오늘 YYYY-MM-DD)").
-- [ ] T010 [P] [US1] Write `test_period_end_null_inactive` in `tests/test_endpoints_me_timeline.py` covering FR-004 (non-active + null period_end → created fallback label "(created)").
-- [ ] T011 [P] [US1] Write `test_company_card_uses_last_reviewed` in `tests/test_endpoints_me_timeline.py` covering FR-005 (CompanyCard → last_reviewed label "(last reviewed)").
-- [ ] T012 [P] [US1] Write `test_quarter_group_header` in `tests/test_endpoints_me_timeline.py` covering FR-006 (분기 헤더 포맷 `## 2024 Q3` per RT-3).
-- [ ] T013 [P] [US1] Write `test_month_subheader` in `tests/test_endpoints_me_timeline.py` covering FR-007 (동일 분기 내 ≥ 2 카드 시 `### YYYY-MM` 서브헤더 출력).
-- [ ] T014 [P] [US1] Write `test_single_result_no_header` in `tests/test_endpoints_me_timeline.py` covering FR-008 (단일 카드 시 헤더 생략).
-- [ ] T015 [P] [US1] Write `test_yyyy_mm_normalization` in `tests/test_endpoints_me_timeline.py` covering RT-2 (`YYYY-MM` 입력의 월 말일 정규화 + leap year).
-- [ ] T016 [P] [US1] Write `test_kendall_tau_golden` in `tests/test_endpoints_me_timeline.py` reading `tests/golden/timeline_recall/synthetic_30.json` and asserting Kendall τ ≥ 0.9 for all 30 queries (SC-001).
-- [ ] T017 [US1] Run `pytest tests/test_endpoints_me_timeline.py -k 'timeline_basic or period_end or company or quarter or month or single or yyyy_mm or kendall'` and verify all listed RED tests fail with `NotImplementedError` or `AssertionError` (RED checkpoint).
+- [X] T008 [P] [US1] Write `test_timeline_basic_sort` in `tests/test_endpoints_me_timeline.py` covering FR-002 (period_end desc 1차, created desc 2차).
+- [X] T009 [P] [US1] Write `test_period_end_null_active` in `tests/test_endpoints_me_timeline.py` covering FR-003 (active + null period_end → today fallback label "(오늘 YYYY-MM-DD)").
+- [X] T010 [P] [US1] Write `test_period_end_null_inactive` in `tests/test_endpoints_me_timeline.py` covering FR-004 (non-active + null period_end → created fallback label "(created)").
+- [X] T011 [P] [US1] Write `test_company_card_uses_last_reviewed` in `tests/test_endpoints_me_timeline.py` covering FR-005 (CompanyCard → last_reviewed label "(last reviewed)").
+- [X] T012 [P] [US1] Write `test_quarter_group_header` in `tests/test_endpoints_me_timeline.py` covering FR-006 (분기 헤더 포맷 `## 2024 Q3` per RT-3).
+- [X] T013 [P] [US1] Write `test_month_subheader` in `tests/test_endpoints_me_timeline.py` covering FR-007 (동일 분기 내 ≥ 2 카드 시 `### YYYY-MM` 서브헤더 출력).
+- [X] T014 [P] [US1] Write `test_single_result_no_header` in `tests/test_endpoints_me_timeline.py` covering FR-008 (단일 카드 시 헤더 생략).
+- [X] T015 [P] [US1] Write `test_yyyy_mm_normalization` in `tests/test_endpoints_me_timeline.py` covering RT-2 (`YYYY-MM` 입력의 월 말일 정규화 + leap year).
+- [X] T016 [P] [US1] Write `test_kendall_tau_golden` in `tests/test_endpoints_me_timeline.py` reading `tests/golden/timeline_recall/synthetic_30.json` and asserting Kendall τ ≥ 0.9 for all 30 queries (SC-001).
+- [X] T017 [US1] Run `pytest tests/test_endpoints_me_timeline.py -k 'timeline_basic or period_end or company or quarter or month or single or yyyy_mm or kendall'` and verify all listed RED tests fail with `NotImplementedError` or `AssertionError` (RED checkpoint).
 
 ### Implementation for User Story 1 (GREEN)
 
-- [ ] T018 [US1] Implement `_resolve_sort_ts(metadata: dict, today: date) -> CardWithMeta` in `src/synapse_memory/endpoints/me.py` per `data-model.md §"분류 표 — sort_ts_source 결정 트리"` (RT-1 폴백 4단계 + RT-2 YYYY-MM 정규화).
-- [ ] T019 [US1] Implement `_sort_by_time(items: list[CardWithMeta]) -> list[CardWithMeta]` in `src/synapse_memory/endpoints/me.py` using stable sort key `(-sort_ts.timestamp(), -created_ts.timestamp())` per research §BT-1.
-- [ ] T020 [US1] Implement `_group_by_quarter(items: list[CardWithMeta]) -> list[TimelineGroup]` in `src/synapse_memory/endpoints/me.py` producing groups sorted by `sort_ts desc` (FR-006).
-- [ ] T021 [US1] Implement `_format_timeline_output(groups: list[TimelineGroup], limit: int) -> str` in `src/synapse_memory/endpoints/me.py` per `contracts/cli-contracts.md §"Stdout 출력 — --timeline ON"` (분기 헤더 `## 2024 Q3`, 월 서브헤더, FR-008 단일 카드, footer `총 N개 카드 (--limit N)`).
-- [ ] T022 [US1] Extend `what_did_i_think()` signature in `src/synapse_memory/endpoints/me.py:230` with parameters `by: Literal["time","distance"] = "distance"` and `limit: int = 20`. When `by == "time"`, call `_resolve_sort_ts → _sort_by_time → _group_by_quarter → _format_timeline_output` chain. When `by == "distance"`, preserve existing behavior unchanged (FR-013).
-- [ ] T023 [US1] Add argparse `--timeline` (store_true) option to `me what-did-i-think` subparser in `src/synapse_memory/cli.py:1267` area. Pass through to `cmd_me_what_did_i_think` which sets `by="time"` when flag is set.
-- [ ] T024 [US1] Run `pytest tests/test_endpoints_me_timeline.py` and verify all RED tests from T008~T016 now pass (GREEN checkpoint, Kendall τ ≥ 0.9).
+- [X] T018 [US1] Implement `_resolve_sort_ts(metadata: dict, today: date) -> CardWithMeta` in `src/synapse_memory/endpoints/me.py` per `data-model.md §"분류 표 — sort_ts_source 결정 트리"` (RT-1 폴백 4단계 + RT-2 YYYY-MM 정규화).
+- [X] T019 [US1] Implement `_sort_by_time(items: list[CardWithMeta]) -> list[CardWithMeta]` in `src/synapse_memory/endpoints/me.py` using stable sort key `(-sort_ts.timestamp(), -created_ts.timestamp())` per research §BT-1.
+- [X] T020 [US1] Implement `_group_by_quarter(items: list[CardWithMeta]) -> list[TimelineGroup]` in `src/synapse_memory/endpoints/me.py` producing groups sorted by `sort_ts desc` (FR-006).
+- [X] T021 [US1] Implement `_format_timeline_output(groups: list[TimelineGroup], limit: int) -> str` in `src/synapse_memory/endpoints/me.py` per `contracts/cli-contracts.md §"Stdout 출력 — --timeline ON"` (분기 헤더 `## 2024 Q3`, 월 서브헤더, FR-008 단일 카드, footer `총 N개 카드 (--limit N)`).
+- [X] T022 [US1] Extend `what_did_i_think()` signature in `src/synapse_memory/endpoints/me.py:230` with parameters `by: Literal["time","distance"] = "distance"` and `limit: int = 20`. When `by == "time"`, call `_resolve_sort_ts → _sort_by_time → _group_by_quarter → _format_timeline_output` chain. When `by == "distance"`, preserve existing behavior unchanged (FR-013).
+- [X] T023 [US1] Add argparse `--timeline` (store_true) option to `me what-did-i-think` subparser in `src/synapse_memory/cli.py:1267` area. Pass through to `cmd_me_what_did_i_think` which sets `by="time"` when flag is set.
+- [X] T024 [US1] Run `pytest tests/test_endpoints_me_timeline.py` and verify all RED tests from T008~T016 now pass (GREEN checkpoint, Kendall τ ≥ 0.9).
 
 **Checkpoint**: US1 MVP 완료 — `--timeline` 단독 출시로 사용자 가치 즉시 도달. `synapse-memory me what-did-i-think "주제" --timeline` 호출 시 분기 그룹 출력.
 
@@ -124,10 +124,10 @@ description: "Task list for Timeline Recall (FR-A1)"
 
 ### Implementation for User Story 3 (GREEN)
 
-- [ ] T038 [US3] Add argparse `--by {time,distance}` option (default `distance`) to `me what-did-i-think` subparser in `src/synapse_memory/cli.py:1267` area.
-- [ ] T039 [US3] Add argparse `--limit N` option (type `int`, default `20`, choices via custom validator for range `1..100`) to same subparser.
-- [ ] T040 [US3] In `cmd_me_what_did_i_think()` at `src/synapse_memory/cli.py:349`, add conflict check: if `args.timeline and args.by == "distance"` → print `"error: --timeline and --by distance conflict — pick one."` and `return 1`. If `args.timeline or args.by == "time"` → set effective `by="time"` to pass to endpoint.
-- [ ] T041 [US3] Pass `limit=args.limit` through to `what_did_i_think()` call in `cmd_me_what_did_i_think()`.
+- [X] T038 [US3] Add argparse `--by {time,distance}` option (default `distance`) to `me what-did-i-think` subparser in `src/synapse_memory/cli.py:1267` area. (T023 와 함께 구현 — Phase 3 단계에서 단일 argparse 정의로 충돌 회피)
+- [X] T039 [US3] Add argparse `--limit N` option (type `int`, default `20`, choices via custom validator for range `1..100`) to same subparser. (T023 와 함께 구현)
+- [X] T040 [US3] In `cmd_me_what_did_i_think()` at `src/synapse_memory/cli.py:349`, add conflict check: if `args.timeline and args.by == "distance"` → print `"error: --timeline and --by distance conflict — pick one."` and `return 1`. If `args.timeline or args.by == "time"` → set effective `by="time"` to pass to endpoint. (T023 와 함께 구현)
+- [X] T041 [US3] Pass `limit=args.limit` through to `what_did_i_think()` call in `cmd_me_what_did_i_think()`. (T023 와 함께 구현)
 - [ ] T042 [US3] Run `pytest tests/test_endpoints_me_timeline.py -k 'by_time_alias or by_distance_explicit or conflict or limit'` and verify all pass (GREEN checkpoint).
 
 **Checkpoint**: US3 완료 — 모드 명시 + 충돌 검증 + limit. 모든 user story 독립 동작.
