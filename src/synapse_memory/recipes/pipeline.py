@@ -14,6 +14,7 @@ Construction order:
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import re
 from collections import defaultdict
@@ -23,6 +24,9 @@ from typing import Any
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
+from synapse_memory.rag.bm25 import BM25IndexError
+from synapse_memory.rag.embeddings import EmbeddingUnavailableError, embed_query
+from synapse_memory.rag.hybrid import hybrid_search
 from synapse_memory.recipes.domain import resolve_domain
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
 from synapse_memory.recipes.locale import resolve_locale
@@ -30,6 +34,7 @@ from synapse_memory.recipes.recipe import (
     GenerationContext,
     GenerationRecipe,
     GenerationResult,
+    RecipeRagMode,
 )
 from synapse_memory.recipes.registry import RecipeRegistry
 from synapse_memory.storage.last_response import (
@@ -50,6 +55,17 @@ class InputValidationError(ValueError):
 
 class RecipePromptTooLargeError(ValueError):
     """Rendered system prompt 가 32KB cap 을 초과할 때 발생 (사용자 입력 폭주 방지)."""
+
+
+class RecipeHybridUnavailableError(RuntimeError):
+    """Hybrid RAG sidecar 가 준비되지 않았을 때 발생."""
+
+
+def _hybrid_unavailable_error() -> RecipeHybridUnavailableError:
+    return RecipeHybridUnavailableError(
+        "rag_mode=hybrid requires BM25 sidecar. "
+        "Run `synapse-memory rag index --include-raw` and retry."
+    )
 
 
 def _load_profile_text(vault: Path) -> str:
@@ -78,7 +94,7 @@ def _primary_input_value(
     for key in recipe.input_schema:  # insertion order preserved
         if recipe.input_schema[key] == "required" and inputs.get(key):
             return inputs[key]
-    for key, val in inputs.items():
+    for _key, val in inputs.items():
         if val:
             return val
     return "untitled"
@@ -203,6 +219,74 @@ def _validate_inputs(recipe: GenerationRecipe, inputs: dict[str, str]) -> None:
         )
 
 
+def _build_rag_query(recipe: GenerationRecipe, inputs: dict[str, str]) -> str:
+    parts = [recipe.name, recipe.description]
+    parts.extend(f"{key}: {value}" for key, value in inputs.items() if value)
+    return "\n".join(parts)
+
+
+def _resolve_rag_mode(
+    *,
+    recipe: GenerationRecipe,
+    override: RecipeRagMode | None,
+) -> RecipeRagMode:
+    return override or recipe.rag_mode
+
+
+def _retrieve_matches(
+    *,
+    recipe: GenerationRecipe,
+    inputs: dict[str, str],
+    store: Any,
+    top_k_override: int | None,
+    rag_mode: RecipeRagMode,
+) -> list[tuple[Any, float]]:
+    if store is None:
+        if rag_mode == "hybrid":
+            raise _hybrid_unavailable_error()
+        return []
+
+    rag_top_k = top_k_override or recipe.rag_top_k
+    rag_query = _build_rag_query(recipe, inputs)
+    rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
+
+    try:
+        query_embedding = embed_query(rag_query)
+    except EmbeddingUnavailableError as exc:
+        if rag_mode == "hybrid":
+            raise
+        try:
+            # Compatibility path for tests/future stores that own query construction.
+            return list(store.query())
+        except TypeError as stub_exc:
+            raise exc from stub_exc
+
+    if rag_mode == "hybrid":
+        try:
+            hits = hybrid_search(
+                rag_query,
+                query_embedding=query_embedding,
+                store=store,
+                top_k=rag_top_k,
+                where=rag_filter,
+            )
+        except BM25IndexError as exc:
+            raise _hybrid_unavailable_error() from exc
+        return [(hit.record, hit.rrf_score) for hit in hits]
+
+    try:
+        return list(
+            store.query(
+                query_embedding,
+                top_k=rag_top_k,
+                where=rag_filter,
+            )
+        )
+    except TypeError:
+        # store.query signature variation tolerance (for stubs / future stores)
+        return list(store.query())
+
+
 def generate(
     recipe_name: str,
     *,
@@ -222,6 +306,7 @@ def generate(
     disable_save: bool = False,
     top_k_override: int | None = None,
     require_matched: bool = False,
+    rag_mode_override: RecipeRagMode | None = None,
 ) -> GenerationResult:
     """Recipe 1 회 실행 — orchestrator entry point.
 
@@ -235,6 +320,7 @@ def generate(
 
     registry = _make_registry(vault, builtin)
     recipe = registry.get(recipe_name)
+    rag_mode = _resolve_rag_mode(recipe=recipe, override=rag_mode_override)
 
     _validate_inputs(recipe, inputs)
 
@@ -256,20 +342,13 @@ def generate(
         else ("한국어", "default")
     )
 
-    matched: list[tuple[Any, float]] = []
-    if store is not None:
-        rag_top_k = top_k_override or recipe.rag_top_k
-        try:
-            matched = list(
-                store.query(
-                    None,
-                    top_k=rag_top_k,
-                    where=recipe.rag_filter,
-                )
-            )
-        except TypeError:
-            # store.query signature variation tolerance (for stubs / future stores)
-            matched = list(store.query())
+    matched = _retrieve_matches(
+        recipe=recipe,
+        inputs=inputs,
+        store=store,
+        top_k_override=top_k_override,
+        rag_mode=rag_mode,
+    )
 
     if require_matched and not matched:
         raise ValueError(
@@ -310,6 +389,7 @@ def generate(
         locale_source=locale_src,
         domain=domain,
         domain_source=domain_src,
+        rag_mode=rag_mode,
         matched_records=matched,
         today=today_resolved,
         rendered_system_prompt=system_rendered,
@@ -336,6 +416,7 @@ def generate(
             locale_source=locale_src,
             domain=domain,
             domain_source=domain_src,
+            rag_mode=rag_mode,
         )
 
     answer = ai_api_complete(
@@ -362,10 +443,8 @@ def generate(
     last_ref: LastAnswerReference | None = None
     if save_last:
         ref = _build_last_answer(recipe=recipe, inputs=inputs, matched=matched)
-        try:
+        with contextlib.suppress(OSError, ValueError):
             save_last_answer(ref)
-        except (OSError, ValueError):
-            pass  # best-effort — last_answer 실패는 generate 실패로 보지 않음
         last_ref = ref
 
     source_ids = [c.target_ref for c in (last_ref.citations if last_ref else ())]
@@ -380,5 +459,6 @@ def generate(
         locale_source=locale_src,
         domain=domain,
         domain_source=domain_src,
+        rag_mode=rag_mode,
         last_answer_ref=last_ref,
     )

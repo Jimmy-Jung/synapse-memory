@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import synapse_memory.endpoints.me as me_mod
 from synapse_memory.cards.company import (
     CompanyCard,
     JobPosition,
@@ -132,7 +131,7 @@ class TestDraftResume:
             (_mock_record("이력서-2026", "# iOS 클린 아키텍처"), 0.45),
         ]
 
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value=(
                 "---\n"
@@ -167,7 +166,7 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="---\ntitle: x\n---\n",
         ):
@@ -188,7 +187,7 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = []
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), pytest.raises(
+        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), pytest.raises(
             ValueError, match="ProjectCard"
         ):
             draft_resume(
@@ -202,7 +201,7 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="---\ntitle: x\n---\n",
         ):
@@ -219,7 +218,7 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="---\ntitle: x\n---\n",
         ):

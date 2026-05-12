@@ -32,15 +32,27 @@ from synapse_memory.cards.project import (
 )
 from synapse_memory.feedback.apply import (
     DEFAULT_FEEDBACK_SCORE,
+    FeedbackAggregate,
     card_feedback_scores,
 )
 from synapse_memory.feedback.events import load_feedback_events
+from synapse_memory.rag.bm25 import (
+    BM25Document,
+    tokenize_for_bm25,
+    write_bm25_documents,
+)
+from synapse_memory.rag.chunker import (
+    RawChunk,
+    discover_raw_sources,
+    raw_chunks_from_file,
+)
 from synapse_memory.rag.embeddings import embed_texts
 from synapse_memory.rag.vector_store import (
     VectorRecord,
     VectorStore,
     open_vector_store,
 )
+from synapse_memory.redaction import redact_full
 
 PREFIX_PROJECT = "card_project:"
 PREFIX_COMPANY = "card_company:"
@@ -50,12 +62,19 @@ PREFIX_COMPANY = "card_company:"
 class IndexStats:
     project_cards: int = 0
     company_cards: int = 0
+    raw_obsidian_chunks: int = 0
+    raw_claude_code_chunks: int = 0
+    bm25_documents: int = 0
     bytes_indexed: int = 0
     failed: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def total_cards(self) -> int:
         return self.project_cards + self.company_cards
+
+    @property
+    def total_raw_chunks(self) -> int:
+        return self.raw_obsidian_chunks + self.raw_claude_code_chunks
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +148,7 @@ def company_card_to_text(card: CompanyCard) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _project_meta(card: ProjectCard) -> dict:
+def _project_meta(card: ProjectCard) -> dict[str, object]:
     return {
         "source_kind": "card_project",
         "card_id": card.project_id,
@@ -147,7 +166,7 @@ def _project_meta(card: ProjectCard) -> dict:
     }
 
 
-def _company_meta(card: CompanyCard) -> dict:
+def _company_meta(card: CompanyCard) -> dict[str, object]:
     return {
         "source_kind": "card_company",
         "card_id": card.company_id,
@@ -172,6 +191,8 @@ def index_cards(
     store: VectorStore | None = None,
     vault_path: Path | None = None,
     rebuild: bool = False,
+    include_raw: bool = False,
+    bm25_path: Path | None = None,
     on_progress: Callable[[str, int, int], None] | None = None,
     batch_size: int = 16,
 ) -> IndexStats:
@@ -181,6 +202,8 @@ def index_cards(
         store: VectorStore (기본: ``open_vector_store()``).
         vault_path: vault 위치 (기본: 자동 감지).
         rebuild: True면 collection 비우고 처음부터.
+        include_raw: True면 vault/L0 raw chunks 도 인덱싱.
+        bm25_path: BM25 sidecar 경로 override (테스트용).
         on_progress: ``(stage, current, total)`` 콜백 (stage="project"|"company").
         batch_size: 임베딩 배치.
 
@@ -197,6 +220,7 @@ def index_cards(
     projects = list_project_cards(vault_path=vault_path)
     companies = list_company_cards(vault_path=vault_path)
     feedback_scores = card_feedback_scores(load_feedback_events(recover=True))
+    bm25_documents: list[BM25Document] = []
 
     # ---- Project Card ----
     if projects:
@@ -216,19 +240,18 @@ def index_cards(
                     embedding=vec,
                     metadata={
                         **_project_meta(card),
-                        "feedback_score": feedback_scores.get(
-                            card.project_id
-                        ).score
-                        if card.project_id in feedback_scores
-                        else DEFAULT_FEEDBACK_SCORE,
+                        "feedback_score": _feedback_score(
+                            feedback_scores, card.project_id
+                        ),
                     },
                 )
             )
-            stats.bytes_indexed += len(text.encode("utf-8"))
+            stats.bytes_indexed += len(text.encode())
 
         try:
             store.upsert(project_records)
             stats.project_cards = len(project_records)
+            bm25_documents.extend(_bm25_documents_from_records(project_records))
         except Exception as exc:
             stats.failed.append(("project_upsert", str(exc)))
 
@@ -238,32 +261,124 @@ def index_cards(
         texts = [company_card_to_text(c) for c in companies]
         vectors = embed_texts(texts, batch_size=batch_size)
 
-        for i, (card, text, vec) in enumerate(
+        for i, (company, text, vec) in enumerate(
             zip(companies, texts, vectors, strict=False)
         ):
             if on_progress:
                 on_progress("company", i + 1, len(companies))
             company_records.append(
                 VectorRecord(
-                    id=f"{PREFIX_COMPANY}{card.company_id}",
+                    id=f"{PREFIX_COMPANY}{company.company_id}",
                     document=text,
                     embedding=vec,
                     metadata={
-                        **_company_meta(card),
-                        "feedback_score": feedback_scores.get(
-                            card.company_id
-                        ).score
-                        if card.company_id in feedback_scores
-                        else DEFAULT_FEEDBACK_SCORE,
+                        **_company_meta(company),
+                        "feedback_score": _feedback_score(
+                            feedback_scores, company.company_id
+                        ),
                     },
                 )
             )
-            stats.bytes_indexed += len(text.encode("utf-8"))
+            stats.bytes_indexed += len(text.encode())
 
         try:
             store.upsert(company_records)
             stats.company_cards = len(company_records)
+            bm25_documents.extend(_bm25_documents_from_records(company_records))
         except Exception as exc:
             stats.failed.append(("company_upsert", str(exc)))
 
+    if include_raw:
+        raw_records = _build_raw_records(
+            vault_path=vault_path,
+            on_progress=on_progress,
+            batch_size=batch_size,
+            stats=stats,
+        )
+        if raw_records:
+            try:
+                store.upsert(raw_records)
+                bm25_documents.extend(_bm25_documents_from_records(raw_records))
+            except Exception as exc:
+                stats.failed.append(("raw_upsert", str(exc)))
+
+        try:
+            write_bm25_documents(bm25_documents, path=bm25_path)
+            stats.bm25_documents = len(bm25_documents)
+        except Exception as exc:
+            stats.failed.append(("bm25_write", str(exc)))
+
     return stats
+
+
+def _build_raw_records(
+    *,
+    vault_path: Path | None,
+    on_progress: Callable[[str, int, int], None] | None,
+    batch_size: int,
+    stats: IndexStats,
+) -> list[VectorRecord]:
+    sources = discover_raw_sources(vault_path=vault_path)
+    chunks: list[RawChunk] = []
+    for index, source in enumerate(sources, start=1):
+        if on_progress:
+            on_progress(source.source_kind, index, len(sources))
+        try:
+            chunks.extend(
+                raw_chunks_from_file(
+                    source.path,
+                    source_kind=source.source_kind,
+                    root_path=source.root_path,
+                    redact=lambda text: redact_full(text).redacted,
+                )
+            )
+        except Exception as exc:
+            stats.failed.append((f"{source.source_kind}:{source.path.name}", str(exc)))
+
+    if not chunks:
+        return []
+
+    texts = [chunk.text for chunk in chunks]
+    vectors = embed_texts(texts, batch_size=batch_size)
+    records: list[VectorRecord] = []
+    for chunk, vector in zip(chunks, vectors, strict=False):
+        records.append(
+            VectorRecord(
+                id=chunk.id,
+                document=chunk.text,
+                embedding=vector,
+                metadata={
+                    "source_kind": chunk.source_kind,
+                    "path": chunk.path,
+                    "chunk_index": chunk.chunk_index,
+                    "display_name": chunk.display_name,
+                    "created": chunk.created,
+                },
+            )
+        )
+        stats.bytes_indexed += len(chunk.text.encode())
+        if chunk.source_kind == "raw_obsidian":
+            stats.raw_obsidian_chunks += 1
+        elif chunk.source_kind == "raw_claude_code":
+            stats.raw_claude_code_chunks += 1
+    return records
+
+
+def _bm25_documents_from_records(records: list[VectorRecord]) -> list[BM25Document]:
+    return [
+        BM25Document(
+            record_id=record.id,
+            text=record.document,
+            tokens=tokenize_for_bm25(record.document),
+            metadata=dict(record.metadata),
+        )
+        for record in records
+    ]
+
+
+def _feedback_score(
+    feedback_scores: dict[str, FeedbackAggregate],
+    card_id: str,
+) -> float:
+    aggregate = feedback_scores.get(card_id)
+    return aggregate.score if aggregate is not None else DEFAULT_FEEDBACK_SCORE

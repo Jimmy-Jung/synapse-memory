@@ -73,6 +73,28 @@ pytest --cov=synapse_memory --cov-report=term-missing
 
 대부분의 테스트는 mock 기반이라 apfel, Claude Code CLI, ChromaDB가 없어도 통과하도록 유지합니다. 실제 LLM이나 임베딩을 부르는 검증은 별도로 실행합니다.
 
+## Observability Snapshots
+
+Constitution [Principle V](../.specify/memory/constitution.md#principle-v-reproducible-daily-pipeline--observability) 에 따라 stage별로 사람이 읽을 수 있는 관측 라인을 유지합니다.
+`me generate <recipe>` 는 stdout 에 생성 결과를 쓰고, stderr 에 한 줄 snapshot 을 남깁니다.
+
+```text
+[me.generate.weekly_report] source=builtin rag_mode=hybrid locale=profile:한국어 domain=tags:software profile_used=True matched=4 duration=2841ms
+```
+
+| 토큰 | 의미 |
+| --- | --- |
+| `source` | 실행된 recipe 출처. `builtin`, `user`, 또는 보조 scan 실패 시 `?` |
+| `rag_mode` | 이번 호출의 effective retrieval mode. recipe frontmatter 또는 `--rag-mode` override 적용 후 값 |
+| `locale` | `<source>:<locale>` 형식. CLI, company card, profile, default 중 어디서 결정됐는지 표시 |
+| `domain` | `<source>:<domain>` 형식. CLI, profile, matched record tags, default 중 어디서 결정됐는지 표시 |
+| `profile_used` | Profile/DecisionPatterns 계열 텍스트가 prompt 에 포함됐는지 여부 |
+| `matched` | downstream prompt와 last_answer citation 후보로 전달된 source id 수 |
+| `duration` | CLI orchestration 시작부터 결과 출력 직전까지의 밀리초 |
+
+`rag_mode=hybrid` 에서 BM25 sidecar 또는 vector store 가 없으면 dense fallback 없이 실패하고,
+stderr 에 `synapse-memory rag index --include-raw` 재색인 안내를 출력해야 합니다.
+
 ## Lint와 format
 
 ```bash

@@ -18,6 +18,7 @@ from __future__ import annotations
 from synapse_memory.recipes.loader import RecipeValidationError
 from synapse_memory.recipes.pipeline import (
     InputValidationError,
+    RecipeHybridUnavailableError,
     RecipePromptTooLargeError,
     generate,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "GenerationRecipe",
     "GenerationResult",
     "InputValidationError",
+    "RecipeHybridUnavailableError",
     "RecipeNotFoundError",
     "RecipePromptTooLargeError",
     "RecipeRegistry",

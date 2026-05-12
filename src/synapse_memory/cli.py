@@ -67,7 +67,7 @@ from synapse_memory.cost.summary import (
     render_summary_json,
     render_summary_table,
 )
-from synapse_memory.daily import STEPS, run_daily
+from synapse_memory.daily import STEPS, StageStatus, run_daily
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.endpoints.me import (
     decide,
@@ -97,6 +97,7 @@ from synapse_memory.rag import (
     index_cards,
     open_vector_store,
 )
+from synapse_memory.rag.bm25 import BM25IndexError
 from synapse_memory.rag.embeddings import (
     EmbeddingError,
     EmbeddingUnavailableError,
@@ -330,7 +331,8 @@ def cmd_card_new(args: argparse.Namespace) -> int:
 
 def cmd_rag_index(args: argparse.Namespace) -> int:
     """모든 Card를 벡터 DB에 인덱싱."""
-    print(f"인덱싱 시작 (rebuild={args.rebuild})")
+    include_raw = bool(getattr(args, "include_raw", False))
+    print(f"인덱싱 시작 (rebuild={args.rebuild}, include_raw={include_raw})")
     try:
         store = open_vector_store()
 
@@ -339,7 +341,10 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
                 print(f"  [{stage}] {total}개 임베딩 중...")
 
         stats = index_cards(
-            store=store, rebuild=args.rebuild, on_progress=_progress
+            store=store,
+            rebuild=args.rebuild,
+            include_raw=include_raw,
+            on_progress=_progress,
         )
     except (EmbeddingUnavailableError, VectorStoreError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
@@ -351,6 +356,9 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
     print(
         f"\n인덱싱 완료: project={stats.project_cards} "
         f"company={stats.company_cards} "
+        f"raw_obsidian={getattr(stats, 'raw_obsidian_chunks', 0)} "
+        f"raw_claude_code={getattr(stats, 'raw_claude_code_chunks', 0)} "
+        f"bm25={getattr(stats, 'bm25_documents', 0)} "
         f"bytes={stats.bytes_indexed}"
     )
     print(f"총 벡터: {open_vector_store().count()}")
@@ -366,7 +374,14 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
 
     # FR-009 — --timeline + --by distance 충돌 검증
     timeline_flag = bool(getattr(args, "timeline", False))
+    hybrid_flag = bool(getattr(args, "hybrid", False))
     by_arg = getattr(args, "by", None)
+    if hybrid_flag and (timeline_flag or by_arg == "time"):
+        print(
+            "error: --timeline and --hybrid conflict — pick one.",
+            file=sys.stderr,
+        )
+        return 1
     if timeline_flag and by_arg == "distance":
         print(
             "error: --timeline and --by distance conflict — pick one.",
@@ -401,8 +416,15 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
             ai_env=ai_env,
             by=effective_by,  # type: ignore[arg-type]
             limit=limit,
+            hybrid=hybrid_flag,
         )
-    except (EmbeddingUnavailableError, VectorStoreError, AIError, ValueError) as exc:
+    except (
+        EmbeddingUnavailableError,
+        VectorStoreError,
+        BM25IndexError,
+        AIError,
+        ValueError,
+    ) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
     print(f"주제: {result.topic}\n")
@@ -448,26 +470,36 @@ def cmd_daily(args: argparse.Namespace) -> int:
     only = set(args.only.split(",")) if args.only else None
     skip = set(args.skip.split(",")) if args.skip else None
 
-    result = run_daily(
-        only=only,
-        skip=skip,
-        classify_model=args.classify_model,
-        generate_model=args.generate_model,
-        profile_model=args.profile_model,
-        profile_sample_lines=args.profile_sample_lines,
-        profile_facts_only=args.profile_facts_only,
-        dry_run=args.dry_run,
-    )
+    try:
+        result = run_daily(
+            only=only,
+            skip=skip,
+            resume_from=args.resume_from,
+            classify_model=args.classify_model,
+            generate_model=args.generate_model,
+            profile_model=args.profile_model,
+            profile_sample_lines=args.profile_sample_lines,
+            profile_facts_only=args.profile_facts_only,
+            dry_run=args.dry_run,
+        )
+    except ValueError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 2
 
     if args.dry_run:
         return 0
 
     print("\n" + "=" * 60)
     print(f"Daily 총 시간: {result.total_elapsed:.1f}s")
-    print(f"실행 단계: {len(result.steps)}, 실패: {result.errors}")
+    print(f"실행 단계: {len(result.steps)}, 실패: {result.errors}, 건너뜀: {result.skipped}")
     for s in result.steps:
-        status = OK if s.ok else FAIL
-        print(f"  {status} {s.name:<22} {s.elapsed:>6.1f}s  {s.summary or s.error}")
+        if s.status == StageStatus.SKIPPED:
+            status = "-"
+            detail = f"skipped: {s.skip_reason}"
+        else:
+            status = OK if s.ok else FAIL
+            detail = s.summary or s.error
+        print(f"  {status} {s.name:<22} {s.elapsed:>6.1f}s  {detail}")
     return 1 if result.errors else 0
 
 
@@ -564,9 +596,12 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     """Recipe-based generator (007-me-recipes) — me generate <recipe>."""
     from synapse_memory.recipes import (
         InputValidationError,
+        RecipeHybridUnavailableError,
         RecipeNotFoundError,
         RecipePromptTooLargeError,
         RecipeValidationError,
+    )
+    from synapse_memory.recipes import (
         generate as recipes_generate,
     )
 
@@ -605,6 +640,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
             today=today_resolved,
             cli_language=args.language,
             cli_domain=args.domain,
+            rag_mode_override=args.rag_mode,
             dry_run=args.dry_run,
         )
     except RecipeNotFoundError as exc:
@@ -616,6 +652,9 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     except (RecipeValidationError, RecipePromptTooLargeError) as exc:
         print(f"{FAIL} recipe 검증 실패: {exc}", file=sys.stderr)
         return 4
+    except RecipeHybridUnavailableError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 10
     except (EmbeddingError, AIError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 10
@@ -638,12 +677,13 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
         )
         _reg.scan()
         recipe_source = _reg.recipes.get(result.recipe_name).source if result.recipe_name in _reg.recipes else "?"
-    except Exception:  # noqa: BLE001 — observability 보조라 silent fallback
+    except Exception:  # observability 보조라 silent fallback
         pass
 
     sys.stderr.write(
         f"[me.generate.{result.recipe_name}] "
         f"source={recipe_source} "
+        f"rag_mode={result.rag_mode} "
         f"locale={result.locale_source}:{result.locale} "
         f"domain={result.domain_source}:{result.domain} "
         f"profile_used={result.profile_used} "
@@ -700,7 +740,7 @@ def cmd_me_recipes_list(args: argparse.Namespace) -> int:
     """me recipes list — 모든 recipe 표 출력 (builtin + user)."""
     try:
         reg = _recipes_registry_for_vault(args.vault)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -740,7 +780,7 @@ def cmd_me_recipes_show(args: argparse.Namespace) -> int:
 
     try:
         reg = _recipes_registry_for_vault(args.vault)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -822,8 +862,9 @@ def cmd_ask(args: argparse.Namespace) -> int:
             model=args.model,
             ai_env=ai_env,
             where=where,
+            hybrid=args.hybrid,
         )
-    except (EmbeddingUnavailableError, VectorStoreError) as exc:
+    except (EmbeddingUnavailableError, VectorStoreError, BM25IndexError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
     except (EmbeddingError, AIError) as exc:
@@ -1610,6 +1651,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_rag_idx.add_argument(
         "--rebuild", action="store_true", help="기존 collection 비우고 처음부터"
     )
+    p_rag_idx.add_argument(
+        "--include-raw",
+        action="store_true",
+        help="10_Active와 redacted Claude Code raw chunks까지 인덱싱",
+    )
     p_rag_idx.set_defaults(func=cmd_rag_index)
 
     p_rag_search = rag_sub.add_parser("search", help="자연어 query → top-k Card")
@@ -1625,11 +1671,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ask.add_argument("query", help="자연어 질문")
     p_ask.add_argument("--top-k", type=int, default=5)
-    p_ask.add_argument("--model", default="sonnet")
+    p_ask.add_argument("--model", default=None)
     p_ask.add_argument(
         "--kind",
         choices=["project", "company"],
         help="특정 Card 종류만 retrieve",
+    )
+    p_ask.add_argument(
+        "--hybrid",
+        action="store_true",
+        help="dense + BM25 RRF 결합 검색",
     )
     p_ask.set_defaults(func=cmd_ask)
 
@@ -1676,7 +1727,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="CompanyCard 파일명 슬러그 (예: danggeun, 메가스터디)",
     )
     p_resume.add_argument("--top-k", type=int, default=6)
-    p_resume.add_argument("--model", default="sonnet")
+    p_resume.add_argument("--model", default=None)
     p_resume.set_defaults(func=cmd_me_draft_resume)
 
     p_up = me_sub.add_parser(
@@ -1689,7 +1740,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=200,
         help="history.jsonl 마지막 N줄 분석",
     )
-    p_up.add_argument("--model", default="sonnet")
+    p_up.add_argument("--model", default=None)
     p_up.add_argument(
         "--facts-only",
         action="store_true",
@@ -1702,7 +1753,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wdt.add_argument("topic", help="회상할 주제")
     p_wdt.add_argument("--top-k", type=int, default=8)
-    p_wdt.add_argument("--model", default="sonnet")
+    p_wdt.add_argument("--model", default=None)
     p_wdt.add_argument(
         "--timeline",
         action="store_true",
@@ -1720,6 +1771,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         help="--timeline 모드 출력 카드 최대 수 (1~100, 기본 20)",
     )
+    p_wdt.add_argument(
+        "--hybrid",
+        action="store_true",
+        help="distance 모드에서 dense + BM25 RRF 결합 검색",
+    )
     p_wdt.set_defaults(func=cmd_me_what_did_i_think)
 
     p_dec = me_sub.add_parser(
@@ -1727,7 +1783,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_dec.add_argument("situation", help="결정할 상황")
     p_dec.add_argument("--top-k", type=int, default=6)
-    p_dec.add_argument("--model", default="sonnet")
+    p_dec.add_argument("--model", default=None)
     p_dec.set_defaults(func=cmd_me_decide)
 
     p_gen = me_sub.add_parser(
@@ -1744,6 +1800,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_gen.add_argument("--language", default=None, help="locale precedence 0 순위")
     p_gen.add_argument("--domain", default=None, help="domain precedence 0 순위")
+    p_gen.add_argument(
+        "--rag-mode",
+        choices=("dense", "hybrid"),
+        default=None,
+        help="recipe rag_mode 기본값 override",
+    )
     p_gen.add_argument("--model", default=None, help="recipe 의 model 기본값 override")
     p_gen.add_argument("--vault", default=None, help="vault 경로 override")
     p_gen.add_argument(
@@ -1797,6 +1859,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"이 단계들만 (comma-separated). 가능: {','.join(STEPS)}",
     )
     p_daily.add_argument("--skip", help="제외할 단계 (comma-separated)")
+    p_daily.add_argument(
+        "--resume-from",
+        choices=STEPS,
+        help="지정 stage부터 daily 재개",
+    )
     p_daily.add_argument("--classify-model", default="haiku")
     p_daily.add_argument("--generate-model", default="sonnet")
     p_daily.add_argument("--profile-model", default="sonnet")

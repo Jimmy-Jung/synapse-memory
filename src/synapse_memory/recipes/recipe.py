@@ -20,6 +20,7 @@ RecipeSource = Literal["builtin", "user"]
 InputRequirement = Literal["required", "optional"]
 LocaleSource = Literal["cli", "company_card", "profile", "default"]
 DomainSource = Literal["cli", "profile", "tags", "default"]
+RecipeRagMode = Literal["dense", "hybrid"]
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class GenerationRecipe:
     system_prompt: str
     rag_filter: dict[str, str] | None = None
     rag_top_k: int = 8
+    rag_mode: RecipeRagMode = "dense"
     use_profile: bool = True
     save_subpath: str | None = None
     locale_aware: bool = True
@@ -62,6 +64,7 @@ class GenerationContext:
     locale_source: LocaleSource
     domain: str
     domain_source: DomainSource
+    rag_mode: RecipeRagMode
     matched_records: list[tuple[Any, float]]
     today: datetime.date
     rendered_system_prompt: str = ""
@@ -81,4 +84,5 @@ class GenerationResult:
     locale_source: LocaleSource = "default"
     domain: str = "generic"
     domain_source: DomainSource = "default"
+    rag_mode: RecipeRagMode = "dense"
     last_answer_ref: Any = None  # storage.last_response.LastAnswerReference | None

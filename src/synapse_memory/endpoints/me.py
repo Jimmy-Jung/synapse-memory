@@ -19,13 +19,12 @@ from typing import Literal
 
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.endpoints.postprocess import strip_meta_prefix
-from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.rag import (
     VectorRecord,
     VectorStore,
     embed_query,
+    hybrid_search,
     open_vector_store,
 )
 from synapse_memory.rag.indexer import company_card_to_text
@@ -182,12 +181,13 @@ def what_did_i_think(
     topic: str,
     *,
     top_k: int = 8,
-    model: str = "sonnet",
+    model: str | None = "sonnet",
     ai_env: AIEnvironment | None = None,
     store: VectorStore | None = None,
     by: Literal["time", "distance"] = "distance",
     limit: int = 20,
     today: datetime.date | None = None,
+    hybrid: bool = False,
 ) -> WhatDidIThinkResult:
     """주제에 대한 과거 사고 회상.
 
@@ -204,10 +204,21 @@ def what_did_i_think(
     """
     if not topic.strip():
         raise ValueError("topic은 빈 문자열일 수 없음")
+    if hybrid and by == "time":
+        raise ValueError("--timeline and --hybrid conflict — pick one.")
 
     store = store or open_vector_store()
     q_vec = embed_query(topic)
-    results = store.query(q_vec, top_k=top_k)
+    if hybrid:
+        hits = hybrid_search(
+            topic,
+            query_embedding=q_vec,
+            store=store,
+            top_k=top_k,
+        )
+        results = [(hit.record, hit.rrf_score) for hit in hits]
+    else:
+        results = store.query(q_vec, top_k=top_k)
 
     if not results:
         if by == "time":
@@ -248,12 +259,13 @@ def what_did_i_think(
     # distance-mode → recipes.generate("recall", ...) wrapper (007 R-7)
     from synapse_memory.recipes import generate as recipes_generate
 
-    # 기존 호출자가 store 를 미리 전달했고 results 가 있으니, 같은 store 를
-    # 재사용 (pipeline 이 store.query 한 번 더 호출 — overhead 적음).
+    # 006 hybrid 결과 또는 기존 dense 결과를 007 recipe pipeline 의 matched-record
+    # 인터페이스로 그대로 전달한다. store 를 재사용하면 hybrid order 가 dense query 로
+    # 덮일 수 있다.
     result = recipes_generate(
         _RECALL_RECIPE_NAME,
         inputs={"topic": topic},
-        store=store,
+        store=_PrecomputedResultStore(results),
         ai_env=ai_env,
         model_override=model,
         top_k_override=top_k,
@@ -264,6 +276,14 @@ def what_did_i_think(
         answer=result.answer_markdown,
         source_ids=result.source_ids,
     )
+
+
+class _PrecomputedResultStore:
+    def __init__(self, results: list[tuple[VectorRecord, float]]) -> None:
+        self._results = results
+
+    def query(self, *_args: object, **_kwargs: object) -> list[tuple[VectorRecord, float]]:
+        return list(self._results)
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +371,7 @@ def _record_last_answer(
         for source_id in source_ids
     )
     ref = new_answer_reference(
-        command=command,  # type: ignore[arg-type]
+        command=command,
         query=query,
         citations=citations,
     )

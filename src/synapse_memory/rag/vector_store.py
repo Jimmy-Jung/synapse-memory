@@ -143,7 +143,7 @@ class VectorStore:
         embedding: list[float],
         *,
         top_k: int = 10,
-        where: dict | None = None,
+        where: dict[str, object] | None = None,
     ) -> list[tuple[VectorRecord, float]]:
         """dense 벡터 검색 → ``[(record, distance), ...]`` 거리 오름차순.
 

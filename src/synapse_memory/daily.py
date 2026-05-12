@@ -8,6 +8,7 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
     4. card generate (--force=False) (새 cluster만 Card 생성)
     5. rag index                     (Card upsert)
     6. me update-profile             (오늘 활동 분석 → MemoryInbox PR)
+    7. report                        (DailyReport 작성)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -17,42 +18,117 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
 
 from __future__ import annotations
 
+import datetime
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
-# 단계 이름 — CLI --only에서 사용
-STEPS = (
-    "collect_claude_code",
-    "collect_obsidian",
-    "classify",
-    "generate",
-    "index",
-    "update_profile",
+StageAction = Callable[[], Any]
+
+
+class StageStatus:
+    SUCCESS = "success"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+@dataclass(frozen=True)
+class DailyStage:
+    name: str
+    description: str
+    requires: tuple[str, ...] = ()
+
+
+DAILY_STAGES = (
+    DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
+    DailyStage("collect_obsidian", "Obsidian vault mirror"),
+    DailyStage("classify", "신규 cluster 분류"),
+    DailyStage("generate", "Project/Company Card 생성", ("classify",)),
+    DailyStage("index", "Card RAG index", ("generate",)),
+    DailyStage(
+        "update_profile",
+        "ProfileFact/DecisionPattern 후보 추출",
+        ("collect_claude_code", "classify"),
+    ),
+    DailyStage("report", "DailyReport 작성"),
 )
+
+# 단계 이름 — CLI --only / --skip / --resume-from 에서 사용
+STEPS = tuple(stage.name for stage in DAILY_STAGES)
 
 
 @dataclass
 class StepResult:
     name: str
     elapsed: float
+    status: str = StageStatus.SUCCESS
     summary: str = ""
     error: str = ""
+    skip_reason: str = ""
 
     @property
     def ok(self) -> bool:
-        return not self.error
+        return self.status == StageStatus.SUCCESS
+
+    @classmethod
+    def success(cls, name: str, elapsed: float, summary: str = "") -> StepResult:
+        return cls(
+            name=name,
+            elapsed=elapsed,
+            status=StageStatus.SUCCESS,
+            summary=summary,
+        )
+
+    @classmethod
+    def failed(cls, name: str, elapsed: float, error: str) -> StepResult:
+        return cls(
+            name=name,
+            elapsed=elapsed,
+            status=StageStatus.FAILED,
+            error=error,
+        )
+
+    @classmethod
+    def skipped(cls, name: str, reason: str) -> StepResult:
+        return cls(
+            name=name,
+            elapsed=0.0,
+            status=StageStatus.SKIPPED,
+            skip_reason=reason,
+        )
 
 
 @dataclass
 class DailyResult:
     steps: list[StepResult] = field(default_factory=list)
     total_elapsed: float = 0.0
+    resume_from: str | None = None
+    report_path: Path | None = None
+    report_error: str = ""
 
     @property
     def errors(self) -> int:
-        return sum(1 for s in self.steps if s.error)
+        return sum(1 for s in self.steps if s.status == StageStatus.FAILED)
+
+    @property
+    def skipped(self) -> int:
+        return sum(1 for s in self.steps if s.status == StageStatus.SKIPPED)
+
+
+def validate_daily_stages(stages: tuple[DailyStage, ...] = DAILY_STAGES) -> None:
+    seen: set[str] = set()
+    for stage in stages:
+        if stage.name in seen:
+            raise ValueError(f"duplicate daily stage: {stage.name}")
+        seen.add(stage.name)
+    for stage in stages:
+        for dependency in stage.requires:
+            if dependency not in seen:
+                raise ValueError(
+                    f"unknown dependency for {stage.name}: {dependency}"
+                )
 
 
 def _run_step(
@@ -68,71 +144,80 @@ def _run_step(
     except Exception as exc:
         elapsed = time.monotonic() - t0
         on_log(f"  실패: {exc}")
-        return StepResult(name=name, elapsed=elapsed, error=str(exc))
+        return StepResult.failed(name, elapsed, str(exc))
     elapsed = time.monotonic() - t0
     on_log(f"  ({elapsed:.1f}s) {summary}")
-    return StepResult(name=name, elapsed=elapsed, summary=str(summary))
+    return StepResult.success(name, elapsed, str(summary))
 
 
-def run_daily(
+def _resume_skip_reason(resume_from: str) -> str:
+    return f"resume before {resume_from}"
+
+
+def _is_resume_skip(step: StepResult) -> bool:
+    return step.status == StageStatus.SKIPPED and step.skip_reason.startswith(
+        "resume before "
+    )
+
+
+def _blocking_dependency(
+    stage: DailyStage,
+    results_by_name: Mapping[str, StepResult],
+) -> str | None:
+    for dependency in stage.requires:
+        upstream = results_by_name.get(dependency)
+        if upstream is None:
+            continue
+        if upstream.status == StageStatus.FAILED:
+            return dependency
+        if upstream.status == StageStatus.SKIPPED and not _is_resume_skip(upstream):
+            return dependency
+    return None
+
+
+def _build_stage_actions(
     *,
-    only: set[str] | None = None,
-    skip: set[str] | None = None,
-    classify_model: str = "haiku",
-    generate_model: str = "sonnet",
-    profile_model: str = "sonnet",
-    profile_sample_lines: int = 200,
-    profile_facts_only: bool = False,
-    dry_run: bool = False,
-    on_log: Callable[[str], None] = print,
-) -> DailyResult:
-    """일일 파이프라인 실행.
+    classify_model: str,
+    generate_model: str,
+    profile_model: str,
+    profile_sample_lines: int,
+    profile_facts_only: bool,
+    on_log: Callable[[str], None],
+) -> dict[str, StageAction]:
+    return {
+        "collect_claude_code": _collect_claude_code_action,
+        "collect_obsidian": _collect_obsidian_action,
+        "classify": _build_classify_action(classify_model, on_log),
+        "generate": _build_generate_action(generate_model, on_log),
+        "index": _index_action,
+        "update_profile": _build_update_profile_action(
+            profile_model=profile_model,
+            profile_sample_lines=profile_sample_lines,
+            profile_facts_only=profile_facts_only,
+        ),
+        "report": lambda: "",
+    }
 
-    Args:
-        only: 이 단계 이름들만 실행. None이면 전체.
-        skip: 제외할 단계.
-        classify_model / generate_model / profile_model: 단계별 AI 모델.
-        profile_sample_lines: update-profile의 history 분석 줄 수.
-        profile_facts_only: DecisionPattern 추출 skip.
-        dry_run: True면 단계 이름만 출력.
-        on_log: print 대체 (테스트용).
-    """
-    result = DailyResult()
-    t_start = time.monotonic()
 
-    selected = set(only) if only else set(STEPS)
-    if skip:
-        selected -= set(skip)
+def _collect_claude_code_action() -> str:
+    from synapse_memory.collectors.claude_code import collect_claude_code
 
-    if dry_run:
-        on_log("[DRY RUN] 실행 단계:")
-        for s in STEPS:
-            mark = "  [x]" if s in selected else "  [ ]"
-            on_log(f"{mark} {s}")
-        return result
+    stats = collect_claude_code()
+    return stats.summary()
 
-    # 1. collect claude-code
-    if "collect_claude_code" in selected:
-        from synapse_memory.collectors.claude_code import collect_claude_code
 
-        def step():
-            stats = collect_claude_code()
-            return stats.summary()
+def _collect_obsidian_action() -> str:
+    from synapse_memory.collectors.obsidian import collect_obsidian
 
-        result.steps.append(_run_step("collect_claude_code", step, on_log=on_log))
+    stats = collect_obsidian()
+    return stats.summary()
 
-    # 2. collect obsidian
-    if "collect_obsidian" in selected:
-        from synapse_memory.collectors.obsidian import collect_obsidian
 
-        def step():
-            stats = collect_obsidian()
-            return stats.summary()
-
-        result.steps.append(_run_step("collect_obsidian", step, on_log=on_log))
-
-    # 3. classify (new clusters only)
-    if "classify" in selected:
+def _build_classify_action(
+    classify_model: str,
+    on_log: Callable[[str], None],
+) -> StageAction:
+    def step() -> str:
         from synapse_memory.cards.auto_classify import (
             classify_cluster,
             load_classifications,
@@ -142,32 +227,38 @@ def run_daily(
         from synapse_memory.collectors.obsidian import get_vault_path as obs_path
         from synapse_memory.llm import detect_ai_environment
 
-        def step():
-            env = detect_ai_environment(model=classify_model)
-            if not env.ready:
-                raise RuntimeError("AI provider 미설치")
-            clusters = identify_clusters()
-            existing = load_classifications()
-            new_clusters = [c for c in clusters if c.cluster_id not in existing]
-            if not new_clusters:
-                return "신규 cluster 없음"
-            obs_root = obs_path()
-            cls_dict = dict(existing)
-            for c in new_clusters:
-                try:
-                    cls = classify_cluster(
-                        c, obs_root=obs_root, ai_env=env, model=classify_model
-                    )
-                    cls_dict[c.cluster_id] = cls
-                except Exception as exc:
-                    on_log(f"    {c.cluster_id} 실패: {exc}")
-            save_classifications(cls_dict)
-            return f"신규 {len(new_clusters)}개 분류"
+        env = detect_ai_environment(model=classify_model)
+        if not env.ready:
+            raise RuntimeError("AI provider 미설치")
+        clusters = identify_clusters()
+        existing = load_classifications()
+        new_clusters = [c for c in clusters if c.cluster_id not in existing]
+        if not new_clusters:
+            return "신규 cluster 없음"
+        obs_root = obs_path()
+        cls_dict = dict(existing)
+        failed = 0
+        for c in new_clusters:
+            try:
+                cls = classify_cluster(
+                    c, obs_root=obs_root, ai_env=env, model=classify_model
+                )
+                cls_dict[c.cluster_id] = cls
+            except Exception as exc:
+                failed += 1
+                on_log(f"    {c.cluster_id} 실패: {exc}")
+        save_classifications(cls_dict)
+        suffix = f", 실패 {failed}개" if failed else ""
+        return f"신규 {len(new_clusters)}개 분류{suffix}"
 
-        result.steps.append(_run_step("classify", step, on_log=on_log))
+    return step
 
-    # 4. card generate (project/company kind, skip existing)
-    if "generate" in selected:
+
+def _build_generate_action(
+    generate_model: str,
+    on_log: Callable[[str], None],
+) -> StageAction:
+    def step() -> str:
         from synapse_memory.cards.auto_classify import load_classifications
         from synapse_memory.cards.auto_generate import (
             generate_company_card,
@@ -179,71 +270,75 @@ def run_daily(
         from synapse_memory.collectors.obsidian import get_vault_path as obs_path
         from synapse_memory.llm import detect_ai_environment
 
-        def step():
-            env = detect_ai_environment(model=generate_model)
-            if not env.ready:
-                raise RuntimeError("AI provider 미설치")
-            classifications = load_classifications()
-            if not classifications:
-                return "classifications 비어있음"
-            clusters = {c.cluster_id: c for c in identify_clusters()}
-            obs_root = obs_path()
-            created = 0
-            for cid, cls in classifications.items():
-                if cls.kind not in ("project", "company"):
+        env = detect_ai_environment(model=generate_model)
+        if not env.ready:
+            raise RuntimeError("AI provider 미설치")
+        classifications = load_classifications()
+        if not classifications:
+            return "classifications 비어있음"
+        clusters = {c.cluster_id: c for c in identify_clusters()}
+        obs_root = obs_path()
+        created = 0
+        failed = 0
+        for cid, cls in classifications.items():
+            if cls.kind not in ("project", "company"):
+                continue
+            if cid not in clusters:
+                continue
+            if cls.kind == "project":
+                target = projects_dir() / f"{cid}.md"
+                if target.exists():
                     continue
-                if cid not in clusters:
+                try:
+                    card = generate_project_card(
+                        clusters[cid],
+                        candidate_name=cls.candidate_name,
+                        obs_root=obs_root,
+                        ai_env=env,
+                        model=generate_model,
+                    )
+                    save_project_card(card)
+                    created += 1
+                except Exception as exc:
+                    failed += 1
+                    on_log(f"    {cid} 실패: {exc}")
+            else:
+                target = companies_dir() / f"{cid}.md"
+                if target.exists():
                     continue
-                if cls.kind == "project":
-                    target = projects_dir() / f"{cid}.md"
-                    if target.exists():
-                        continue
-                    try:
-                        card = generate_project_card(
-                            clusters[cid],
-                            candidate_name=cls.candidate_name,
-                            obs_root=obs_root,
-                            ai_env=env,
-                            model=generate_model,
-                        )
-                        save_project_card(card)
-                        created += 1
-                    except Exception as exc:
-                        on_log(f"    {cid} 실패: {exc}")
-                else:
-                    target = companies_dir() / f"{cid}.md"
-                    if target.exists():
-                        continue
-                    try:
-                        card_c = generate_company_card(
-                            clusters[cid],
-                            candidate_name=cls.candidate_name,
-                            obs_root=obs_root,
-                            ai_env=env,
-                            model=generate_model,
-                        )
-                        save_company_card(card_c)
-                        created += 1
-                    except Exception as exc:
-                        on_log(f"    {cid} 실패: {exc}")
-            return f"신규 Card {created}개 생성"
+                try:
+                    card_c = generate_company_card(
+                        clusters[cid],
+                        candidate_name=cls.candidate_name,
+                        obs_root=obs_root,
+                        ai_env=env,
+                        model=generate_model,
+                    )
+                    save_company_card(card_c)
+                    created += 1
+                except Exception as exc:
+                    failed += 1
+                    on_log(f"    {cid} 실패: {exc}")
+        suffix = f", 실패 {failed}개" if failed else ""
+        return f"신규 Card {created}개 생성{suffix}"
 
-        result.steps.append(_run_step("generate", step, on_log=on_log))
+    return step
 
-    # 5. rag index (upsert)
-    if "index" in selected:
-        from synapse_memory.rag import index_cards
 
-        def step():
-            stats = index_cards()
-            return (
-                f"project={stats.project_cards} company={stats.company_cards}"
-            )
+def _index_action() -> str:
+    from synapse_memory.rag import index_cards
 
-        result.steps.append(_run_step("index", step, on_log=on_log))
+    stats = index_cards()
+    return f"project={stats.project_cards} company={stats.company_cards}"
 
-    # 6. update profile (today's history → MemoryInbox PR)
-    if "update_profile" in selected:
+
+def _build_update_profile_action(
+    *,
+    profile_model: str,
+    profile_sample_lines: int,
+    profile_facts_only: bool,
+) -> StageAction:
+    def step() -> str:
         from synapse_memory.llm import detect_ai_environment
         from synapse_memory.profile.extract import (
             extract_decision_patterns,
@@ -251,26 +346,234 @@ def run_daily(
             save_profile_update,
         )
 
-        def step():
-            env = detect_ai_environment(model=profile_model)
-            if not env.ready:
-                raise RuntimeError("AI provider 미설치")
-            facts = extract_profile_facts(
+        env = detect_ai_environment(model=profile_model)
+        if not env.ready:
+            raise RuntimeError("AI provider 미설치")
+        facts = extract_profile_facts(
+            sample_lines=profile_sample_lines,
+            model=profile_model,
+            ai_env=env,
+        )
+        patterns = []
+        if not profile_facts_only:
+            patterns = extract_decision_patterns(
                 sample_lines=profile_sample_lines,
                 model=profile_model,
                 ai_env=env,
             )
-            patterns = []
-            if not profile_facts_only:
-                patterns = extract_decision_patterns(
-                    sample_lines=profile_sample_lines,
-                    model=profile_model,
-                    ai_env=env,
-                )
-            path = save_profile_update(facts, patterns)
-            return f"fact={len(facts)} pattern={len(patterns)} → {path.name}"
+        path = save_profile_update(facts, patterns)
+        return f"fact={len(facts)} pattern={len(patterns)} → {path.name}"
 
-        result.steps.append(_run_step("update_profile", step, on_log=on_log))
+    return step
+
+
+def _build_report_action(result: DailyResult) -> StageAction:
+    def step() -> str:
+        path = write_daily_report(result)
+        result.report_path = path
+        return f"DailyReports/{path.name}"
+
+    return step
+
+
+def write_daily_report(
+    result: DailyResult,
+    *,
+    date: datetime.date | None = None,
+    vault_path: Path | None = None,
+) -> Path:
+    from synapse_memory.collectors.obsidian import get_vault_path
+
+    report_date = date or datetime.date.today()
+    root = vault_path or get_vault_path()
+    report_dir = root / "90_System" / "AI" / "DailyReports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    path = report_dir / f"{report_date.isoformat()}.md"
+    path.write_text(
+        render_daily_report(
+            result,
+            date=report_date.isoformat(),
+            est_usd=_estimate_usd_today(report_date),
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def render_daily_report(
+    result: DailyResult,
+    *,
+    date: str,
+    est_usd: float,
+) -> str:
+    lines = [
+        "---",
+        f"date: {date}",
+        f"total_elapsed_s: {result.total_elapsed:.1f}",
+        f"errors_count: {result.errors}",
+        f"skipped_count: {result.skipped}",
+        f"new_cards: {_extract_first_int(result.steps, '신규 Card')}",
+        f"new_facts: {_extract_first_int(result.steps, 'fact=')}",
+        f"est_usd: {est_usd:.4f}",
+        f"resume_from: {result.resume_from or ''}",
+        "---",
+        "",
+        f"# Daily Report — {date}",
+        "",
+        "## Stage Summary",
+        "",
+        "| Stage | Status | Elapsed | Summary | Reason |",
+        "|---|---:|---:|---|---|",
+    ]
+    for step in result.steps:
+        reason = step.error or step.skip_reason
+        lines.append(
+            "| "
+            f"{step.name} | {step.status} | {step.elapsed:.1f}s | "
+            f"{_clean_cell(step.summary)} | {_clean_cell(reason)} |"
+        )
+
+    failures = [step for step in result.steps if step.status == StageStatus.FAILED]
+    lines.extend(["", "## Failures", ""])
+    if failures:
+        lines.extend(f"- {step.name}: {step.error}" for step in failures)
+    else:
+        lines.append("- 없음")
+
+    lines.extend(["", "## Resume", ""])
+    if failures:
+        first_failure = failures[0].name
+        lines.extend(
+            [
+                "Re-run from the first failed stage:",
+                "",
+                "```bash",
+                f"synapse-memory daily --resume-from {first_failure}",
+                "```",
+            ]
+        )
+    elif result.resume_from:
+        lines.append(f"Resumed from `{result.resume_from}`.")
+    else:
+        lines.append("Resume not needed.")
+    return "\n".join(lines) + "\n"
+
+
+def _clean_cell(value: str) -> str:
+    return value.replace("\n", " ").replace("|", "\\|")
+
+
+def _extract_first_int(steps: list[StepResult], marker: str) -> int:
+    import re
+
+    for step in steps:
+        if marker not in step.summary:
+            continue
+        tail = step.summary.split(marker, 1)[1]
+        match = re.search(r"\d+", tail)
+        if match:
+            return int(match.group(0))
+    return 0
+
+
+def _estimate_usd_today(date: datetime.date) -> float:
+    try:
+        from synapse_memory.cost.summary import load_summary
+
+        end = datetime.datetime.combine(
+            date + datetime.timedelta(days=1),
+            datetime.time.min,
+            tzinfo=datetime.UTC,
+        )
+        return load_summary(days=1, by="command", now=end).total.usd
+    except Exception:
+        return 0.0
+
+
+def run_daily(
+    *,
+    only: set[str] | None = None,
+    skip: set[str] | None = None,
+    resume_from: str | None = None,
+    classify_model: str = "haiku",
+    generate_model: str = "sonnet",
+    profile_model: str = "sonnet",
+    profile_sample_lines: int = 200,
+    profile_facts_only: bool = False,
+    dry_run: bool = False,
+    stage_actions: Mapping[str, StageAction] | None = None,
+    on_log: Callable[[str], None] = print,
+) -> DailyResult:
+    """일일 파이프라인 실행.
+
+    Args:
+        only: 이 단계 이름들만 실행. None이면 전체.
+        skip: 제외할 단계.
+        classify_model / generate_model / profile_model: 단계별 AI 모델.
+        profile_sample_lines: update-profile의 history 분석 줄 수.
+        profile_facts_only: DecisionPattern 추출 skip.
+        dry_run: True면 단계 이름만 출력.
+        stage_actions: stage body override (테스트용).
+        on_log: print 대체 (테스트용).
+    """
+    validate_daily_stages()
+    if resume_from is not None and resume_from not in STEPS:
+        raise ValueError(
+            f"unknown daily stage: {resume_from}\n"
+            f"valid stages: {', '.join(STEPS)}"
+        )
+
+    result = DailyResult(resume_from=resume_from)
+    t_start = time.monotonic()
+
+    selected = set(only) if only else set(STEPS)
+    if skip:
+        selected -= set(skip)
+    if resume_from is not None:
+        resume_index = STEPS.index(resume_from)
+        selected -= set(STEPS[:resume_index])
+
+    if dry_run:
+        on_log("[DRY RUN] 실행 단계:")
+        for i, s in enumerate(STEPS):
+            resume_skipped = resume_from is not None and i < STEPS.index(resume_from)
+            mark = "  [x]" if s in selected else "  [ ]"
+            suffix = " (resume skip)" if resume_skipped else ""
+            on_log(f"{mark} {s}{suffix}")
+        return result
+
+    actions = _build_stage_actions(
+        classify_model=classify_model,
+        generate_model=generate_model,
+        profile_model=profile_model,
+        profile_sample_lines=profile_sample_lines,
+        profile_facts_only=profile_facts_only,
+        on_log=on_log,
+    )
+    if stage_actions:
+        actions.update(stage_actions)
+
+    results_by_name: dict[str, StepResult] = {}
+    for i, stage in enumerate(DAILY_STAGES):
+        if resume_from is not None and i < STEPS.index(resume_from):
+            step_result = StepResult.skipped(stage.name, _resume_skip_reason(resume_from))
+            result.steps.append(step_result)
+            results_by_name[stage.name] = step_result
+            continue
+        if stage.name not in selected:
+            continue
+        dependency = _blocking_dependency(stage, results_by_name)
+        if dependency is not None:
+            step_result = StepResult.skipped(stage.name, f"requires {dependency}")
+            on_log(f"\n=== [{stage.name}] ===")
+            on_log(f"  건너뜀: {step_result.skip_reason}")
+        else:
+            action = actions[stage.name]
+            if stage.name == "report" and stage.name not in (stage_actions or {}):
+                action = _build_report_action(result)
+            step_result = _run_step(stage.name, action, on_log=on_log)
+        result.steps.append(step_result)
+        results_by_name[stage.name] = step_result
 
     result.total_elapsed = time.monotonic() - t_start
     return result
