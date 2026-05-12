@@ -30,6 +30,7 @@ def test_parser_has_ask_hybrid() -> None:
     args = parser.parse_args(["ask", "당근마켓", "--hybrid"])
 
     assert args.hybrid is True
+    assert args.model is None
 
 
 def test_parser_has_me_what_did_i_think_hybrid() -> None:
@@ -38,6 +39,7 @@ def test_parser_has_me_what_did_i_think_hybrid() -> None:
     args = parser.parse_args(["me", "what-did-i-think", "당근마켓", "--hybrid"])
 
     assert args.hybrid is True
+    assert args.model is None
 
 
 def test_me_timeline_hybrid_conflict(capsys: pytest.CaptureFixture[str]) -> None:

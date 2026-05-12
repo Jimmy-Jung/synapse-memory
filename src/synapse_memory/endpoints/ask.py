@@ -89,7 +89,7 @@ def ask(
     query: str,
     *,
     top_k: int = DEFAULT_TOP_K,
-    model: str = DEFAULT_MODEL,
+    model: str | None = DEFAULT_MODEL,
     store: VectorStore | None = None,
     ai_env: AIEnvironment | None = None,
     where: dict[str, object] | None = None,

@@ -11,6 +11,7 @@ import pytest
 from synapse_memory.llm.codex import (
     CodexEnvironment,
     CodexError,
+    _build_cmd,
     complete,
     complete_structured,
     detect_codex_environment,
@@ -35,6 +36,20 @@ def test_detect_no_cli() -> None:
         env = detect_codex_environment()
 
     assert env.ready is False
+
+
+def test_build_cmd_uses_current_codex_exec_flags(tmp_path) -> None:
+    cmd = _build_cmd(
+        _ready_env(),
+        model=None,
+        output_path=tmp_path / "last-message.txt",
+        schema_path=None,
+    )
+
+    assert "--ask-for-approval" not in cmd
+    assert "--sandbox" in cmd
+    assert "read-only" in cmd
+    assert "--output-last-message" in cmd
 
 
 def test_complete_reads_output_last_message(

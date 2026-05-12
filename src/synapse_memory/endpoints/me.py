@@ -242,7 +242,7 @@ def what_did_i_think(
     topic: str,
     *,
     top_k: int = 8,
-    model: str = "sonnet",
+    model: str | None = "sonnet",
     ai_env: AIEnvironment | None = None,
     store: VectorStore | None = None,
     by: Literal["time", "distance"] = "distance",

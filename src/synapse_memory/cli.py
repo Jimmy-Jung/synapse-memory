@@ -1407,7 +1407,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ask.add_argument("query", help="자연어 질문")
     p_ask.add_argument("--top-k", type=int, default=5)
-    p_ask.add_argument("--model", default="sonnet")
+    p_ask.add_argument("--model", default=None)
     p_ask.add_argument(
         "--kind",
         choices=["project", "company"],
@@ -1463,7 +1463,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="CompanyCard 파일명 슬러그 (예: danggeun, 메가스터디)",
     )
     p_resume.add_argument("--top-k", type=int, default=6)
-    p_resume.add_argument("--model", default="sonnet")
+    p_resume.add_argument("--model", default=None)
     p_resume.set_defaults(func=cmd_me_draft_resume)
 
     p_up = me_sub.add_parser(
@@ -1476,7 +1476,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=200,
         help="history.jsonl 마지막 N줄 분석",
     )
-    p_up.add_argument("--model", default="sonnet")
+    p_up.add_argument("--model", default=None)
     p_up.add_argument(
         "--facts-only",
         action="store_true",
@@ -1489,7 +1489,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wdt.add_argument("topic", help="회상할 주제")
     p_wdt.add_argument("--top-k", type=int, default=8)
-    p_wdt.add_argument("--model", default="sonnet")
+    p_wdt.add_argument("--model", default=None)
     p_wdt.add_argument(
         "--timeline",
         action="store_true",
@@ -1519,7 +1519,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_dec.add_argument("situation", help="결정할 상황")
     p_dec.add_argument("--top-k", type=int, default=6)
-    p_dec.add_argument("--model", default="sonnet")
+    p_dec.add_argument("--model", default=None)
     p_dec.set_defaults(func=cmd_me_decide)
 
     p_daily = sub.add_parser("daily", help="일일 통합 파이프라인 (5분 워크플로)")
