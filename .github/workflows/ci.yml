@@ -23,10 +23,10 @@ jobs:
         run: python3 -m pip install -e ".[dev]"
 
       - name: Ruff
-        run: python3 -m ruff check src/synapse_memory/cost src/synapse_memory/daily.py src/synapse_memory/cli.py tests/test_cost_events.py tests/test_cost_summary.py tests/test_cost_cli.py tests/test_llm_claude.py tests/test_apfel.py tests/test_daily.py tests/test_daily_cli.py
+        run: python3 -m ruff check src/synapse_memory/cost src/synapse_memory/daily.py src/synapse_memory/cli.py src/synapse_memory/rag/chunker.py src/synapse_memory/rag/bm25.py src/synapse_memory/rag/hybrid.py src/synapse_memory/rag/indexer.py src/synapse_memory/rag/__init__.py src/synapse_memory/endpoints/ask.py src/synapse_memory/endpoints/me.py tests/test_cost_events.py tests/test_cost_summary.py tests/test_cost_cli.py tests/test_llm_claude.py tests/test_apfel.py tests/test_daily.py tests/test_daily_cli.py tests/test_rag_chunker.py tests/test_rag_bm25.py tests/test_rag_hybrid.py tests/test_rag_indexer.py tests/test_rag_cli.py tests/test_endpoints_ask.py tests/test_endpoints_me_extra.py
 
       - name: Mypy
-        run: python3 -m mypy --strict src/synapse_memory/cost src/synapse_memory/daily.py
+        run: python3 -m mypy --strict src/synapse_memory/cost src/synapse_memory/daily.py src/synapse_memory/rag/chunker.py src/synapse_memory/rag/bm25.py src/synapse_memory/rag/hybrid.py src/synapse_memory/rag/indexer.py src/synapse_memory/endpoints/ask.py src/synapse_memory/endpoints/me.py
 
       - name: Pytest
         run: python3 -m pytest tests/ -W ignore::DeprecationWarning
