@@ -256,9 +256,23 @@ CompanyCard와 매칭되는 ProjectCard를 바탕으로 회사 맞춤 이력서 
 ```bash
 synapse-memory me what-did-i-think "TCA 아키텍처"
 synapse-memory me what-did-i-think "AI 코딩 도구 사용 경험" --top-k 8
+synapse-memory me what-did-i-think "클린 아키텍처" --timeline
+synapse-memory me what-did-i-think "이직 고민" --by time --limit 10
 ```
 
 특정 주제에 대해 과거 자료를 검색하고, 시간순 변화와 현재 입장을 요약합니다.
+
+**정렬 모드** (FR-A1, v0.5):
+
+| 옵션 | 동작 | 외부 LLM 호출 |
+|---|---|---|
+| (기본 / `--by distance`) | cosine 유사도 + Claude 가 시간순 변화·일관성 정리 | ✓ |
+| `--timeline` / `--by time` | period_end 내림차순 + 분기·월 그룹 헤더로 로컬 포맷 | ✗ |
+| `--limit N` | 출력 카드 최대 수 (기본 20, 범위 1~100) | — |
+
+`--timeline` 과 `--by distance` 가 동시 지정되면 `error: ... conflict — pick one.` 메시지와 함께 exit 1 입니다.
+
+ProjectCard 의 `period_end` 가 없으면: `status=active` → 오늘 날짜로 폴백 ("(오늘 YYYY-MM-DD)" 라벨), 그 외 → `created` 폴백 ("(created)" 라벨). CompanyCard 는 `last_reviewed` 가 정렬 키 ("(last reviewed)" 라벨).
 
 ### `me decide`
 
