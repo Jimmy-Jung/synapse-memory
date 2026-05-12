@@ -261,12 +261,13 @@ def what_did_i_think(
     # distance-mode → recipes.generate("recall", ...) wrapper (007 R-7)
     from synapse_memory.recipes import generate as recipes_generate
 
-    # 기존 호출자가 store 를 미리 전달했고 results 가 있으니, 같은 store 를
-    # 재사용 (pipeline 이 store.query 한 번 더 호출 — overhead 적음).
+    # 006 hybrid 결과 또는 기존 dense 결과를 007 recipe pipeline 의 matched-record
+    # 인터페이스로 그대로 전달한다. store 를 재사용하면 hybrid order 가 dense query 로
+    # 덮일 수 있다.
     result = recipes_generate(
         _RECALL_RECIPE_NAME,
         inputs={"topic": topic},
-        store=store,
+        store=_PrecomputedResultStore(results),
         ai_env=ai_env,
         model_override=model,
         top_k_override=top_k,
@@ -277,6 +278,14 @@ def what_did_i_think(
         answer=result.answer_markdown,
         source_ids=result.source_ids,
     )
+
+
+class _PrecomputedResultStore:
+    def __init__(self, results: list[tuple[VectorRecord, float]]) -> None:
+        self._results = results
+
+    def query(self, *_args, **_kwargs) -> list[tuple[VectorRecord, float]]:
+        return list(self._results)
 
 
 # ---------------------------------------------------------------------------

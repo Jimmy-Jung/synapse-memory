@@ -111,9 +111,8 @@ class TestWhatDidIThink:
                     rrf_score=0.03,
                 )
             ],
-        ), patch.object(
-            me_mod.ai_api,
-            "complete",
+        ), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="당근마켓을 검토했습니다 [danggeun].",
         ):
             result = what_did_i_think(
@@ -161,9 +160,8 @@ class TestWhatDidIThink:
                     rrf_score=0.02,
                 )
             ],
-        ), patch.object(
-            me_mod.ai_api,
-            "complete",
+        ), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="당근마켓을 검토했습니다 [raw_obsidian:abc:0].",
         ) as mock_complete:
             what_did_i_think(
