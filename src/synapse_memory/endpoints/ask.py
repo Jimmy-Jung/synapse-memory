@@ -20,6 +20,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass, field
 
+from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import claude as claude_api
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag import (
@@ -136,6 +137,7 @@ def ask(
         env=claude_env,
         timeout=120,
     )
+    answer = strip_meta_prefix(answer)
 
     sources = [
         SourceCitation(

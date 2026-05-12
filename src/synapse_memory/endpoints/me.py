@@ -19,6 +19,7 @@ from typing import Literal
 
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import claude as claude_api
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag import (
@@ -326,6 +327,7 @@ def what_did_i_think(
         env=claude_env,
         timeout=120,
     )
+    answer = strip_meta_prefix(answer)
     _record_last_answer(
         command="me.what_did_i_think",
         query=topic,
@@ -429,6 +431,7 @@ def decide(
         env=claude_env,
         timeout=120,
     )
+    answer = strip_meta_prefix(answer)
     _record_last_answer(
         command="me.decide",
         query=situation,

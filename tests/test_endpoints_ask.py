@@ -116,6 +116,22 @@ class TestAsk:
         assert ref.command == "ask"
         assert ref.citations[0].target_ref == "dansim"
 
+    def test_strips_claude_meta_prefix(self) -> None:
+        records = [
+            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
+        ]
+        store = self._setup_store(records)
+        with patch.object(
+            ask_mod, "embed_query", return_value=[0.0]
+        ), patch.object(
+            ask_mod.claude_api,
+            "complete",
+            return_value="Note: I will answer from the cards.\n\n단심앱입니다 [dansim].",
+        ):
+            result = ask("뭐 만들었어?", store=store, claude_env=_claude_env())
+
+        assert result.answer == "단심앱입니다 [dansim]."
+
     def test_passes_where_filter(self) -> None:
         store = self._setup_store([])
         with patch.object(ask_mod, "embed_query", return_value=[0.0]):

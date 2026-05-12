@@ -74,6 +74,17 @@ class TestWhatDidIThink:
         assert ref.command == "me.what_did_i_think"
         assert ref.citations[0].target_ref == "dansim"
 
+    def test_strips_claude_meta_prefix(self) -> None:
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X"), 0.4)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api,
+            "complete",
+            return_value="Insight: 이 답변은 개인 자료를 바탕으로 합니다.\n\n실제 답변 [x]",
+        ):
+            result = what_did_i_think("x", store=store, claude_env=_claude_env())
+        assert result.answer == "실제 답변 [x]"
+
     def test_empty_topic_raises(self) -> None:
         with pytest.raises(ValueError):
             what_did_i_think("", store=MagicMock(), claude_env=_claude_env())
@@ -125,6 +136,22 @@ class TestDecide:
         assert ref is not None
         assert ref.command == "me.decide"
         assert ref.citations[0].target_ref == "x"
+
+    def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api,
+            "complete",
+            return_value="Analysis: 사용자의 Profile을 검토했습니다.\n\n**추천**: A",
+        ):
+            result = decide(
+                "어떤 회사 지원?",
+                store=store,
+                claude_env=_claude_env(),
+                vault_path=tmp_path,
+            )
+        assert result.answer == "**추천**: A"
 
     def test_with_profile(self, tmp_path: Path) -> None:
         # Profile.md 생성
