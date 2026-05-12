@@ -10,7 +10,11 @@ from typing import Literal, TypeAlias
 from synapse_memory.feedback.events import new_event_id
 from synapse_memory.storage.l0 import ensure_l0_root_secure, l0_root, secure_write_text
 
-AnswerCommand: TypeAlias = Literal["ask", "me.what_did_i_think", "me.decide"]
+AnswerCommand: TypeAlias = str
+"""Open string alias. Recognized values: "ask", "me.what_did_i_think", "me.decide",
+and dynamic "me.generate.<recipe_name>" identifiers introduced by 007-me-recipes.
+Validation in :func:`LastAnswerReference.from_dict` accepts any non-empty string."""
+
 CitationTargetKind: TypeAlias = Literal["card", "pattern"]
 LAST_RESPONSE_FILENAME = "last_response.json"
 
@@ -60,8 +64,8 @@ class LastAnswerReference:
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> LastAnswerReference:
         command = data.get("command")
-        if command not in {"ask", "me.what_did_i_think", "me.decide"}:
-            raise ValueError(f"unknown command: {command}")
+        if not isinstance(command, str) or not command.strip():
+            raise ValueError(f"command must be non-empty string, got {command!r}")
         raw_citations = data.get("citations", [])
         if not isinstance(raw_citations, list):
             raise ValueError("citations must be a list")

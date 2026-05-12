@@ -76,7 +76,8 @@ src/synapse_memory/
 ├── clusters/               # raw에서 프로젝트/회사 후보 묶기
 ├── cards/                  # ProjectCard, CompanyCard, 자동 생성
 ├── rag/                    # embedding, ChromaDB, indexing
-├── endpoints/              # ask, me 기능
+├── endpoints/              # ask, me 기능 (me 는 recipes wrapper)
+├── recipes/                # 007-me-recipes: markdown recipe 기반 generator framework
 └── profile/                # ProfileFact, DecisionPattern 추출
 ```
 

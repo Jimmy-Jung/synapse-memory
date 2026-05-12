@@ -132,9 +132,8 @@ class TestDraftResume:
             (_mock_record("이력서-2026", "# iOS 클린 아키텍처"), 0.45),
         ]
 
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api,
-            "complete",
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value=(
                 "---\n"
                 "title: 당근마켓 지원 이력서\n"
@@ -168,8 +167,9 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api, "complete", return_value="---\ntitle: x\n---\n"
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="---\ntitle: x\n---\n",
         ):
             draft_resume("danggeun", vault_path=vault, store=store, ai_env=_ai_env())
         kw = store.query.call_args.kwargs
@@ -202,8 +202,9 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api, "complete", return_value="---\ntitle: x\n---\n"
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="---\ntitle: x\n---\n",
         ):
             draft_resume(
                 "danggeun",
@@ -218,8 +219,9 @@ class TestDraftResume:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api, "complete", return_value="---\ntitle: x\n---\n"
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="---\ntitle: x\n---\n",
         ):
             result = draft_resume(
                 "danggeun", vault_path=vault, store=store, ai_env=_ai_env()

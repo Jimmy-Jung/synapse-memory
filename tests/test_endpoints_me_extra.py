@@ -44,8 +44,8 @@ class TestWhatDidIThink:
             (_rec("dansim", "# 단심\n## 회고\nTCA 도입"), 0.3),
             (_rec("이력서-2026", "# 클린 아키텍처 도입"), 0.4),
         ]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api, "complete",
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="TCA를 도입했습니다 [dansim].",
         ):
             result = what_did_i_think(
@@ -62,24 +62,22 @@ class TestWhatDidIThink:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
         store = MagicMock()
         store.query.return_value = [(_rec("dansim", "# 단심"), 0.3)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api,
-            "complete",
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="답변 [dansim].",
         ):
             what_did_i_think("TCA", store=store, ai_env=_ai_env())
 
         ref = load_last_answer()
         assert ref is not None
-        assert ref.command == "me.what_did_i_think"
+        assert ref.command == "me.generate.recall"  # R-6: unified me.generate.<recipe>
         assert ref.citations[0].target_ref == "dansim"
 
     def test_strips_claude_meta_prefix(self) -> None:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api,
-            "complete",
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="Insight: 이 답변은 개인 자료를 바탕으로 합니다.\n\n실제 답변 [x]",
         ):
             result = what_did_i_think("x", store=store, ai_env=_ai_env())
@@ -101,8 +99,8 @@ class TestDecide:
     def test_without_profile(self, tmp_path: Path) -> None:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api, "complete", return_value="추천: A"
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
         ):
             result = decide(
                 "어떤 회사 지원?",
@@ -120,9 +118,8 @@ class TestDecide:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api,
-            "complete",
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="추천: A",
         ):
             decide(
@@ -134,15 +131,14 @@ class TestDecide:
 
         ref = load_last_answer()
         assert ref is not None
-        assert ref.command == "me.decide"
+        assert ref.command == "me.generate.decide"  # R-6: unified me.generate.<recipe>
         assert ref.citations[0].target_ref == "x"
 
     def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
         store = MagicMock()
         store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api,
-            "complete",
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="Analysis: 사용자의 Profile을 검토했습니다.\n\n**추천**: A",
         ):
             result = decide(
@@ -169,8 +165,8 @@ class TestDecide:
             captured_prompt.append(prompt)
             return "추천"
 
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.ai_api, "complete", side_effect=fake_complete
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete", side_effect=fake_complete
         ):
             result = decide(
                 "결정",

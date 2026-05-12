@@ -40,54 +40,7 @@ DEFAULT_RESUME_MODEL = "sonnet"
 DEFAULT_RESUME_TIMEOUT = 240
 DRAFTS_SUBPATH = Path("30_Creative") / "Drafts"
 
-RESUME_SYSTEM = """당신은 한국 IT 채용 시장에 능숙한 이력서 작성 어시스턴트입니다.
-
-# 임무
-지원 회사 정보(CompanyCard)와 사용자 ProjectCard 목록을 받아, **그 회사에 최적화된**
-한국어 이력서를 markdown 형식으로 작성합니다.
-
-# 원칙 (절대 위반 금지)
-- 회사 키워드와 매칭되는 프로젝트를 **상단**에 배치
-- 각 프로젝트의 메트릭/수치는 자료에 있는 값만 그대로 인용
-- 자료에 없는 사실은 **추측 금지** — 누락 처리 또는 "정보 없음"
-- 모든 주장에 ``[card_id]`` 출처 인용
-- 출력 첫 문자는 ``-`` (frontmatter 시작). prose 앞부분 금지.
-
-# 출력 형식
----
-title: <display_name> 지원 이력서
-company_id: <company_id>
-position: <포지션 또는 빈 문자열>
-generated: <YYYY-MM-DD>
-based_on:
-  - card_project:<id>
-  - ...
----
-
-# 핵심 한 줄 소개
-회사 키워드를 반영한 1-2문장.
-
-## 핵심 경험 (회사 매칭 우선)
-- **<프로젝트>**: 회사 키워드 맞춘 한 줄 [card_id]
-- ...
-
-## 프로젝트 상세 (3-5개)
-
-### <프로젝트명> ([card_id])
-- **역할/기간**: ...
-- **문제**: ...
-- **접근**: ...
-- **영향**: <수치 인용>
-- **기술 스택**: ...
-
-(반복)
-
-## 기술 스택
-회사 키워드와 매칭되는 항목 우선. 카테고리별 정리.
-
-## 비고
-자료에 없는 항목은 표시 안 함. 마지막에 "이력서 검토 후 본인이 채울 부분" 섹션 추가.
-"""
+_RESUME_RECIPE_NAME = "resume"  # 007-me-recipes — `draft_resume` 는 wrapper
 
 
 @dataclass
@@ -146,66 +99,67 @@ def draft_resume(
     store: VectorStore | None = None,
     timeout: int = DEFAULT_RESUME_TIMEOUT,
 ) -> ResumeDraft:
-    """회사 맞춤 이력서 자동 생성 → vault에 markdown 저장.
+    """회사 맞춤 이력서 자동 생성 → vault에 저장 (007-me-recipes wrapper).
 
-    Args:
-        company_id: ``20_Reference/Companies/<id>.md`` 파일명 슬러그.
-        top_k_projects: 매칭 ProjectCard 수 (이력서에 인용).
-        model: AI 모델 (sonnet 권장).
+    내부적으로 ``recipes.pipeline.generate("resume", ...)`` 를 호출하여
+    Profile + locale (CompanyCard.resume_language → Profile.preferred_lang →
+    default) + domain (Profile.domain → tags → generic) 을 인식한다.
 
-    Returns:
-        ResumeDraft (저장 경로, 인용 project_ids, 원문).
+    외부 시그니처와 ``ResumeDraft`` 반환은 SC-005 회귀 가드로 보존.
 
     Raises:
         FileNotFoundError: CompanyCard 없음.
         AIError: 호출 실패.
         ValueError: 매칭 ProjectCard 0건.
     """
-    company = load_company_card(company_id, vault_path=vault_path)
+    from synapse_memory.recipes import generate as recipes_generate
 
-    # RAG search — project만
+    company = load_company_card(company_id, vault_path=vault_path)
     store = store or open_vector_store()
-    query = _company_search_query(company)
-    q_vec = embed_query(query)
-    matched = store.query(
-        q_vec,
-        top_k=top_k_projects,
-        where={"source_kind": "card_project"},
-    )
-    if not matched:
+
+    try:
+        result = recipes_generate(
+            _RESUME_RECIPE_NAME,
+            inputs={"company_id": company_id},
+            vault_path=vault_path,
+            store=store,
+            ai_env=ai_env,
+            model_override=model,
+            timeout_override=timeout,
+            company=company,
+            disable_save=True,  # SC-005: wrapper 가 기존 filename rule 로 직접 저장
+            top_k_override=top_k_projects,
+            require_matched=True,  # ProjectCard 0 건 → ValueError
+        )
+    except ValueError as exc:
+        # 기존 message 호환 (SC-005)
+        if "got 0" in str(exc):
+            raise ValueError(
+                "매칭 ProjectCard 0건 — `synapse-memory rag index` 먼저 실행"
+            ) from exc
+        raise
+
+    if not result.source_ids:
         raise ValueError(
             "매칭 ProjectCard 0건 — `synapse-memory rag index` 먼저 실행"
         )
 
-    project_ids = [rec.metadata.get("card_id") or rec.id for rec, _ in matched]
-
-    user_prompt = _build_resume_prompt(company, matched)
-
-    raw_text = ai_api.complete(
-        user_prompt,
-        system=RESUME_SYSTEM,
-        model=model,
-        env=ai_env,
-        timeout=timeout,
-    )
-
-    # vault에 저장
+    # 기존 filename rule 유지 (SC-005): `Resume - {display_name} ({YYYY-MM}).md`
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     drafts_dir = vault / DRAFTS_SUBPATH
     drafts_dir.mkdir(parents=True, exist_ok=True)
-
     today = datetime.date.today().isoformat()
     safe_name = company.display_name.replace("/", "-").replace("\\", "-")
     filename = f"Resume - {safe_name} ({today[:7]}).md"
     path = drafts_dir / filename
-    path.write_text(raw_text, encoding="utf-8")
+    path.write_text(result.answer_markdown, encoding="utf-8")
 
     return ResumeDraft(
         company_id=company_id,
         company_name=company.display_name,
         saved_path=path,
-        project_card_ids=project_ids,
-        raw_text=raw_text,
+        project_card_ids=result.source_ids[:top_k_projects],
+        raw_text=result.answer_markdown,
     )
 
 
@@ -214,20 +168,7 @@ def draft_resume(
 # ---------------------------------------------------------------------------
 
 
-WHAT_DID_I_THINK_SYSTEM = """당신은 사용자의 세컨드 브레인입니다.
-
-# 임무
-주어진 주제에 대해 사용자가 어떻게 생각해왔는지 **시간순 또는 입장별로** 정리.
-
-# 원칙
-- 사고 변화가 발견되면 명시 ("처음엔 X, 나중엔 Y").
-- 입장 유지 시 "일관되게 X" 명시.
-- 자료에 없으면 "자료 없음"으로 솔직히.
-- 각 주장에 ``[card_id]`` 인용.
-- 한국어, 간결.
-
-# 형식
-첫 줄: 핵심 한 문장. 그 다음 자세한 정리."""
+_RECALL_RECIPE_NAME = "recall"  # 007-me-recipes — what_did_i_think distance-mode wrapper
 
 
 @dataclass
@@ -304,37 +245,25 @@ def what_did_i_think(
         )
         return WhatDidIThinkResult(topic=topic, answer=markdown, source_ids=source_ids)
 
-    parts: list[str] = []
-    source_ids = []
-    for rec, dist in results:
-        cid = rec.metadata.get("card_id") or rec.id
-        kind = rec.metadata.get("source_kind", "?")
-        parts.append(
-            f"---\n[{cid}] ({kind}, 거리={dist:.3f})\n{rec.document[:1500]}"
-        )
-        source_ids.append(cid)
+    # distance-mode → recipes.generate("recall", ...) wrapper (007 R-7)
+    from synapse_memory.recipes import generate as recipes_generate
 
-    prompt = (
-        f"# 주제\n{topic}\n\n"
-        f"# 자료 (top {len(results)})\n"
-        + "\n\n".join(parts)
-        + "\n\n사용자가 이 주제에 대해 어떻게 생각해왔는지 정리."
+    # 기존 호출자가 store 를 미리 전달했고 results 가 있으니, 같은 store 를
+    # 재사용 (pipeline 이 store.query 한 번 더 호출 — overhead 적음).
+    result = recipes_generate(
+        _RECALL_RECIPE_NAME,
+        inputs={"topic": topic},
+        store=store,
+        ai_env=ai_env,
+        model_override=model,
+        top_k_override=top_k,
+        disable_save=True,
     )
-
-    answer = ai_api.complete(
-        prompt,
-        system=WHAT_DID_I_THINK_SYSTEM,
-        model=model,
-        env=ai_env,
-        timeout=120,
+    return WhatDidIThinkResult(
+        topic=topic,
+        answer=result.answer_markdown,
+        source_ids=result.source_ids,
     )
-    answer = strip_meta_prefix(answer)
-    _record_last_answer(
-        command="me.what_did_i_think",
-        query=topic,
-        source_ids=source_ids,
-    )
-    return WhatDidIThinkResult(topic=topic, answer=answer, source_ids=source_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -342,22 +271,7 @@ def what_did_i_think(
 # ---------------------------------------------------------------------------
 
 
-DECIDE_SYSTEM = """당신은 사용자의 의사결정 코파일럿입니다.
-
-# 임무
-주어진 상황에 대해 **사용자라면 어떻게 결정할지** 추천.
-사용자 Profile, DecisionPatterns, 관련 Card를 종합해서 답.
-
-# 형식
-1. **추천**: 한 줄로 명확히
-2. **근거**: Profile/Patterns/Card 인용 (``[source]`` 형식)
-3. **대안**: 1-2개 + 트레이드오프
-4. **추가 고려**: 사용자가 자체 판단할 부분
-
-# 원칙
-- Profile/Patterns가 있으면 **반드시 그것 기반으로** 추천 (사용자 voice).
-- 자료가 부족하면 솔직히 "추가 정보 필요" 명시.
-- 외부 일반론 X — 사용자 자료만."""
+_DECIDE_RECIPE_NAME = "decide"  # 007-me-recipes — decide() wrapper
 
 
 @dataclass
@@ -391,58 +305,33 @@ def decide(
     store: VectorStore | None = None,
     vault_path: Path | None = None,
 ) -> DecideResult:
-    """의사결정 코파일럿."""
+    """의사결정 코파일럿 (007-me-recipes wrapper).
+
+    내부적으로 ``recipes.pipeline.generate("decide", ...)`` 를 호출한다.
+    외부 시그니처와 ``DecideResult`` 반환은 SC-005 회귀 가드로 보존.
+    """
     if not situation.strip():
         raise ValueError("situation은 빈 문자열일 수 없음")
 
-    profile_text = _load_profile_text(vault_path)
-    profile_used = bool(profile_text)
+    from synapse_memory.recipes import generate as recipes_generate
 
     store = store or open_vector_store()
-    q_vec = embed_query(situation)
-    results = store.query(q_vec, top_k=top_k)
 
-    card_blocks: list[str] = []
-    source_ids: list[str] = []
-    for rec, dist in results:
-        cid = rec.metadata.get("card_id") or rec.id
-        card_blocks.append(
-            f"---\n[{cid}] (거리={dist:.3f})\n{rec.document[:1200]}"
-        )
-        source_ids.append(cid)
-
-    sections = [f"# 의사결정 상황\n{situation}"]
-    if profile_text:
-        sections.append(f"# 사용자 Profile (90_System/AI/)\n{profile_text}")
-    else:
-        sections.append(
-            "# 사용자 Profile\n(없음 — `me update-profile`로 만든 뒤 진실원본으로 promote 필요)"
-        )
-    if card_blocks:
-        sections.append("# 관련 Card\n" + "\n\n".join(card_blocks))
-    else:
-        sections.append("# 관련 Card\n(매칭 없음)")
-    sections.append("# 지시\n위 자료로 사용자 voice 기반 추천.")
-    prompt = "\n\n".join(sections)
-
-    answer = ai_api.complete(
-        prompt,
-        system=DECIDE_SYSTEM,
-        model=model,
-        env=ai_env,
-        timeout=120,
-    )
-    answer = strip_meta_prefix(answer)
-    _record_last_answer(
-        command="me.decide",
-        query=situation,
-        source_ids=source_ids,
+    result = recipes_generate(
+        _DECIDE_RECIPE_NAME,
+        inputs={"situation": situation},
+        vault_path=vault_path,
+        store=store,
+        ai_env=ai_env,
+        model_override=model,
+        top_k_override=top_k,
+        disable_save=True,
     )
     return DecideResult(
         situation=situation,
-        answer=answer,
-        profile_used=profile_used,
-        source_ids=source_ids,
+        answer=result.answer_markdown,
+        profile_used=result.profile_used,
+        source_ids=result.source_ids,
     )
 
 
