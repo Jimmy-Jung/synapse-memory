@@ -6,5 +6,5 @@ Apple Silicon + macOS Tahoe 26+ 전용. FoundationModels(apfel)을 로컬 게이
 저자: JunyoungJung <joony300@gmail.com>
 """
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"
 __all__ = ["__version__"]

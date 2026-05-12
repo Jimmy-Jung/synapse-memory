@@ -149,8 +149,9 @@ W4 ✓ RAG (bge-m3 + ChromaDB) + ask endpoint
 W5 ✓ me {draft-resume, what-did-i-think, decide, update-profile}
 W6 ✓ daily 통합 + 문서화 + GitHub publish (v0.3.0)
 W7 ✓ Claude Code / Codex plugin layer 부활 (v0.4.0) — 6개 slash 명령
+W8 ✓ me-recipes framework + hybrid retrieval (v0.5.0) — recipe 기반 생성 + dense/BM25 선택
 
-459 tests passed · ~5500줄 · v0.4.0
+667 tests passed · v0.5.0
 ```
 
 ## 라이선스
