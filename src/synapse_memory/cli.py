@@ -348,13 +348,44 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
 
 def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
     _interactive_guard("me what-did-i-think", "recall")
-    claude_env = detect_claude_environment(model=args.model)
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가", file=sys.stderr)
+
+    # FR-009 — --timeline + --by distance 충돌 검증
+    timeline_flag = bool(getattr(args, "timeline", False))
+    by_arg = getattr(args, "by", None)
+    if timeline_flag and by_arg == "distance":
+        print(
+            "error: --timeline and --by distance conflict — pick one.",
+            file=sys.stderr,
+        )
+        return 1
+    if timeline_flag or by_arg == "time":
+        effective_by = "time"
+    elif by_arg == "distance":
+        effective_by = "distance"
+    else:
+        effective_by = "distance"  # 기본 (FR-013 회귀 가드)
+
+    # FR-010 — --limit 범위 검증
+    limit = int(getattr(args, "limit", 20))
+    if not (1 <= limit <= 100):
+        print(f"error: --limit must be in [1, 100], got {limit}", file=sys.stderr)
         return 2
+
+    # Claude 환경은 distance 모드에만 필수 (timeline 은 외부 LLM 미호출)
+    claude_env = None
+    if effective_by == "distance":
+        claude_env = detect_claude_environment(model=args.model)
+        if not claude_env.ready:
+            print(f"{FAIL} Claude 사용 불가", file=sys.stderr)
+            return 2
     try:
         result = what_did_i_think(
-            args.topic, top_k=args.top_k, model=args.model, claude_env=claude_env
+            args.topic,
+            top_k=args.top_k,
+            model=args.model,
+            claude_env=claude_env,
+            by=effective_by,  # type: ignore[arg-type]
+            limit=limit,
         )
     except (EmbeddingUnavailableError, VectorStoreError, ClaudeError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
@@ -1269,6 +1300,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_wdt.add_argument("topic", help="회상할 주제")
     p_wdt.add_argument("--top-k", type=int, default=8)
     p_wdt.add_argument("--model", default="sonnet")
+    p_wdt.add_argument(
+        "--timeline",
+        action="store_true",
+        help="시간순(period_end desc) + 분기 그룹 출력 (FR-A1)",
+    )
+    p_wdt.add_argument(
+        "--by",
+        choices=("time", "distance"),
+        default=None,
+        help="정렬 모드: time (= --timeline) 또는 distance (기본)",
+    )
+    p_wdt.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="--timeline 모드 출력 카드 최대 수 (1~100, 기본 20)",
+    )
     p_wdt.set_defaults(func=cmd_me_what_did_i_think)
 
     p_dec = me_sub.add_parser(
