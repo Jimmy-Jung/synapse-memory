@@ -654,6 +654,153 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _recipes_registry_for_vault(vault_arg: str | None):
+    """me recipes list/show 의 공통 helper — RecipeRegistry 인스턴스 반환."""
+    from synapse_memory.recipes.registry import RecipeRegistry
+
+    vault = (
+        Path(vault_arg).expanduser().resolve()
+        if vault_arg
+        else get_obsidian_vault().expanduser().resolve()
+    )
+    builtin_dir = Path(__file__).resolve().parent / "recipes" / "builtin"
+    user_dir = vault / "90_System" / "AI" / "recipes"
+    reg = RecipeRegistry(builtin_dir=builtin_dir, user_dir=user_dir)
+    reg.scan()
+    return reg
+
+
+def _format_recipes_table(recipes: list) -> str:
+    """plain-text 표 — list[GenerationRecipe] → 정렬된 stdout 문자열."""
+    headers = ("NAME", "SOURCE", "REQUIRED INPUTS", "DESCRIPTION")
+    rows: list[tuple[str, str, str, str]] = [headers]
+    for r in recipes:
+        rows.append(
+            (
+                r.name,
+                r.source,
+                ",".join(r.required_inputs) or "-",
+                r.description,
+            )
+        )
+    widths = [max(len(row[i]) for row in rows) for i in range(4)]
+    lines = ["  ".join(c.ljust(widths[j]) for j, c in enumerate(row)) for row in rows]
+    return "\n".join(lines) + "\n"
+
+
+def _recipes_envelope(ok: bool, data, errors=None) -> str:
+    """contracts/cli-contracts.md §5 의 JSON envelope."""
+    import json
+
+    payload = {"ok": ok, "data": data, "errors": list(errors or [])}
+    return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
+def cmd_me_recipes_list(args: argparse.Namespace) -> int:
+    """me recipes list — 모든 recipe 표 출력 (builtin + user)."""
+    try:
+        reg = _recipes_registry_for_vault(args.vault)
+    except Exception as exc:  # noqa: BLE001
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+
+    source_filter = getattr(args, "source", "all")
+    items = [
+        r for r in reg.list() if source_filter == "all" or r.source == source_filter
+    ]
+
+    if getattr(args, "json", False):
+        data = [
+            {
+                "name": r.name,
+                "source": r.source,
+                "description": r.description,
+                "required_inputs": list(r.required_inputs),
+                "optional_inputs": list(r.optional_inputs),
+                "save_subpath": r.save_subpath,
+                "locale_aware": r.locale_aware,
+                "domain_aware": r.domain_aware,
+            }
+            for r in items
+        ]
+        sys.stdout.write(_recipes_envelope(True, data))
+        return 0
+
+    sys.stdout.write(_format_recipes_table(items))
+    if getattr(args, "verbose", False) and reg.skipped:
+        sys.stdout.write("\n# Skipped\n")
+        for path, reason in reg.skipped:
+            sys.stdout.write(f"- {path}: {reason}\n")
+    return 0
+
+
+def cmd_me_recipes_show(args: argparse.Namespace) -> int:
+    """me recipes show <recipe> — 한 recipe 의 세부 사항 + system_prompt preview."""
+    from synapse_memory.recipes.registry import RecipeNotFoundError
+
+    try:
+        reg = _recipes_registry_for_vault(args.vault)
+    except Exception as exc:  # noqa: BLE001
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        r = reg.get(args.recipe)
+    except RecipeNotFoundError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        if exc.suggestions:
+            print(
+                "  가까운 후보: " + ", ".join(exc.suggestions), file=sys.stderr
+            )
+        return 2
+
+    prompt_lines = r.system_prompt.splitlines()
+    show_full = getattr(args, "full", False)
+    shown_prompt = prompt_lines if show_full else prompt_lines[:20]
+
+    if getattr(args, "json", False):
+        data = {
+            "name": r.name,
+            "source": r.source,
+            "source_path": str(r.source_path),
+            "description": r.description,
+            "required_inputs": list(r.required_inputs),
+            "optional_inputs": list(r.optional_inputs),
+            "rag_filter": r.rag_filter,
+            "rag_top_k": r.rag_top_k,
+            "save_subpath": r.save_subpath,
+            "use_profile": r.use_profile,
+            "locale_aware": r.locale_aware,
+            "domain_aware": r.domain_aware,
+            "timeout": r.timeout,
+            "model": r.model,
+            "system_prompt": "\n".join(shown_prompt),
+        }
+        sys.stdout.write(_recipes_envelope(True, data))
+        return 0
+
+    sys.stdout.write(f"name:           {r.name}\n")
+    sys.stdout.write(f"source:         {r.source}\n")
+    sys.stdout.write(f"source_path:    {r.source_path}\n")
+    sys.stdout.write(f"description:    {r.description}\n")
+    sys.stdout.write("input_schema:\n")
+    for k, req in r.input_schema.items():
+        sys.stdout.write(f"  - {k} ({req})\n")
+    sys.stdout.write(f"rag_filter:     {r.rag_filter}\n")
+    sys.stdout.write(f"rag_top_k:      {r.rag_top_k}\n")
+    sys.stdout.write(f"use_profile:    {r.use_profile}\n")
+    sys.stdout.write(f"save_subpath:   {r.save_subpath}\n")
+    sys.stdout.write(f"locale_aware:   {r.locale_aware}\n")
+    sys.stdout.write(f"domain_aware:   {r.domain_aware}\n")
+    sys.stdout.write(f"timeout:        {r.timeout}\n")
+    sys.stdout.write(f"model:          {r.model}\n\n")
+    suffix = " (full):" if show_full else " (first 20 lines):"
+    sys.stdout.write(f"system_prompt{suffix}\n")
+    for line in shown_prompt:
+        sys.stdout.write(line + "\n")
+    return 0
+
+
 def cmd_ask(args: argparse.Namespace) -> int:
     """자연어 질의 → RAG → AI 답변."""
     _interactive_guard("ask", "ask")
@@ -1610,6 +1757,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="LLM 호출·저장·last_answer 생략. system/user prompt 미리보기만",
     )
     p_gen.set_defaults(func=cmd_me_generate)
+
+    p_recipes = me_sub.add_parser(
+        "recipes",
+        help="recipe 목록·상세 (007-me-recipes)",
+    )
+    recipes_sub = p_recipes.add_subparsers(
+        dest="recipes_action", required=True, metavar="RECIPES_ACTION"
+    )
+    p_recipes_list = recipes_sub.add_parser(
+        "list", help="모든 recipe 표 출력 (builtin + user)"
+    )
+    p_recipes_list.add_argument(
+        "--source", choices=("builtin", "user", "all"), default="all"
+    )
+    p_recipes_list.add_argument("--vault", default=None)
+    p_recipes_list.add_argument(
+        "--verbose", action="store_true", help="검증 실패 recipe 도 표시"
+    )
+    p_recipes_list.add_argument(
+        "--json", action="store_true", help="machine-readable JSON envelope"
+    )
+    p_recipes_list.set_defaults(func=cmd_me_recipes_list)
+
+    p_recipes_show = recipes_sub.add_parser(
+        "show", help="recipe 1 건 상세 + system_prompt preview"
+    )
+    p_recipes_show.add_argument("recipe", help="recipe 이름")
+    p_recipes_show.add_argument("--vault", default=None)
+    p_recipes_show.add_argument("--json", action="store_true")
+    p_recipes_show.add_argument(
+        "--full", action="store_true", help="system_prompt 전체 출력"
+    )
+    p_recipes_show.set_defaults(func=cmd_me_recipes_show)
 
     p_daily = sub.add_parser("daily", help="일일 통합 파이프라인 (5분 워크플로)")
     p_daily.add_argument(

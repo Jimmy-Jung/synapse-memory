@@ -130,3 +130,107 @@ def test_me_generate_missing_required_input_exits_with_code(
     err = capsys.readouterr().err
     assert rc != 0
     assert "period" in err
+
+
+# ----- US4: me recipes list/show CLI (T040-T043) ------------------------------
+
+
+def test_me_recipes_list_default(
+    fixture_vault: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """T040 — builtin 4 + user 1 → 5 행 표 + name 알파벳 정렬 + source 컬럼."""
+    with mock.patch(
+        "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
+    ):
+        rc = cli_mod.main(["me", "recipes", "list", "--vault", str(fixture_vault)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    # 헤더 + 5 recipes (resume, weekly_report, journal, brainstorm + user diary)
+    assert "NAME" in out
+    assert "SOURCE" in out
+    # alphabetical
+    idx_brainstorm = out.find("brainstorm")
+    idx_diary = out.find("diary")
+    idx_resume = out.find("resume")
+    assert 0 < idx_brainstorm < idx_diary < idx_resume
+    # source 컬럼
+    assert "builtin" in out
+    assert "user" in out
+
+
+def test_me_recipes_list_json_envelope(
+    fixture_vault: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """T041 — --json envelope {ok, data, errors} + per-item keys."""
+    import json
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
+    ):
+        rc = cli_mod.main(
+            ["me", "recipes", "list", "--vault", str(fixture_vault), "--json"]
+        )
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    payload = json.loads(out)
+    assert payload["ok"] is True
+    assert payload["errors"] == []
+    data = payload["data"]
+    assert isinstance(data, list)
+    assert len(data) >= 4  # 최소 builtin 4
+    item = data[0]
+    for key in ("name", "source", "description", "required_inputs", "optional_inputs", "save_subpath"):
+        assert key in item
+
+
+def test_me_recipes_show_builtin(
+    fixture_vault: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """T042 — me recipes show weekly_report 출력 키 검증."""
+    with mock.patch(
+        "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
+    ):
+        rc = cli_mod.main(
+            [
+                "me",
+                "recipes",
+                "show",
+                "weekly_report",
+                "--vault",
+                str(fixture_vault),
+            ]
+        )
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "name:" in out
+    assert "weekly_report" in out
+    assert "source:" in out
+    assert "input_schema:" in out
+    assert "period" in out
+    assert "save_subpath:" in out
+    assert "30_Creative/Reports" in out
+    assert "system_prompt" in out
+
+
+def test_me_recipes_show_unknown_suggests(
+    fixture_vault: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """T043 — unknown recipe → exit 2 + suggestions."""
+    with mock.patch(
+        "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
+    ):
+        rc = cli_mod.main(
+            ["me", "recipes", "show", "weekly", "--vault", str(fixture_vault)]
+        )
+
+    err = capsys.readouterr().err
+    assert rc == 2
+    # 가까운 후보 제안
+    assert "weekly_report" in err or "후보" in err

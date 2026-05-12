@@ -145,17 +145,17 @@ description: "Implementation tasks for 007-me-recipes (Me Generator Recipes)"
 
 ### Test-First (RED)
 
-- [ ] T040 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_list_default` — fixture 의 builtin 4 + user 1 → assert stdout 에 5 행 + name 알파벳 정렬 + source 컬럼 ("builtin"/"user") + required inputs 컬럼
-- [ ] T041 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_list_json_envelope` — `--json` 출력이 [cli-contracts.md §5](./contracts/cli-contracts.md) envelope shape `{ok, data, errors}` 와 일치 + each item 의 키 set 확인
-- [ ] T042 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_show_builtin` — `me recipes show weekly_report` 출력에 name/source/source_path/description/input_schema/rag_filter/save_subpath/system_prompt preview 포함
-- [ ] T043 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_show_unknown_suggests` — `me recipes show foo` → exit code 2 + stderr 에 가까운 이름 ≤ 3 개 제안
+- [X] T040 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_list_default` — fixture 의 builtin 4 + user 1 → assert stdout 에 5 행 + name 알파벳 정렬 + source 컬럼 ("builtin"/"user") + required inputs 컬럼
+- [X] T041 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_list_json_envelope` — `--json` 출력이 [cli-contracts.md §5](./contracts/cli-contracts.md) envelope shape `{ok, data, errors}` 와 일치 + each item 의 키 set 확인
+- [X] T042 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_show_builtin` — `me recipes show weekly_report` 출력에 name/source/source_path/description/input_schema/rag_filter/save_subpath/system_prompt preview 포함
+- [X] T043 [P] [US4] Write failing test `tests/test_recipes_cli.py::test_me_recipes_show_unknown_suggests` — `me recipes show foo` → exit code 2 + stderr 에 가까운 이름 ≤ 3 개 제안
 
 ### Implementation (GREEN)
 
-- [ ] T044 [US4] Add `me recipes list [--source] [--vault] [--verbose] [--json]` subcommand in `src/synapse_memory/cli.py` — depends on T011
-- [ ] T045 [US4] Add `me recipes show <recipe> [--vault] [--json] [--full]` subcommand in `src/synapse_memory/cli.py` — depends on T011
-- [ ] T046 [US4] Implement plain-text table formatter (no `rich` dependency) for `me recipes list` per [cli-contracts.md §2](./contracts/cli-contracts.md) — depends on T044
-- [ ] T047 [US4] Implement JSON envelope helper `recipes_cli_envelope(ok, data, errors)` used by both `list --json` and `show --json` — depends on T044, T045
+- [X] T044 [US4] Add `me recipes list [--source] [--vault] [--verbose] [--json]` subcommand in `src/synapse_memory/cli.py` — depends on T011
+- [X] T045 [US4] Add `me recipes show <recipe> [--vault] [--json] [--full]` subcommand in `src/synapse_memory/cli.py` — depends on T011
+- [X] T046 [US4] Implement plain-text table formatter (no `rich` dependency) for `me recipes list` per [cli-contracts.md §2](./contracts/cli-contracts.md) — depends on T044
+- [X] T047 [US4] Implement JSON envelope helper `recipes_cli_envelope(ok, data, errors)` used by both `list --json` and `show --json` — depends on T044, T045
 
 **Checkpoint**: US4 fully functional. Discoverability 확보.
 
