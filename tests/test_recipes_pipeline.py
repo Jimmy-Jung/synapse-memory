@@ -203,12 +203,15 @@ def test_pipeline_result_reports_recipe_rag_mode(tmp_path: Path) -> None:
     vault = _build_vault(tmp_path)
     builtin = _builtin_recipe_dir_with_rag_mode(tmp_path, "hybrid")
 
-    with mock.patch("synapse_memory.recipes.pipeline.ai_api_complete") as mocked:
+    with mock.patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.1]), mock.patch(
+        "synapse_memory.recipes.pipeline.hybrid_search",
+        return_value=[],
+    ), mock.patch("synapse_memory.recipes.pipeline.ai_api_complete") as mocked:
         result = generate(
             "echo",
             inputs={"topic": "z"},
             vault_path=vault,
-            store=None,
+            store=_StoreStub(),
             builtin_dir=builtin,
             dry_run=True,
         )
@@ -453,6 +456,23 @@ def test_pipeline_hybrid_unavailable_error_mentions_reindex(tmp_path: Path) -> N
             )
 
     assert store.queries == []
+
+
+def test_pipeline_hybrid_requires_available_store(tmp_path: Path) -> None:
+    from synapse_memory.recipes.pipeline import RecipeHybridUnavailableError, generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_options(tmp_path, rag_mode="hybrid")
+
+    with pytest.raises(RecipeHybridUnavailableError, match="rag index --include-raw"):
+        generate(
+            "echo",
+            inputs={"topic": "missing vector store"},
+            vault_path=vault,
+            store=None,
+            builtin_dir=builtin,
+            dry_run=True,
+        )
 
 
 def test_pipeline_generate_records_last_answer(tmp_path: Path) -> None:

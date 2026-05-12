@@ -196,6 +196,35 @@ def test_me_generate_hybrid_unavailable_exits_with_reindex_hint(
     assert "rag index --include-raw" in err
 
 
+def test_me_generate_hybrid_override_without_store_exits_with_reindex_hint(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
+
+    with mock.patch("synapse_memory.cli.open_vector_store", return_value=None):
+        rc = cli_mod.main(
+            [
+                "me",
+                "generate",
+                "weekly_report",
+                "--input",
+                "period=2026-W19",
+                "--rag-mode",
+                "hybrid",
+                "--vault",
+                str(fixture_vault),
+                "--dry-run",
+            ]
+        )
+
+    err = capsys.readouterr().err
+    assert rc == 10
+    assert "rag_mode=hybrid" in err
+    assert "rag index --include-raw" in err
+
+
 def test_me_generate_missing_required_input_exits_with_code(
     fixture_vault: Path,
     monkeypatch: pytest.MonkeyPatch,

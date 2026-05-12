@@ -60,6 +60,13 @@ class RecipeHybridUnavailableError(RuntimeError):
     """Hybrid RAG sidecar 가 준비되지 않았을 때 발생."""
 
 
+def _hybrid_unavailable_error() -> RecipeHybridUnavailableError:
+    return RecipeHybridUnavailableError(
+        "rag_mode=hybrid requires BM25 sidecar. "
+        "Run `synapse-memory rag index --include-raw` and retry."
+    )
+
+
 def _load_profile_text(vault: Path) -> str:
     parts: list[str] = []
     base = vault / "90_System" / "AI"
@@ -234,6 +241,8 @@ def _retrieve_matches(
     rag_mode: RecipeRagMode,
 ) -> list[tuple[Any, float]]:
     if store is None:
+        if rag_mode == "hybrid":
+            raise _hybrid_unavailable_error()
         return []
 
     rag_top_k = top_k_override or recipe.rag_top_k
@@ -250,10 +259,7 @@ def _retrieve_matches(
                 where=recipe.rag_filter,
             )
         except BM25IndexError as exc:
-            raise RecipeHybridUnavailableError(
-                "rag_mode=hybrid requires BM25 sidecar. "
-                "Run `synapse-memory rag index --include-raw` and retry."
-            ) from exc
+            raise _hybrid_unavailable_error() from exc
         return [(hit.record, hit.rrf_score) for hit in hits]
 
     try:
