@@ -122,7 +122,7 @@
 
 - [X] T040 [P] Document `feedback` commands and examples in `docs/commands.md`
 - [X] T041 [P] Complete `commands/synapse-feedback.md` with `SYNAPSE_FROM_AGENT=1` examples
-- [ ] T042 Run quickstart smoke from `specs/003-feedback-loop/quickstart.md` and save transcript in `specs/003-feedback-loop/quickstart-results.md`
+- [X] T042 Run quickstart smoke from `specs/003-feedback-loop/quickstart.md` and save transcript in `specs/003-feedback-loop/quickstart-results.md`
 - [X] T043 Run ruff on changed files with `uvx ruff check src/synapse_memory/feedback src/synapse_memory/storage/last_response.py src/synapse_memory/profile/patterns.py src/synapse_memory/cli.py tests/test_feedback_events.py tests/test_feedback_targets.py tests/test_feedback_apply.py tests/test_feedback_cli.py tests/test_last_response.py tests/test_profile_patterns.py`
 - [X] T044 Run mypy strict on new modules with `python3 -m mypy --strict src/synapse_memory/feedback src/synapse_memory/storage/last_response.py src/synapse_memory/profile/patterns.py`
 - [X] T045 Run full tests with `python3 -m pytest tests/ -W ignore::DeprecationWarning`
