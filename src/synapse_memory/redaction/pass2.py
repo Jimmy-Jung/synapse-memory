@@ -107,7 +107,7 @@ NON_PII_TERMS = frozenset(
         "person", "people", "member", "team", "developer", "engineer",
         # 데이터 필드 이름
         "name", "value", "key", "data", "id", "type", "category",
-        "token", "password", "secret", "auth", "credential",
+        "token", "password", "secret", "auth", "credential", "rrn",
         # ALL_CAPS markers (코드 주석/플래그)
         "important", "warning", "error", "todo", "fixme", "note",
         "critical", "deprecated", "experimental", "wip",
@@ -115,6 +115,59 @@ NON_PII_TERMS = frozenset(
         "feat", "fix", "chore", "docs", "refactor", "test", "perf",
     }
 )
+
+KOREAN_LOCATION_TERMS = frozenset(
+    {
+        "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종",
+        "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남",
+        "제주", "서울시", "부산시", "대구시", "인천시", "광주시", "대전시",
+        "울산시", "세종시", "서울특별시", "부산광역시", "대구광역시",
+        "인천광역시", "광주광역시", "대전광역시", "울산광역시",
+    }
+)
+
+KOREAN_ORG_WATCHLIST = frozenset(
+    {
+        "메가스터디", "당근마켓", "토스", "카카오뱅크", "무신사", "야놀자",
+        "컬리", "마켓컬리", "우아한형제들", "라인", "쿠팡", "토스뱅크",
+        "비바리퍼블리카", "직방",
+    }
+)
+
+ADDRESS_GENERIC_SUFFIXES = ("빌딩", "타워", "건물", "아파트")
+
+
+def _is_role_label_phrase(val: str) -> bool:
+    """``User Assistant System`` 같은 role label 묶음 — PII 아님."""
+    words = val.split()
+    return bool(words) and all(w.lower() in NON_PII_TERMS for w in words)
+
+
+def _is_lowercase_ascii_handle(val: str) -> bool:
+    """소문자 ASCII 단어는 사람 이름보다 handle/identifier일 가능성이 높다."""
+    return val.islower() and val.isalpha() and val.isascii() and " " not in val
+
+
+def _normalize_pass2_value(category: str, value: str) -> str:
+    """모델 value를 eval/치환 가능한 정확 원문 단위로 보정."""
+    if category != "address":
+        return value
+
+    normalized = value.strip()
+    for suffix in ADDRESS_GENERIC_SUFFIXES:
+        marker = f" {suffix}"
+        if normalized.endswith(marker):
+            return normalized[: -len(marker)].rstrip()
+    return normalized
+
+
+def _find_watchlist_orgs(text: str) -> list[tuple[str, str]]:
+    """Apple 모델이 놓치기 쉬운 한국 회사명을 deterministic 보조 탐지."""
+    return [
+        ("org_name", org)
+        for org in sorted(KOREAN_ORG_WATCHLIST, key=len, reverse=True)
+        if org in text
+    ]
 
 
 def _looks_like_filename(val: str) -> bool:
@@ -147,9 +200,7 @@ def _looks_like_uuid_or_hash(val: str) -> bool:
     """
     if _UUID_PATTERN.match(val):
         return True
-    if len(val) >= 32 and all(c in "0123456789abcdefABCDEF" for c in val):
-        return True
-    return False
+    return len(val) >= 32 and all(c in "0123456789abcdefABCDEF" for c in val)
 
 
 def _looks_like_path_or_identifier(val: str) -> bool:
@@ -181,17 +232,8 @@ def _looks_like_path_or_identifier(val: str) -> bool:
     # GitHub handle 흔도가 훨씬 높아 트레이드오프 수용.
     if "-" in val and val.isascii() and any(c.isalpha() for c in val):
         return True
-    # 소문자 ASCII 단일 영어 단어 6자+ (예: "jarrodwatts", "garrytan").
-    # 길이 6+ 제한: 짧은 건 우연한 매치 가능성.
-    if (
-        val.islower()
-        and " " not in val
-        and val.isalpha()
-        and val.isascii()
-        and len(val) >= 6
-    ):
-        return True
-    return False
+    # 소문자 ASCII 단일 영어 단어 (예: "jimmy", "jarrodwatts", "garrytan").
+    return _is_lowercase_ascii_handle(val)
 
 
 def _allowlist_path() -> Path:
@@ -321,6 +363,10 @@ def _build_pass2_detections(
             continue
         seen.add((cat, val))
 
+        val = _normalize_pass2_value(cat, val)
+        if len(val) < MIN_VALUE_LEN:
+            continue
+
         # allowlist는 lowercase로 정규화되어 있음
         if val.lower() in allowlist:
             continue
@@ -331,6 +377,14 @@ def _build_pass2_detections(
 
         # 일반 명사/role label — 모든 카테고리에서 제외
         if val.lower() in NON_PII_TERMS:
+            continue
+
+        # role label 묶음 — "User Assistant System" 등
+        if _is_role_label_phrase(val):
+            continue
+
+        # 단순 도시/광역시명 — person/address false positive 컷
+        if val in KOREAN_LOCATION_TERMS:
             continue
 
         # 파일명 패턴 (foo.md, bar.py)
@@ -352,6 +406,10 @@ def _build_pass2_detections(
             "org_name",
             "address",
         ) and _looks_like_path_or_identifier(val):
+            continue
+
+        # person_name에서 소문자 ASCII 단어는 GitHub handle/identifier로 처리.
+        if cat == "person_name" and _is_lowercase_ascii_handle(val):
             continue
 
         # 사람 이름에는 숫자가 들어가지 않는다 — 대소문자+숫자 혼합 토큰
@@ -454,6 +512,7 @@ def redact_full(
                 chunk, env=env, timeout=timeout, permissive=permissive
             )
         )
+        pass2_findings.extend(_find_watchlist_orgs(chunk))
 
     pass2_detections = _build_pass2_detections(
         text, pass2_findings, occupied, effective_allowlist
