@@ -1,12 +1,1575 @@
 {
   "_schema": {
-    "description": "Timeline recall Kendall τ evaluation golden set — placeholder body. To be filled in tasks.md T007 with 30 synthetic queries per research.md §BT-3 distribution.",
-    "query_shape": {
-      "query": "str — natural-language topic",
-      "expected_card_id_order": "list[str] — card_ids in expected period_end desc / fallback order",
-      "cards": "list[{card_id, source_kind, period_end?, created?, last_reviewed?, status}]"
+    "description": "Timeline recall Kendall τ golden set per research.md §BT-3.",
+    "today": "2026-05-12",
+    "distribution": {
+      "recent_1y": 10,
+      "mid_1y_3y": 10,
+      "old_ge_3y": 5,
+      "null_period_end": 5
     },
-    "distribution_target": "1/3 within 1y, 1/3 1-3y, 1/6 >=3y, 1/6 period_end null (status active/inactive 50/50)"
+    "query_count": 30
   },
-  "queries": []
+  "queries": [
+    {
+      "query": "q_01_recent",
+      "expected_card_id_order": [
+        "q01_recent_c0",
+        "q01_recent_c1",
+        "q01_recent_c2",
+        "q01_recent_c3",
+        "q01_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q01_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q01_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q01_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q01_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q01_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_02_recent",
+      "expected_card_id_order": [
+        "q02_recent_c0",
+        "q02_recent_c1",
+        "q02_recent_c2",
+        "q02_recent_c3",
+        "q02_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q02_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q02_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q02_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q02_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q02_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_03_recent",
+      "expected_card_id_order": [
+        "q03_recent_c0",
+        "q03_recent_c1",
+        "q03_recent_c2",
+        "q03_recent_c3",
+        "q03_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q03_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q03_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q03_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q03_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q03_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_04_recent",
+      "expected_card_id_order": [
+        "q04_recent_c0",
+        "q04_recent_c1",
+        "q04_recent_c2",
+        "q04_recent_c3",
+        "q04_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q04_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q04_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q04_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q04_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q04_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_05_recent",
+      "expected_card_id_order": [
+        "q05_recent_c0",
+        "q05_recent_c1",
+        "q05_recent_c2",
+        "q05_recent_c3",
+        "q05_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q05_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q05_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q05_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q05_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q05_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_06_recent",
+      "expected_card_id_order": [
+        "q06_recent_c0",
+        "q06_recent_c1",
+        "q06_recent_c2",
+        "q06_recent_c3",
+        "q06_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q06_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q06_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q06_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q06_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q06_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_07_recent",
+      "expected_card_id_order": [
+        "q07_recent_c0",
+        "q07_recent_c1",
+        "q07_recent_c2",
+        "q07_recent_c3",
+        "q07_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q07_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q07_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q07_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q07_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q07_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_08_recent",
+      "expected_card_id_order": [
+        "q08_recent_c0",
+        "q08_recent_c1",
+        "q08_recent_c2",
+        "q08_recent_c3",
+        "q08_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q08_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q08_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q08_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q08_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q08_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_09_recent",
+      "expected_card_id_order": [
+        "q09_recent_c0",
+        "q09_recent_c1",
+        "q09_recent_c2",
+        "q09_recent_c3",
+        "q09_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q09_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q09_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q09_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q09_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q09_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_10_recent",
+      "expected_card_id_order": [
+        "q10_recent_c0",
+        "q10_recent_c1",
+        "q10_recent_c2",
+        "q10_recent_c3",
+        "q10_recent_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q10_recent_c0",
+          "source_kind": "card_project",
+          "period_end": "2026-04-12",
+          "created": "2025-10-12",
+          "last_reviewed": "2026-04-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q10_recent_c1",
+          "source_kind": "card_project",
+          "period_end": "2026-02-10",
+          "created": "2025-08-12",
+          "last_reviewed": "2026-02-10",
+          "status": "archived"
+        },
+        {
+          "card_id": "q10_recent_c2",
+          "source_kind": "card_project",
+          "period_end": "2025-12-11",
+          "created": "2025-06-12",
+          "last_reviewed": "2025-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q10_recent_c3",
+          "source_kind": "card_project",
+          "period_end": "2025-10-11",
+          "created": "2025-04-12",
+          "last_reviewed": "2025-10-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q10_recent_c4",
+          "source_kind": "card_project",
+          "period_end": "2025-08-12",
+          "created": "2025-02-11",
+          "last_reviewed": "2025-08-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_11_mid",
+      "expected_card_id_order": [
+        "q11_mid_c0",
+        "q11_mid_c1",
+        "q11_mid_c2",
+        "q11_mid_c3",
+        "q11_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q11_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q11_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q11_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q11_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q11_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_12_mid",
+      "expected_card_id_order": [
+        "q12_mid_c0",
+        "q12_mid_c1",
+        "q12_mid_c2",
+        "q12_mid_c3",
+        "q12_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q12_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q12_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q12_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q12_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q12_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_13_mid",
+      "expected_card_id_order": [
+        "q13_mid_c0",
+        "q13_mid_c1",
+        "q13_mid_c2",
+        "q13_mid_c3",
+        "q13_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q13_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q13_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q13_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q13_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q13_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_14_mid",
+      "expected_card_id_order": [
+        "q14_mid_c0",
+        "q14_mid_c1",
+        "q14_mid_c2",
+        "q14_mid_c3",
+        "q14_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q14_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q14_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q14_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q14_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q14_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_15_mid",
+      "expected_card_id_order": [
+        "q15_mid_c0",
+        "q15_mid_c1",
+        "q15_mid_c2",
+        "q15_mid_c3",
+        "q15_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q15_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q15_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q15_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q15_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q15_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_16_mid",
+      "expected_card_id_order": [
+        "q16_mid_c0",
+        "q16_mid_c1",
+        "q16_mid_c2",
+        "q16_mid_c3",
+        "q16_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q16_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q16_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q16_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q16_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q16_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_17_mid",
+      "expected_card_id_order": [
+        "q17_mid_c0",
+        "q17_mid_c1",
+        "q17_mid_c2",
+        "q17_mid_c3",
+        "q17_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q17_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q17_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q17_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q17_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q17_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_18_mid",
+      "expected_card_id_order": [
+        "q18_mid_c0",
+        "q18_mid_c1",
+        "q18_mid_c2",
+        "q18_mid_c3",
+        "q18_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q18_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q18_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q18_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q18_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q18_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_19_mid",
+      "expected_card_id_order": [
+        "q19_mid_c0",
+        "q19_mid_c1",
+        "q19_mid_c2",
+        "q19_mid_c3",
+        "q19_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q19_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q19_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q19_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q19_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q19_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_20_mid",
+      "expected_card_id_order": [
+        "q20_mid_c0",
+        "q20_mid_c1",
+        "q20_mid_c2",
+        "q20_mid_c3",
+        "q20_mid_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q20_mid_c0",
+          "source_kind": "card_project",
+          "period_end": "2025-05-12",
+          "created": "2024-11-11",
+          "last_reviewed": "2025-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q20_mid_c1",
+          "source_kind": "card_project",
+          "period_end": "2024-12-11",
+          "created": "2024-06-12",
+          "last_reviewed": "2024-12-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q20_mid_c2",
+          "source_kind": "card_project",
+          "period_end": "2024-07-12",
+          "created": "2024-01-12",
+          "last_reviewed": "2024-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q20_mid_c3",
+          "source_kind": "card_project",
+          "period_end": "2024-02-11",
+          "created": "2023-08-13",
+          "last_reviewed": "2024-02-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q20_mid_c4",
+          "source_kind": "card_project",
+          "period_end": "2023-09-11",
+          "created": "2023-03-13",
+          "last_reviewed": "2023-09-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_21_old",
+      "expected_card_id_order": [
+        "q21_old_c0",
+        "q21_old_c1",
+        "q21_old_c2",
+        "q21_old_c3",
+        "q21_old_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q21_old_c0",
+          "source_kind": "card_project",
+          "period_end": "2023-05-13",
+          "created": "2022-11-12",
+          "last_reviewed": "2023-05-13",
+          "status": "archived"
+        },
+        {
+          "card_id": "q21_old_c1",
+          "source_kind": "card_project",
+          "period_end": "2022-11-11",
+          "created": "2022-05-13",
+          "last_reviewed": "2022-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q21_old_c2",
+          "source_kind": "card_project",
+          "period_end": "2022-05-12",
+          "created": "2021-11-11",
+          "last_reviewed": "2022-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q21_old_c3",
+          "source_kind": "card_project",
+          "period_end": "2021-11-11",
+          "created": "2021-05-13",
+          "last_reviewed": "2021-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q21_old_c4",
+          "source_kind": "card_project",
+          "period_end": "2021-05-12",
+          "created": "2020-11-11",
+          "last_reviewed": "2021-05-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_22_old",
+      "expected_card_id_order": [
+        "q22_old_c0",
+        "q22_old_c1",
+        "q22_old_c2",
+        "q22_old_c3",
+        "q22_old_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q22_old_c0",
+          "source_kind": "card_project",
+          "period_end": "2023-05-13",
+          "created": "2022-11-12",
+          "last_reviewed": "2023-05-13",
+          "status": "archived"
+        },
+        {
+          "card_id": "q22_old_c1",
+          "source_kind": "card_project",
+          "period_end": "2022-11-11",
+          "created": "2022-05-13",
+          "last_reviewed": "2022-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q22_old_c2",
+          "source_kind": "card_project",
+          "period_end": "2022-05-12",
+          "created": "2021-11-11",
+          "last_reviewed": "2022-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q22_old_c3",
+          "source_kind": "card_project",
+          "period_end": "2021-11-11",
+          "created": "2021-05-13",
+          "last_reviewed": "2021-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q22_old_c4",
+          "source_kind": "card_project",
+          "period_end": "2021-05-12",
+          "created": "2020-11-11",
+          "last_reviewed": "2021-05-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_23_old",
+      "expected_card_id_order": [
+        "q23_old_c0",
+        "q23_old_c1",
+        "q23_old_c2",
+        "q23_old_c3",
+        "q23_old_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q23_old_c0",
+          "source_kind": "card_project",
+          "period_end": "2023-05-13",
+          "created": "2022-11-12",
+          "last_reviewed": "2023-05-13",
+          "status": "archived"
+        },
+        {
+          "card_id": "q23_old_c1",
+          "source_kind": "card_project",
+          "period_end": "2022-11-11",
+          "created": "2022-05-13",
+          "last_reviewed": "2022-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q23_old_c2",
+          "source_kind": "card_project",
+          "period_end": "2022-05-12",
+          "created": "2021-11-11",
+          "last_reviewed": "2022-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q23_old_c3",
+          "source_kind": "card_project",
+          "period_end": "2021-11-11",
+          "created": "2021-05-13",
+          "last_reviewed": "2021-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q23_old_c4",
+          "source_kind": "card_project",
+          "period_end": "2021-05-12",
+          "created": "2020-11-11",
+          "last_reviewed": "2021-05-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_24_old",
+      "expected_card_id_order": [
+        "q24_old_c0",
+        "q24_old_c1",
+        "q24_old_c2",
+        "q24_old_c3",
+        "q24_old_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q24_old_c0",
+          "source_kind": "card_project",
+          "period_end": "2023-05-13",
+          "created": "2022-11-12",
+          "last_reviewed": "2023-05-13",
+          "status": "archived"
+        },
+        {
+          "card_id": "q24_old_c1",
+          "source_kind": "card_project",
+          "period_end": "2022-11-11",
+          "created": "2022-05-13",
+          "last_reviewed": "2022-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q24_old_c2",
+          "source_kind": "card_project",
+          "period_end": "2022-05-12",
+          "created": "2021-11-11",
+          "last_reviewed": "2022-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q24_old_c3",
+          "source_kind": "card_project",
+          "period_end": "2021-11-11",
+          "created": "2021-05-13",
+          "last_reviewed": "2021-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q24_old_c4",
+          "source_kind": "card_project",
+          "period_end": "2021-05-12",
+          "created": "2020-11-11",
+          "last_reviewed": "2021-05-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_25_old",
+      "expected_card_id_order": [
+        "q25_old_c0",
+        "q25_old_c1",
+        "q25_old_c2",
+        "q25_old_c3",
+        "q25_old_c4"
+      ],
+      "cards": [
+        {
+          "card_id": "q25_old_c0",
+          "source_kind": "card_project",
+          "period_end": "2023-05-13",
+          "created": "2022-11-12",
+          "last_reviewed": "2023-05-13",
+          "status": "archived"
+        },
+        {
+          "card_id": "q25_old_c1",
+          "source_kind": "card_project",
+          "period_end": "2022-11-11",
+          "created": "2022-05-13",
+          "last_reviewed": "2022-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q25_old_c2",
+          "source_kind": "card_project",
+          "period_end": "2022-05-12",
+          "created": "2021-11-11",
+          "last_reviewed": "2022-05-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q25_old_c3",
+          "source_kind": "card_project",
+          "period_end": "2021-11-11",
+          "created": "2021-05-13",
+          "last_reviewed": "2021-11-11",
+          "status": "archived"
+        },
+        {
+          "card_id": "q25_old_c4",
+          "source_kind": "card_project",
+          "period_end": "2021-05-12",
+          "created": "2020-11-11",
+          "last_reviewed": "2021-05-12",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_26_null_A",
+      "expected_card_id_order": [
+        "q26_null_c0_a",
+        "q26_null_c1_a",
+        "q26_null_c2_a",
+        "q26_null_c3_i",
+        "q26_null_c4_i"
+      ],
+      "cards": [
+        {
+          "card_id": "q26_null_c0_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2026-03-13",
+          "last_reviewed": "2026-03-13",
+          "status": "active"
+        },
+        {
+          "card_id": "q26_null_c1_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-11-11",
+          "last_reviewed": "2025-11-11",
+          "status": "active"
+        },
+        {
+          "card_id": "q26_null_c2_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-07-12",
+          "last_reviewed": "2025-07-12",
+          "status": "active"
+        },
+        {
+          "card_id": "q26_null_c3_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-03-12",
+          "last_reviewed": "2025-03-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q26_null_c4_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2024-11-11",
+          "last_reviewed": "2024-11-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_27_null_M",
+      "expected_card_id_order": [
+        "q27_null_c0_a",
+        "q27_null_c1_a",
+        "q27_null_c2_i",
+        "q27_null_c3_i",
+        "q27_null_c4_i"
+      ],
+      "cards": [
+        {
+          "card_id": "q27_null_c0_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2026-03-13",
+          "last_reviewed": "2026-03-13",
+          "status": "active"
+        },
+        {
+          "card_id": "q27_null_c1_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-11-11",
+          "last_reviewed": "2025-11-11",
+          "status": "active"
+        },
+        {
+          "card_id": "q27_null_c2_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-07-12",
+          "last_reviewed": "2025-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q27_null_c3_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-03-12",
+          "last_reviewed": "2025-03-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q27_null_c4_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2024-11-11",
+          "last_reviewed": "2024-11-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_28_null_A",
+      "expected_card_id_order": [
+        "q28_null_c0_a",
+        "q28_null_c1_a",
+        "q28_null_c2_a",
+        "q28_null_c3_i",
+        "q28_null_c4_i"
+      ],
+      "cards": [
+        {
+          "card_id": "q28_null_c0_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2026-03-13",
+          "last_reviewed": "2026-03-13",
+          "status": "active"
+        },
+        {
+          "card_id": "q28_null_c1_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-11-11",
+          "last_reviewed": "2025-11-11",
+          "status": "active"
+        },
+        {
+          "card_id": "q28_null_c2_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-07-12",
+          "last_reviewed": "2025-07-12",
+          "status": "active"
+        },
+        {
+          "card_id": "q28_null_c3_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-03-12",
+          "last_reviewed": "2025-03-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q28_null_c4_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2024-11-11",
+          "last_reviewed": "2024-11-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_29_null_M",
+      "expected_card_id_order": [
+        "q29_null_c0_a",
+        "q29_null_c1_a",
+        "q29_null_c2_i",
+        "q29_null_c3_i",
+        "q29_null_c4_i"
+      ],
+      "cards": [
+        {
+          "card_id": "q29_null_c0_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2026-03-13",
+          "last_reviewed": "2026-03-13",
+          "status": "active"
+        },
+        {
+          "card_id": "q29_null_c1_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-11-11",
+          "last_reviewed": "2025-11-11",
+          "status": "active"
+        },
+        {
+          "card_id": "q29_null_c2_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-07-12",
+          "last_reviewed": "2025-07-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q29_null_c3_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-03-12",
+          "last_reviewed": "2025-03-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q29_null_c4_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2024-11-11",
+          "last_reviewed": "2024-11-11",
+          "status": "archived"
+        }
+      ]
+    },
+    {
+      "query": "q_30_null_A",
+      "expected_card_id_order": [
+        "q30_null_c0_a",
+        "q30_null_c1_a",
+        "q30_null_c2_a",
+        "q30_null_c3_i",
+        "q30_null_c4_i"
+      ],
+      "cards": [
+        {
+          "card_id": "q30_null_c0_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2026-03-13",
+          "last_reviewed": "2026-03-13",
+          "status": "active"
+        },
+        {
+          "card_id": "q30_null_c1_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-11-11",
+          "last_reviewed": "2025-11-11",
+          "status": "active"
+        },
+        {
+          "card_id": "q30_null_c2_a",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-07-12",
+          "last_reviewed": "2025-07-12",
+          "status": "active"
+        },
+        {
+          "card_id": "q30_null_c3_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2025-03-12",
+          "last_reviewed": "2025-03-12",
+          "status": "archived"
+        },
+        {
+          "card_id": "q30_null_c4_i",
+          "source_kind": "card_project",
+          "period_end": null,
+          "created": "2024-11-11",
+          "last_reviewed": "2024-11-11",
+          "status": "archived"
+        }
+      ]
+    }
+  ]
 }
