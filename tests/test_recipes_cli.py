@@ -58,6 +58,23 @@ def test_parser_registers_me_generate_rag_mode_override() -> None:
     assert args.rag_mode == "hybrid"
 
 
+def test_parser_rejects_invalid_me_generate_rag_mode() -> None:
+    parser = cli_mod.build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                "me",
+                "generate",
+                "weekly_report",
+                "--input",
+                "period=2026-W19",
+                "--rag-mode",
+                "keyword",
+            ]
+        )
+
+
 def test_me_generate_weekly_report_invocation(
     fixture_vault: Path,
     monkeypatch: pytest.MonkeyPatch,
