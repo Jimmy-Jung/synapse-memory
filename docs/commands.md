@@ -219,9 +219,15 @@ synapse-memory card generate --kind all --model sonnet --force
 ```bash
 synapse-memory rag index
 synapse-memory rag index --rebuild
+synapse-memory rag index --rebuild --include-raw
 ```
 
-Card를 임베딩해서 ChromaDB에 저장합니다. `--rebuild`는 기존 collection을 비우고 다시 만듭니다.
+Card를 임베딩해서 ChromaDB에 저장합니다. `--rebuild`는 기존 collection을 비우고 다시 만듭니다. `--include-raw`를 붙이면 vault `10_Active/` markdown과 `~/.synapse/private/redacted/claude-code/` 파일도 redacted chunk 단위로 인덱싱하고 BM25 sidecar를 작성합니다.
+
+| 옵션 | 동작 |
+|---|---|
+| `--rebuild` | 기존 vector collection을 비우고 재생성 |
+| `--include-raw` | Card + redacted raw chunk + BM25 sidecar 생성 |
 
 ### `rag search`
 
@@ -290,9 +296,16 @@ Claude Code CLI 와 apfel 외부 호출이 남긴 `~/.synapse/private/cost.jsonl
 synapse-memory ask "내가 클린 아키텍처를 어떻게 도입했지?"
 synapse-memory ask "어떤 회사에 관심 있었지?" --kind company
 synapse-memory ask "기술 스택 정리" --top-k 8 --model sonnet
+synapse-memory ask "당근마켓 경험" --hybrid
 ```
 
-자연어 질문을 받고, 관련 Card를 검색한 뒤 Claude로 답변을 합성합니다.
+자연어 질문을 받고, 관련 Card를 검색한 뒤 Claude로 답변을 합성합니다. `--hybrid`는 dense vector 결과와 BM25 keyword 결과를 RRF(k=60)로 결합합니다. BM25 sidecar가 없으면 `synapse-memory rag index --include-raw`를 먼저 실행해야 합니다.
+
+| 옵션 | 동작 |
+|---|---|
+| `--top-k N` | 검색 근거 수 |
+| `--kind project\|company` | 특정 Card 종류만 검색 |
+| `--hybrid` | dense + BM25 RRF 결합 검색 |
 
 ### `me generate <recipe>` (007-me-recipes)
 
@@ -333,6 +346,7 @@ synapse-memory me what-did-i-think "TCA 아키텍처"
 synapse-memory me what-did-i-think "AI 코딩 도구 사용 경험" --top-k 8
 synapse-memory me what-did-i-think "클린 아키텍처" --timeline
 synapse-memory me what-did-i-think "이직 고민" --by time --limit 10
+synapse-memory me what-did-i-think "당근마켓" --hybrid
 ```
 
 특정 주제에 대해 과거 자료를 검색하고, 시간순 변화와 현재 입장을 요약합니다.
@@ -342,10 +356,11 @@ synapse-memory me what-did-i-think "이직 고민" --by time --limit 10
 | 옵션 | 동작 | 외부 LLM 호출 |
 |---|---|---|
 | (기본 / `--by distance`) | cosine 유사도 + Claude 가 시간순 변화·일관성 정리 | ✓ |
+| `--hybrid` | distance 모드에서 dense + BM25 RRF 검색 후 Claude 정리 | ✓ |
 | `--timeline` / `--by time` | period_end 내림차순 + 분기·월 그룹 헤더로 로컬 포맷 | ✗ |
 | `--limit N` | 출력 카드 최대 수 (기본 20, 범위 1~100) | — |
 
-`--timeline` 과 `--by distance` 가 동시 지정되면 `error: ... conflict — pick one.` 메시지와 함께 exit 1 입니다.
+`--timeline` 과 `--by distance`, 또는 `--timeline`/`--by time` 과 `--hybrid` 가 동시 지정되면 `error: ... conflict — pick one.` 메시지와 함께 exit 1 입니다.
 
 ProjectCard 의 `period_end` 가 없으면: `status=active` → 오늘 날짜로 폴백 ("(오늘 YYYY-MM-DD)" 라벨), 그 외 → `created` 폴백 ("(created)" 라벨). CompanyCard 는 `last_reviewed` 가 정렬 키 ("(last reviewed)" 라벨).
 
@@ -374,6 +389,7 @@ synapse-memory me update-profile --facts-only --sample-lines 200
 synapse-memory daily
 synapse-memory daily --profile-facts-only
 synapse-memory daily --dry-run
+synapse-memory daily --resume-from classify
 ```
 
 가능한 단계는 다음과 같습니다.
@@ -385,6 +401,7 @@ classify
 generate
 index
 update_profile
+report
 ```
 
 특정 단계만 실행하거나 제외할 수 있습니다.
@@ -393,6 +410,15 @@ update_profile
 synapse-memory daily --only collect_obsidian,index
 synapse-memory daily --skip update_profile
 ```
+
+실패한 단계부터 재개할 수 있습니다.
+
+```bash
+synapse-memory daily --resume-from classify
+synapse-memory daily --dry-run --resume-from index
+```
+
+`--resume-from` 대상 이전 단계는 실행하지 않고 `resume before <stage>` 이유로 건너뜀 처리됩니다. 실행 중 upstream stage가 실패하면 해당 stage에 의존하는 downstream stage는 `requires <stage>` 이유로 건너뜁니다. daily 종료 시 `90_System/AI/DailyReports/YYYY-MM-DD.md`에 stage별 status, elapsed, skip reason, 실패 stage와 재개 명령이 기록됩니다.
 
 모델 관련 옵션:
 

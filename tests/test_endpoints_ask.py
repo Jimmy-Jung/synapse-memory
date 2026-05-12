@@ -17,6 +17,8 @@ from synapse_memory.endpoints.ask import (
     ask,
 )
 from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.rag.bm25 import BM25IndexError
+from synapse_memory.rag.hybrid import RetrievalHit
 from synapse_memory.rag.vector_store import VectorRecord
 from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
@@ -166,3 +168,82 @@ class TestAsk:
         assert "문의" in prompt
         assert "[x]" in prompt
         assert "X 내용 풍부" in prompt
+
+    def test_hybrid_uses_hybrid_search_order(self) -> None:
+        store = self._setup_store([])
+        hybrid_record = _mock_record(
+            "danggeun", "card_company", "당근마켓", "# 당근마켓"
+        )
+        with patch.object(
+            ask_mod, "embed_query", return_value=[0.0]
+        ), patch.object(
+            ask_mod,
+            "hybrid_search",
+            return_value=[
+                RetrievalHit(
+                    record=hybrid_record,
+                    dense_rank=2,
+                    dense_distance=0.4,
+                    bm25_rank=1,
+                    bm25_score=3.0,
+                    rrf_score=0.03,
+                )
+            ],
+        ) as mock_hybrid, patch.object(
+            ask_mod.ai_api,
+            "complete",
+            return_value="당근마켓 경험입니다 [danggeun].",
+        ):
+            result = ask("당근마켓 경험", store=store, ai_env=_ai_env(), hybrid=True)
+
+        assert result.sources[0].card_id == "danggeun"
+        assert result.sources[0].distance == 0.03
+        mock_hybrid.assert_called_once()
+
+    def test_hybrid_missing_bm25_sidecar_raises(self) -> None:
+        store = self._setup_store([])
+        with patch.object(ask_mod, "embed_query", return_value=[0.0]), patch.object(
+            ask_mod,
+            "hybrid_search",
+            side_effect=BM25IndexError("BM25 sidecar 없음"),
+        ), pytest.raises(BM25IndexError):
+            ask("당근마켓", store=store, ai_env=_ai_env(), hybrid=True)
+
+    def test_hybrid_prompt_uses_redacted_raw_context(self) -> None:
+        store = self._setup_store([])
+        raw_record = VectorRecord(
+            id="raw_obsidian:abc:0",
+            document="연락처 [EMAIL_1] 당근마켓",
+            embedding=[0.0],
+            metadata={
+                "source_kind": "raw_obsidian",
+                "path": "10_Active/secret.md",
+                "chunk_index": 0,
+                "display_name": "secret.md",
+            },
+        )
+        with patch.object(
+            ask_mod, "embed_query", return_value=[0.0]
+        ), patch.object(
+            ask_mod,
+            "hybrid_search",
+            return_value=[
+                RetrievalHit(
+                    record=raw_record,
+                    dense_rank=None,
+                    dense_distance=None,
+                    bm25_rank=1,
+                    bm25_score=3.0,
+                    rrf_score=0.02,
+                )
+            ],
+        ), patch.object(
+            ask_mod.ai_api,
+            "complete",
+            return_value="redacted raw 근거입니다 [raw_obsidian:abc:0].",
+        ) as mock_complete:
+            ask("당근마켓", store=store, ai_env=_ai_env(), hybrid=True)
+
+        prompt = mock_complete.call_args.args[0]
+        assert "user@example.com" not in prompt
+        assert "[EMAIL_1]" in prompt

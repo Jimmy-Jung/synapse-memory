@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -246,3 +247,94 @@ class TestIndexCards:
             index_cards(store=store, vault_path=vault)
 
         assert captured[0].metadata["feedback_score"] == 0.85
+
+    def test_include_raw_indexes_obsidian_and_redacted_claude(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        raw_note = vault / "10_Active" / "raw-note.md"
+        raw_note.parent.mkdir(parents=True)
+        raw_note.write_text("당근마켓 raw memo", encoding="utf-8")
+        claude_log = tmp_path / "private" / "redacted" / "claude-code" / "session.jsonl"
+        claude_log.parent.mkdir(parents=True)
+        claude_log.write_text('{"text":"카카오뱅크 redacted memo"}', encoding="utf-8")
+
+        store = self._fake_store()
+        captured: list[VectorRecord] = []
+        store.upsert.side_effect = lambda records: captured.extend(records)
+
+        with patch(
+            "synapse_memory.rag.indexer.embed_texts",
+            side_effect=lambda texts, **_kwargs: [[0.1] * 1024 for _ in texts],
+        ):
+            stats = index_cards(
+                store=store,
+                vault_path=vault,
+                include_raw=True,
+                bm25_path=tmp_path / "bm25.jsonl",
+            )
+
+        assert stats.raw_obsidian_chunks == 1
+        assert stats.raw_claude_code_chunks == 1
+        assert stats.bm25_documents == 2
+        kinds = {record.metadata["source_kind"] for record in captured}
+        assert "raw_obsidian" in kinds
+        assert "raw_claude_code" in kinds
+
+    def test_raw_chunk_ids_are_stable(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        raw_note = vault / "10_Active" / "memo.md"
+        raw_note.parent.mkdir(parents=True)
+        raw_note.write_text("dansim-ios raw memo", encoding="utf-8")
+
+        def run_once() -> list[str]:
+            store = self._fake_store()
+            captured: list[VectorRecord] = []
+            store.upsert.side_effect = lambda records: captured.extend(records)
+            with patch(
+                "synapse_memory.rag.indexer.embed_texts",
+                side_effect=lambda texts, **_kwargs: [[0.1] * 1024 for _ in texts],
+            ):
+                index_cards(
+                    store=store,
+                    vault_path=vault,
+                    include_raw=True,
+                    bm25_path=tmp_path / "bm25.jsonl",
+                )
+            return [record.id for record in captured if record.id.startswith("raw_")]
+
+        assert run_once() == run_once()
+
+    def test_include_raw_redacts_before_upsert(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        raw_note = vault / "10_Active" / "secret.md"
+        raw_note.parent.mkdir(parents=True)
+        raw_note.write_text("email user@example.com", encoding="utf-8")
+        store = self._fake_store()
+        captured: list[VectorRecord] = []
+        store.upsert.side_effect = lambda records: captured.extend(records)
+
+        with patch(
+            "synapse_memory.rag.indexer.embed_texts",
+            side_effect=lambda texts, **_kwargs: [[0.1] * 1024 for _ in texts],
+        ), patch(
+            "synapse_memory.rag.indexer.redact_full",
+            side_effect=lambda text: SimpleNamespace(
+                redacted=text.replace("user@example.com", "[EMAIL_1]")
+            ),
+        ):
+            index_cards(
+                store=store,
+                vault_path=vault,
+                include_raw=True,
+                bm25_path=tmp_path / "bm25.jsonl",
+            )
+
+        raw_records = [record for record in captured if record.id.startswith("raw_")]
+        assert raw_records
+        assert "user@example.com" not in raw_records[0].document
+        assert "[EMAIL_1]" in raw_records[0].document

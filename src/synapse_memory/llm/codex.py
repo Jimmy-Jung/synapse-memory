@@ -195,8 +195,6 @@ def _build_cmd(
         "never",
         "--sandbox",
         "read-only",
-        "--ask-for-approval",
-        "never",
         "--ephemeral",
         "--output-last-message",
         str(output_path),
