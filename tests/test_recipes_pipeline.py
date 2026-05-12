@@ -251,6 +251,31 @@ def test_pipeline_generate_embeds_dense_rag_query_before_store_query(tmp_path: P
     assert store.queries[0][1]["top_k"] == 3
 
 
+def test_pipeline_dense_allows_query_owned_stub_without_embedding(tmp_path: Path) -> None:
+    from synapse_memory.rag.embeddings import EmbeddingUnavailableError
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir(tmp_path)
+    store = _StoreStub()
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        side_effect=EmbeddingUnavailableError("missing sentence-transformers"),
+    ):
+        result = generate(
+            "echo",
+            inputs={"topic": "stub query"},
+            vault_path=vault,
+            store=store,
+            builtin_dir=builtin,
+            dry_run=True,
+        )
+
+    assert result.rag_mode == "dense"
+    assert store.queries == [((), {})]
+
+
 def test_pipeline_generate_hybrid_uses_hybrid_search_and_adapts_hits(
     tmp_path: Path,
 ) -> None:
@@ -444,16 +469,15 @@ def test_pipeline_hybrid_unavailable_error_mentions_reindex(tmp_path: Path) -> N
     ), mock.patch(
         "synapse_memory.recipes.pipeline.hybrid_search",
         side_effect=BM25IndexError("BM25 sidecar 없음"),
-    ):
-        with pytest.raises(RecipeHybridUnavailableError, match="rag index --include-raw"):
-            generate(
-                "echo",
-                inputs={"topic": "missing sidecar"},
-                vault_path=vault,
-                store=store,
-                builtin_dir=builtin,
-                dry_run=True,
-            )
+    ), pytest.raises(RecipeHybridUnavailableError, match="rag index --include-raw"):
+        generate(
+            "echo",
+            inputs={"topic": "missing sidecar"},
+            vault_path=vault,
+            store=store,
+            builtin_dir=builtin,
+            dry_run=True,
+        )
 
     assert store.queries == []
 

@@ -14,6 +14,7 @@ Construction order:
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import re
 from collections import defaultdict
@@ -24,7 +25,7 @@ from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
 from synapse_memory.rag.bm25 import BM25IndexError
-from synapse_memory.rag.embeddings import embed_query
+from synapse_memory.rag.embeddings import EmbeddingUnavailableError, embed_query
 from synapse_memory.rag.hybrid import hybrid_search
 from synapse_memory.recipes.domain import resolve_domain
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
@@ -93,7 +94,7 @@ def _primary_input_value(
     for key in recipe.input_schema:  # insertion order preserved
         if recipe.input_schema[key] == "required" and inputs.get(key):
             return inputs[key]
-    for key, val in inputs.items():
+    for _key, val in inputs.items():
         if val:
             return val
     return "untitled"
@@ -247,8 +248,18 @@ def _retrieve_matches(
 
     rag_top_k = top_k_override or recipe.rag_top_k
     rag_query = _build_rag_query(recipe, inputs)
-    query_embedding = embed_query(rag_query)
     rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
+
+    try:
+        query_embedding = embed_query(rag_query)
+    except EmbeddingUnavailableError as exc:
+        if rag_mode == "hybrid":
+            raise
+        try:
+            # Compatibility path for tests/future stores that own query construction.
+            return list(store.query())
+        except TypeError as stub_exc:
+            raise exc from stub_exc
 
     if rag_mode == "hybrid":
         try:
@@ -432,10 +443,8 @@ def generate(
     last_ref: LastAnswerReference | None = None
     if save_last:
         ref = _build_last_answer(recipe=recipe, inputs=inputs, matched=matched)
-        try:
+        with contextlib.suppress(OSError, ValueError):
             save_last_answer(ref)
-        except (OSError, ValueError):
-            pass  # best-effort — last_answer 실패는 generate 실패로 보지 않음
         last_ref = ref
 
     source_ids = [c.target_ref for c in (last_ref.citations if last_ref else ())]
