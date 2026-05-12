@@ -596,6 +596,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     """Recipe-based generator (007-me-recipes) — me generate <recipe>."""
     from synapse_memory.recipes import (
         InputValidationError,
+        RecipeHybridUnavailableError,
         RecipeNotFoundError,
         RecipePromptTooLargeError,
         RecipeValidationError,
@@ -649,6 +650,9 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     except (RecipeValidationError, RecipePromptTooLargeError) as exc:
         print(f"{FAIL} recipe 검증 실패: {exc}", file=sys.stderr)
         return 4
+    except RecipeHybridUnavailableError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 10
     except (EmbeddingError, AIError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 10

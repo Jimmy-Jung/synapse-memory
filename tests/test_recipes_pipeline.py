@@ -427,6 +427,34 @@ def test_pipeline_rag_mode_override_hybrid_wins_over_dense_recipe(tmp_path: Path
     assert result.rag_mode == "hybrid"
 
 
+def test_pipeline_hybrid_unavailable_error_mentions_reindex(tmp_path: Path) -> None:
+    from synapse_memory.rag.bm25 import BM25IndexError
+    from synapse_memory.recipes.pipeline import RecipeHybridUnavailableError, generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_options(tmp_path, rag_mode="hybrid")
+    store = _StoreStub()
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        return_value=[0.1],
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.hybrid_search",
+        side_effect=BM25IndexError("BM25 sidecar 없음"),
+    ):
+        with pytest.raises(RecipeHybridUnavailableError, match="rag index --include-raw"):
+            generate(
+                "echo",
+                inputs={"topic": "missing sidecar"},
+                vault_path=vault,
+                store=store,
+                builtin_dir=builtin,
+                dry_run=True,
+            )
+
+    assert store.queries == []
+
+
 def test_pipeline_generate_records_last_answer(tmp_path: Path) -> None:
     """FR-011 — every successful AI call updates last_answer."""
     from synapse_memory.recipes.pipeline import generate

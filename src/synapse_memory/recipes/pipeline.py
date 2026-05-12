@@ -23,6 +23,7 @@ from typing import Any
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
+from synapse_memory.rag.bm25 import BM25IndexError
 from synapse_memory.rag.embeddings import embed_query
 from synapse_memory.rag.hybrid import hybrid_search
 from synapse_memory.recipes.domain import resolve_domain
@@ -53,6 +54,10 @@ class InputValidationError(ValueError):
 
 class RecipePromptTooLargeError(ValueError):
     """Rendered system prompt 가 32KB cap 을 초과할 때 발생 (사용자 입력 폭주 방지)."""
+
+
+class RecipeHybridUnavailableError(RuntimeError):
+    """Hybrid RAG sidecar 가 준비되지 않았을 때 발생."""
 
 
 def _load_profile_text(vault: Path) -> str:
@@ -236,13 +241,19 @@ def _retrieve_matches(
     query_embedding = embed_query(rag_query)
 
     if rag_mode == "hybrid":
-        hits = hybrid_search(
-            rag_query,
-            query_embedding=query_embedding,
-            store=store,
-            top_k=rag_top_k,
-            where=recipe.rag_filter,
-        )
+        try:
+            hits = hybrid_search(
+                rag_query,
+                query_embedding=query_embedding,
+                store=store,
+                top_k=rag_top_k,
+                where=recipe.rag_filter,
+            )
+        except BM25IndexError as exc:
+            raise RecipeHybridUnavailableError(
+                "rag_mode=hybrid requires BM25 sidecar. "
+                "Run `synapse-memory rag index --include-raw` and retry."
+            ) from exc
         return [(hit.record, hit.rrf_score) for hit in hits]
 
     try:

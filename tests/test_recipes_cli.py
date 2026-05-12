@@ -160,6 +160,42 @@ def test_me_generate_passes_rag_mode_override(
     assert "rag_mode=hybrid" in captured.err
 
 
+def test_me_generate_hybrid_unavailable_exits_with_reindex_hint(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from synapse_memory.recipes import RecipeHybridUnavailableError
+
+    monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
+
+    with mock.patch("synapse_memory.cli.open_vector_store", return_value=None), mock.patch(
+        "synapse_memory.recipes.generate",
+        side_effect=RecipeHybridUnavailableError(
+            "rag_mode=hybrid requires BM25 sidecar. "
+            "Run `synapse-memory rag index --include-raw` and retry."
+        ),
+    ):
+        rc = cli_mod.main(
+            [
+                "me",
+                "generate",
+                "weekly_report",
+                "--input",
+                "period=2026-W19",
+                "--rag-mode",
+                "hybrid",
+                "--vault",
+                str(fixture_vault),
+            ]
+        )
+
+    err = capsys.readouterr().err
+    assert rc == 10
+    assert "rag_mode=hybrid" in err
+    assert "rag index --include-raw" in err
+
+
 def test_me_generate_missing_required_input_exits_with_code(
     fixture_vault: Path,
     monkeypatch: pytest.MonkeyPatch,
