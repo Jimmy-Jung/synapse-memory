@@ -22,8 +22,6 @@ from pathlib import Path
 import pytest
 
 from synapse_memory.endpoints.me import (
-    CardWithMeta,
-    TimelineGroup,
     _format_timeline_output,
     _group_by_quarter,
     _resolve_sort_ts,

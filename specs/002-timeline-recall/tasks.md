@@ -144,7 +144,7 @@ description: "Task list for Timeline Recall (FR-A1)"
 - [X] T046 [P] Update `commands/synapse-recall.md` to document `--timeline`, `--by {time,distance}`, `--limit N` options per `contracts/cli-contracts.md §"Slash 명령"`. Ensure `SYNAPSE_FROM_AGENT=1` prefix is present (parent plan §B5).
 - [X] T047 [P] Update `docs/commands.md` `me what-did-i-think` section with new options and 3 examples (timeline, distance, limit).
 - [X] T048 Run `mypy --strict src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py` and fix any new type errors introduced by T004~T042. (신규 코드 strict 위반 0건; 기존 코드의 pre-existing `list[tuple]` 1건은 본 PR 범위 외)
-- [ ] T049 Run `ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` and resolve any new lint warnings. (ruff dev 의존성 미설치 — 후속 turn 에서 `uv pip install -e '.[dev]'` 후 실행)
+- [X] T049 Run `ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` and resolve any new lint warnings. (`uvx ruff check src/synapse_memory/endpoints/me.py src/synapse_memory/cli.py tests/test_endpoints_me_timeline.py` 통과)
 - [X] T050 Run full test suite `pytest` and confirm 459 baseline + new tests all green (no regressions across redaction / cards / rag / profile / collectors). (480 passed)
 - [ ] T051 Manual smoke test per `specs/002-timeline-recall/quickstart.md §1~§7` — capture stdout transcripts in PR description. (실제 vault·embedding 의존 — 후속 turn 사용자 환경에서 수행)
 - [ ] T052 Add eval golden 결과 첨부 to PR description: Pass1 / Pass2 F1 unchanged, Kendall τ on synthetic_30.json (parent plan §B4). (PR 작성 시 첨부)

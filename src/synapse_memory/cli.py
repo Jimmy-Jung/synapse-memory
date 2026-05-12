@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import stat
 import sys
@@ -26,14 +27,6 @@ import time
 from pathlib import Path
 
 from synapse_memory import __version__
-from synapse_memory.collectors.claude_code import (
-    DEFAULT_CLAUDE_HOME,
-    collect_claude_code,
-)
-from synapse_memory.collectors.obsidian import (
-    collect_obsidian,
-    get_vault_path,
-)
 from synapse_memory.cards import (
     CompanyCard,
     ProjectCard,
@@ -55,6 +48,18 @@ from synapse_memory.cards.auto_generate import (
     generate_company_card,
     generate_project_card,
 )
+from synapse_memory.cards.company import companies_dir
+from synapse_memory.cards.project import projects_dir
+from synapse_memory.clusters import identify_clusters
+from synapse_memory.collectors.claude_code import (
+    DEFAULT_CLAUDE_HOME,
+    collect_claude_code,
+)
+from synapse_memory.collectors.obsidian import (
+    collect_obsidian,
+    get_vault_path,
+)
+from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault
 from synapse_memory.daily import STEPS, run_daily
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.endpoints.me import (
@@ -62,6 +67,14 @@ from synapse_memory.endpoints.me import (
     draft_resume,
     what_did_i_think,
 )
+from synapse_memory.eval.golden import (
+    default_synthetic_path,
+    evaluate,
+    load_golden_set,
+)
+from synapse_memory.llm import detect_claude_environment
+from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment
+from synapse_memory.llm.claude import ClaudeError
 from synapse_memory.profile.extract import (
     extract_decision_patterns,
     extract_profile_facts,
@@ -77,24 +90,12 @@ from synapse_memory.rag.embeddings import (
     EmbeddingUnavailableError,
 )
 from synapse_memory.rag.vector_store import VectorStoreError
-from synapse_memory.cards.company import companies_dir
-from synapse_memory.cards.project import projects_dir
-from synapse_memory.clusters import identify_clusters
-from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault
-from synapse_memory.llm import detect_claude_environment
-from synapse_memory.llm.claude import ClaudeError
+from synapse_memory.redaction import redact_full
 from synapse_memory.redaction.redactlist import (
     add_redactlist_item,
     load_redactlist,
     remove_redactlist_item,
 )
-from synapse_memory.eval.golden import (
-    default_synthetic_path,
-    evaluate,
-    load_golden_set,
-)
-from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment
-from synapse_memory.redaction import redact_full
 from synapse_memory.storage.l0 import (
     L0_DIR_MODE,
     L0_FILE_MODE,
@@ -477,7 +478,7 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
 
         patterns = []
         if not args.facts_only:
-            print(f"DecisionPattern 추출 중...")
+            print("DecisionPattern 추출 중...")
             patterns = extract_decision_patterns(
                 sample_lines=args.sample_lines,
                 model=args.model,
@@ -625,11 +626,9 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
     clusters = {c.cluster_id: c for c in identify_clusters()}
 
     # filter by kind
-    kinds_to_run: set[str]
-    if args.kind == "all":
-        kinds_to_run = {"project", "company"}
-    else:
-        kinds_to_run = {args.kind}
+    kinds_to_run: set[str] = (
+        {"project", "company"} if args.kind == "all" else {args.kind}
+    )
 
     targets: list[tuple[str, str, str]] = []  # (cluster_id, kind, candidate_name)
     for cid, cls in classifications.items():
@@ -960,11 +959,16 @@ def cmd_redact_backfill_claude_code(args: argparse.Namespace) -> int:
         # 청크별 진행 표시 — dot 출력 (10청크마다 카운터)
         chunk_state = {"shown": 0}
 
-        def _on_chunk(current: int, total: int) -> None:
+        def _on_chunk(
+            current: int,
+            total: int,
+            *,
+            state: dict[str, int] = chunk_state,
+        ) -> None:
             print(".", end="", flush=True)
             if current % 10 == 0:
                 print(f"{current}", end="", flush=True)
-            chunk_state["shown"] = total
+            state["shown"] = total
 
         try:
             text = src_file.read_text(encoding="utf-8", errors="replace")
@@ -977,10 +981,8 @@ def cmd_redact_backfill_claude_code(args: argparse.Namespace) -> int:
             dst_file = dst_root / rel
             ensure_secure_dir(dst_file.parent)
             dst_file.write_text(result.redacted, encoding="utf-8")
-            try:
+            with contextlib.suppress(OSError):
                 os.chmod(dst_file, L0_FILE_MODE)
-            except OSError:
-                pass
 
             for cat, n in result.category_counts().items():
                 total_counts[cat] = total_counts.get(cat, 0) + n
@@ -989,7 +991,7 @@ def cmd_redact_backfill_claude_code(args: argparse.Namespace) -> int:
                 f" → {chunk_state['shown']}청크, "
                 f"{len(result.detections)}건, {elapsed:.1f}s"
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             failed.append((src_file, str(exc)))
             print(f" → 실패: {exc}", file=sys.stderr)
 
