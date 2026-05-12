@@ -17,14 +17,21 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 
+from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import claude as claude_api
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag import (
     VectorStore,
     embed_query,
     open_vector_store,
+)
+from synapse_memory.storage.last_response import (
+    AnswerCitation,
+    new_answer_reference,
+    save_last_answer,
 )
 
 ASK_SYSTEM = """당신은 사용자의 개인 세컨드 브레인입니다.
@@ -130,6 +137,7 @@ def ask(
         env=claude_env,
         timeout=120,
     )
+    answer = strip_meta_prefix(answer)
 
     sources = [
         SourceCitation(
@@ -140,4 +148,20 @@ def ask(
         )
         for rec, dist in results
     ]
+    _record_last_answer(query, sources)
     return AskResult(query=query, answer=answer, sources=sources)
+
+
+def _record_last_answer(query: str, sources: list[SourceCitation]) -> None:
+    citations = tuple(
+        AnswerCitation(
+            target_kind="card",
+            target_ref=s.card_id,
+            source_kind=s.source_kind,
+            display_name=s.display_name,
+        )
+        for s in sources
+    )
+    ref = new_answer_reference(command="ask", query=query, citations=citations)
+    with contextlib.suppress(OSError, ValueError):
+        save_last_answer(ref)

@@ -9,13 +9,14 @@ synapse-memory <command> --help
 
 ## Slash 명령 (Claude Code / Codex)
 
-이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 6개 slash 명령이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
+이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 7개 slash 명령이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
 
 | Slash | 대응 CLI | 인자 |
 |---|---|---|
 | `/synapse-ask` | `synapse-memory ask "..."` | `<질의>` |
 | `/synapse-recall` | `synapse-memory me what-did-i-think "..."` | `<주제>` |
 | `/synapse-decide` | `synapse-memory me decide "..."` | `<상황>` |
+| `/synapse-feedback` | `synapse-memory feedback ...` | `last --reject <이유>` 등 |
 | `/synapse-resume` | `synapse-memory me draft-resume <slug>` | `<회사 slug>` |
 | `/synapse-daily` | `synapse-memory daily [flags]` | (선택) `--profile-facts-only` 등 |
 | `/synapse-doctor` | `synapse-memory doctor` | 없음 |
@@ -229,6 +230,36 @@ synapse-memory rag search "이력서 프로젝트" --top-k 8 --show-snippet
 ```
 
 검색 결과 Card를 거리와 함께 출력합니다. 거리가 작을수록 query와 가깝습니다.
+
+feedback loop 가 적용된 Card 는 metadata 의 `feedback_score` 로 거리 보정을 받습니다. reject 된 Card 는 뒤로 밀리고 accept 된 Card 는 같은 cosine 거리에서 앞으로 당겨집니다.
+
+## 피드백 루프
+
+### `feedback`
+
+```bash
+synapse-memory feedback last --reject "관련 없음"
+synapse-memory feedback last --accept
+synapse-memory feedback card dansim-ios --reject "SwiftUI 주제에는 부적합"
+synapse-memory feedback card dansim-ios --accept
+synapse-memory feedback pattern pattern-b330dfadf791 --weight -0.3
+```
+
+AI 답변이나 Card/DecisionPattern 에 사용자 피드백을 남깁니다. `feedback` 은 batch endpoint 이며 외부 LLM 을 호출하지 않습니다.
+
+| 대상 | 용도 |
+|---|---|
+| `last` | 직전 `ask` / `me what-did-i-think` / `me decide` 답변의 citation 대상에 피드백 |
+| `card <id>` | 특정 ProjectCard 또는 CompanyCard 에 직접 피드백 |
+| `pattern <id>` | 특정 DecisionPattern 에 직접 weight 조정 |
+
+| 옵션 | 동작 |
+|---|---|
+| `--accept` | 긍정 신호, 기본 `+0.20` |
+| `--reject <reason>` | 부정 신호, 기본 `-0.30`; reason 필수 |
+| `--weight <delta>` | 직접 가중치 조정, 범위 `-1.0`~`1.0` |
+
+직전 답변 대상이 없으면 event 를 기록하지 않고 `No recent answer found. Run ask/me first, then retry feedback last.` 를 출력합니다. feedback event 는 `~/.synapse/private/feedback.jsonl` 에 append-only 로 저장되며, 다음 `rag index` 이후 Card 검색 가중치로 반영됩니다.
 
 ## 사용자 endpoint
 

@@ -157,14 +157,32 @@ def _run_claude(
             f"envelope JSON 파싱 실패: {result.stdout[:200]!r}"
         ) from exc
 
-    if not isinstance(envelope, dict):
-        raise ClaudeError(f"envelope이 dict 아님: {type(envelope).__name__}")
+    envelope = _normalize_envelope(envelope)
 
     if envelope.get("is_error"):
         msg = envelope.get("result") or envelope.get("subtype") or "unknown"
         raise ClaudeError(f"Claude 응답 에러: {msg}")
 
     return envelope
+
+
+def _normalize_envelope(envelope: Any) -> dict[str, Any]:
+    """Claude Code JSON output variants → final result envelope.
+
+    Claude Code 2.1+ can return a JSON event array for ``--output-format json``.
+    The final event with ``type == "result"`` contains the same result fields
+    that older single-dict output exposed directly.
+    """
+    if isinstance(envelope, dict):
+        return envelope
+
+    if isinstance(envelope, list):
+        for event in reversed(envelope):
+            if isinstance(event, dict) and event.get("type") == "result":
+                return event
+        raise ClaudeError("Claude event stream에 result event 없음")
+
+    raise ClaudeError(f"envelope이 dict/list 아님: {type(envelope).__name__}")
 
 
 def complete(

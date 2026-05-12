@@ -72,6 +72,12 @@ from synapse_memory.eval.golden import (
     evaluate,
     load_golden_set,
 )
+from synapse_memory.feedback.events import append_feedback_event, build_feedback_event
+from synapse_memory.feedback.targets import (
+    resolve_card_target,
+    resolve_last_answer_targets,
+    resolve_pattern_target,
+)
 from synapse_memory.llm import detect_claude_environment
 from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment
 from synapse_memory.llm.claude import ClaudeError
@@ -103,6 +109,7 @@ from synapse_memory.storage.l0 import (
     ensure_secure_dir,
     l0_root,
 )
+from synapse_memory.storage.last_response import load_last_answer
 
 OK = "✓"
 FAIL = "✗"
@@ -574,6 +581,81 @@ def cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_feedback(args: argparse.Namespace) -> int:
+    """사용자 피드백 기록."""
+    try:
+        action = _feedback_action(args)
+        if action == "reject" and not str(args.reject or "").strip():
+            raise ValueError("reject feedback reason is required")
+        targets = _feedback_targets(args)
+        if not targets:
+            print("No feedback targets resolved.", file=sys.stderr)
+            return 1
+
+        events = []
+        last_ref = load_last_answer() if args.feedback_target == "last" else None
+        for target in targets:
+            events.append(
+                build_feedback_event(
+                    target_kind=target.target_kind,  # type: ignore[arg-type]
+                    target_ref=target.target_ref,
+                    action=action,
+                    reason=args.reject,
+                    weight=args.weight,
+                    answer_id_context=last_ref.answer_id if last_ref else None,
+                )
+            )
+        for event in events:
+            append_feedback_event(event)
+    except ValueError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"{FAIL} feedback 저장 실패: {exc}", file=sys.stderr)
+        return 2
+
+    target_label = (
+        f"last answer {last_ref.answer_id}" if args.feedback_target == "last" and last_ref
+        else f"{args.feedback_target} {args.target_ref}"
+    )
+    print(
+        f"{OK} Recorded {action} for {target_label} "
+        f"(targets={len(events)}, weight={events[0].weight:+.2f})"
+    )
+    refs = ", ".join(e.target_ref for e in events)
+    print(f"  → next index will apply updated feedback_score: {refs}")
+    return 0
+
+
+def _feedback_action(args: argparse.Namespace) -> str:
+    actions = [
+        bool(args.accept),
+        bool(args.reject is not None),
+        bool(args.weight is not None),
+    ]
+    if sum(actions) != 1:
+        raise ValueError("exactly one of --accept, --reject, --weight is required")
+    if args.accept:
+        return "accept"
+    if args.reject is not None:
+        return "reject"
+    return "weight"
+
+
+def _feedback_targets(args: argparse.Namespace):
+    vault_path = Path(args.vault_path).expanduser() if args.vault_path else None
+    if args.feedback_target == "last":
+        last_ref = load_last_answer()
+        if last_ref is None:
+            raise ValueError("No recent answer found. Run ask/me first, then retry feedback last.")
+        return resolve_last_answer_targets(last_ref)
+    if args.feedback_target == "card":
+        return [resolve_card_target(str(args.target_ref), vault_path=vault_path)]
+    if args.feedback_target == "pattern":
+        return [resolve_pattern_target(str(args.target_ref), vault_path=vault_path)]
+    raise ValueError(f"unknown feedback target: {args.feedback_target}")
+
+
 def cmd_rag_search(args: argparse.Namespace) -> int:
     """벡터 DB 검색 — dense (bge-m3 cosine)."""
     try:
@@ -596,7 +678,13 @@ def cmd_rag_search(args: argparse.Namespace) -> int:
     for rec, dist in results:
         name = rec.metadata.get("display_name", rec.id)
         kind = rec.metadata.get("source_kind", "?")
-        print(f"  [{dist:.3f}] {kind:<14} {rec.id:<30} {name}")
+        feedback_score = rec.metadata.get("feedback_score")
+        feedback_label = (
+            f" feedback={float(feedback_score):.2f}"
+            if isinstance(feedback_score, (float, int))
+            else ""
+        )
+        print(f"  [{dist:.3f}] {kind:<14} {rec.id:<30} {name}{feedback_label}")
         if args.show_snippet:
             snippet = rec.document.replace("\n", " ")[:150]
             print(f"    {snippet}")
@@ -1264,6 +1352,31 @@ def build_parser() -> argparse.ArgumentParser:
         help="특정 Card 종류만 retrieve",
     )
     p_ask.set_defaults(func=cmd_ask)
+
+    p_feedback = sub.add_parser("feedback", help="답변/Card/Pattern 피드백 기록")
+    feedback_sub = p_feedback.add_subparsers(
+        dest="feedback_target", required=True, metavar="TARGET"
+    )
+
+    def add_feedback_action_args(p: argparse.ArgumentParser) -> None:
+        group = p.add_mutually_exclusive_group(required=True)
+        group.add_argument("--accept", action="store_true", help="긍정 피드백")
+        group.add_argument("--reject", help="부정 피드백 이유")
+        group.add_argument("--weight", type=float, help="직접 가중치 delta (-1.0~1.0)")
+        p.add_argument("--vault-path", help="vault 경로 override")
+        p.set_defaults(func=cmd_feedback)
+
+    p_fb_last = feedback_sub.add_parser("last", help="직전 답변에 피드백")
+    p_fb_last.set_defaults(target_ref=None)
+    add_feedback_action_args(p_fb_last)
+
+    p_fb_card = feedback_sub.add_parser("card", help="특정 Card에 피드백")
+    p_fb_card.add_argument("target_ref", help="card id")
+    add_feedback_action_args(p_fb_card)
+
+    p_fb_pattern = feedback_sub.add_parser("pattern", help="특정 DecisionPattern에 피드백")
+    p_fb_pattern.add_argument("target_ref", help="pattern id")
+    add_feedback_action_args(p_fb_pattern)
 
     p_me = sub.add_parser("me", help="클론 모드 endpoints")
     me_sub = p_me.add_subparsers(dest="action", required=True, metavar="ACTION")

@@ -80,7 +80,7 @@ class VectorStore:
                 name=self.collection_name,
                 metadata={"hnsw:space": "cosine"},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise VectorStoreError(
                 f"ChromaDB 연결 실패 ({self.persist_dir}): {exc}"
             ) from exc
@@ -105,7 +105,7 @@ class VectorStore:
                 embeddings=embeddings,
                 metadatas=metadatas,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise VectorStoreError(f"upsert 실패: {exc}") from exc
         return len(records)
 
@@ -115,7 +115,7 @@ class VectorStore:
         self._connect()
         try:
             self._collection.delete(ids=list(ids))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise VectorStoreError(f"delete 실패: {exc}") from exc
         return len(ids)
 
@@ -127,7 +127,7 @@ class VectorStore:
             ids = self._collection.get()["ids"]
             if ids:
                 self._collection.delete(ids=ids)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise VectorStoreError(f"clear 실패: {exc}") from exc
 
     # ------------------------------------------------------------------
@@ -160,7 +160,7 @@ class VectorStore:
                 where=where,
                 include=["documents", "metadatas", "distances", "embeddings"],
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise VectorStoreError(f"query 실패: {exc}") from exc
 
         results: list[tuple[VectorRecord, float]] = []
@@ -176,8 +176,9 @@ class VectorStore:
                 embedding=list(embs[i]) if embs is not None and len(embs) > i else [],
                 metadata=dict(metas[i]) if metas else {},
             )
-            results.append((rec, float(dists[i])))
-        return results
+            distance = _apply_feedback_score(float(dists[i]), rec.metadata)
+            results.append((rec, distance))
+        return sorted(results, key=lambda item: item[1])
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +202,17 @@ def _clean_metadata(meta: dict[str, Any]) -> dict[str, Any]:
         else:
             out[k] = str(v)
     return out
+
+
+def _apply_feedback_score(distance: float, metadata: dict[str, Any]) -> float:
+    raw_score = metadata.get("feedback_score", 1.0)
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError):
+        score = 1.0
+    if score <= 0:
+        return distance
+    return distance / score
 
 
 def open_vector_store(

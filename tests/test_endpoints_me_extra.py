@@ -13,7 +13,6 @@ import pytest
 
 import synapse_memory.endpoints.me as me_mod
 from synapse_memory.endpoints.me import (
-    DecideResult,
     WhatDidIThinkResult,
     _load_profile_text,
     decide,
@@ -21,6 +20,8 @@ from synapse_memory.endpoints.me import (
 )
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag.vector_store import VectorRecord
+from synapse_memory.storage.l0 import L0_ENV_VAR
+from synapse_memory.storage.last_response import load_last_answer
 
 
 def _claude_env() -> ClaudeEnvironment:
@@ -55,6 +56,35 @@ class TestWhatDidIThink:
         assert "TCA" in result.answer
         assert result.source_ids == ["dansim", "이력서-2026"]
 
+    def test_records_last_answer_reference(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        store = MagicMock()
+        store.query.return_value = [(_rec("dansim", "# 단심"), 0.3)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api,
+            "complete",
+            return_value="답변 [dansim].",
+        ):
+            what_did_i_think("TCA", store=store, claude_env=_claude_env())
+
+        ref = load_last_answer()
+        assert ref is not None
+        assert ref.command == "me.what_did_i_think"
+        assert ref.citations[0].target_ref == "dansim"
+
+    def test_strips_claude_meta_prefix(self) -> None:
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X"), 0.4)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api,
+            "complete",
+            return_value="Insight: 이 답변은 개인 자료를 바탕으로 합니다.\n\n실제 답변 [x]",
+        ):
+            result = what_did_i_think("x", store=store, claude_env=_claude_env())
+        assert result.answer == "실제 답변 [x]"
+
     def test_empty_topic_raises(self) -> None:
         with pytest.raises(ValueError):
             what_did_i_think("", store=MagicMock(), claude_env=_claude_env())
@@ -83,6 +113,45 @@ class TestDecide:
         assert result.profile_used is False
         assert "추천" in result.answer
         assert result.source_ids == ["x"]
+
+    def test_decide_records_last_answer_reference(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api,
+            "complete",
+            return_value="추천: A",
+        ):
+            decide(
+                "어떤 회사 지원?",
+                store=store,
+                claude_env=_claude_env(),
+                vault_path=tmp_path,
+            )
+
+        ref = load_last_answer()
+        assert ref is not None
+        assert ref.command == "me.decide"
+        assert ref.citations[0].target_ref == "x"
+
+    def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
+            me_mod.claude_api,
+            "complete",
+            return_value="Analysis: 사용자의 Profile을 검토했습니다.\n\n**추천**: A",
+        ):
+            result = decide(
+                "어떤 회사 지원?",
+                store=store,
+                claude_env=_claude_env(),
+                vault_path=tmp_path,
+            )
+        assert result.answer == "**추천**: A"
 
     def test_with_profile(self, tmp_path: Path) -> None:
         # Profile.md 생성

@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import calendar
+import contextlib
 import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +19,7 @@ from typing import Literal
 
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import claude as claude_api
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag import (
@@ -26,6 +28,11 @@ from synapse_memory.rag import (
     open_vector_store,
 )
 from synapse_memory.rag.indexer import company_card_to_text
+from synapse_memory.storage.last_response import (
+    AnswerCitation,
+    new_answer_reference,
+    save_last_answer,
+)
 
 DEFAULT_PROJECTS_FOR_RESUME = 6
 DEFAULT_RESUME_MODEL = "sonnet"
@@ -289,6 +296,11 @@ def what_did_i_think(
         fallback = [c for c in sorted_cards if c.sort_ts_source == "no_time_meta"]
         markdown = _format_timeline_output(groups, limit=limit, fallback_items=fallback)
         source_ids = [c.card_id for c in sorted_cards[:limit] if c.card_id]
+        _record_last_answer(
+            command="me.what_did_i_think",
+            query=topic,
+            source_ids=source_ids,
+        )
         return WhatDidIThinkResult(topic=topic, answer=markdown, source_ids=source_ids)
 
     parts: list[str] = []
@@ -314,6 +326,12 @@ def what_did_i_think(
         model=model,
         env=claude_env,
         timeout=120,
+    )
+    answer = strip_meta_prefix(answer)
+    _record_last_answer(
+        command="me.what_did_i_think",
+        query=topic,
+        source_ids=source_ids,
     )
     return WhatDidIThinkResult(topic=topic, answer=answer, source_ids=source_ids)
 
@@ -413,12 +431,42 @@ def decide(
         env=claude_env,
         timeout=120,
     )
+    answer = strip_meta_prefix(answer)
+    _record_last_answer(
+        command="me.decide",
+        query=situation,
+        source_ids=source_ids,
+    )
     return DecideResult(
         situation=situation,
         answer=answer,
         profile_used=profile_used,
         source_ids=source_ids,
     )
+
+
+def _record_last_answer(
+    *,
+    command: str,
+    query: str,
+    source_ids: list[str],
+) -> None:
+    citations = tuple(
+        AnswerCitation(
+            target_kind="card",
+            target_ref=source_id,
+            source_kind="card",
+            display_name=source_id,
+        )
+        for source_id in source_ids
+    )
+    ref = new_answer_reference(
+        command=command,  # type: ignore[arg-type]
+        query=query,
+        citations=citations,
+    )
+    with contextlib.suppress(OSError, ValueError):
+        save_last_answer(ref)
 
 
 # ---------------------------------------------------------------------------

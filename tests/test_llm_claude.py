@@ -47,6 +47,28 @@ def _mock_envelope(result: str, *, is_error: bool = False) -> str:
     )
 
 
+def _mock_event_stream(result: str, *, is_error: bool = False) -> str:
+    return json.dumps(
+        [
+            {"type": "system", "subtype": "init", "session_id": "test-session"},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [{"type": "text", "text": result}],
+                },
+            },
+            {
+                "type": "result",
+                "subtype": "success" if not is_error else "error",
+                "is_error": is_error,
+                "result": result,
+                "session_id": "test-session",
+                "total_cost_usd": 0.001,
+            },
+        ]
+    )
+
+
 def _mock_proc(stdout: str = "", returncode: int = 0, stderr: str = ""):
     return subprocess.CompletedProcess(
         args=["claude"], returncode=returncode, stdout=stdout, stderr=stderr
@@ -191,6 +213,12 @@ class TestComplete:
             mock_run.return_value = _mock_proc(stdout=_mock_envelope("응답"))
             assert complete("p", env=_ready_env()) == "응답"
 
+    def test_returns_result_from_event_stream(self) -> None:
+        """Claude Code 2.1+ may return a JSON event array instead of one dict."""
+        with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(stdout=_mock_event_stream("응답"))
+            assert complete("p", env=_ready_env()) == "응답"
+
     def test_unavailable_raises(self) -> None:
         env = ClaudeEnvironment(claude_path=None, claude_version=None)
         with pytest.raises(ClaudeUnavailableError):
@@ -208,6 +236,22 @@ class TestComplete:
                 stdout=_mock_envelope("budget exceeded", is_error=True)
             )
             with pytest.raises(ClaudeError, match="budget exceeded"):
+                complete("p", env=_ready_env())
+
+    def test_event_stream_is_error(self) -> None:
+        with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(
+                stdout=_mock_event_stream("budget exceeded", is_error=True)
+            )
+            with pytest.raises(ClaudeError, match="budget exceeded"):
+                complete("p", env=_ready_env())
+
+    def test_event_stream_without_result_raises(self) -> None:
+        with patch("synapse_memory.llm.claude.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_proc(
+                stdout=json.dumps([{"type": "system", "subtype": "init"}])
+            )
+            with pytest.raises(ClaudeError, match="result event"):
                 complete("p", env=_ready_env())
 
     def test_invalid_envelope_json(self) -> None:

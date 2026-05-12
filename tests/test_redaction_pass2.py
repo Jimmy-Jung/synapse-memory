@@ -21,6 +21,7 @@ from synapse_memory.redaction.pass2 import (
     _build_pass2_detections,
     _detect_in_chunk,
     _find_spans,
+    _find_watchlist_orgs,
     _looks_like_filename,
     _looks_like_path_or_identifier,
     _looks_like_screaming_snake,
@@ -370,6 +371,40 @@ class TestBuildPass2Detections:
         )
         assert detections == []
 
+    def test_role_label_phrase_rejected(self) -> None:
+        """Apple 모델이 role label 묶음을 person_name으로 반환해도 reject."""
+        text = "User Assistant System role"
+        findings = [("person_name", "User Assistant System")]
+        detections = _build_pass2_detections(
+            text, findings, occupied_spans=[], allowlist=set()
+        )
+        assert detections == []
+
+    def test_lowercase_ascii_handle_short_rejected(self) -> None:
+        """짧은 lowercase ASCII handle도 person_name으로 보지 않음."""
+        text = "사용자 jimmy가 GitHub에 commit"
+        findings = [("person_name", "jimmy")]
+        detections = _build_pass2_detections(
+            text, findings, occupied_spans=[], allowlist=set()
+        )
+        assert detections == []
+
+    def test_korean_city_rejected_as_person(self) -> None:
+        text = "단순 도시: 서울에서 만나요"
+        findings = [("person_name", "서울")]
+        detections = _build_pass2_detections(
+            text, findings, occupied_spans=[], allowlist=set()
+        )
+        assert detections == []
+
+    def test_rrn_label_rejected_as_sensitive_topic(self) -> None:
+        text = "valid RRN 9401011234567"
+        findings = [("sensitive_topic", "RRN")]
+        detections = _build_pass2_detections(
+            text, findings, occupied_spans=[], allowlist=set()
+        )
+        assert detections == []
+
     def test_filename_rejected(self) -> None:
         text = "참고: GEMINI.md, CLAUDE.md, AGENTS.md"
         findings = [
@@ -436,6 +471,16 @@ class TestBuildPass2Detections:
             text, findings, occupied_spans=[], allowlist=set()
         )
         assert detections == []
+
+    def test_address_generic_suffix_trimmed(self) -> None:
+        """주소 끝의 빌딩/타워 같은 일반 건물명 suffix는 값에서 제외."""
+        text = "부산광역시 해운대구 해운대로 456 빌딩"
+        findings = [("address", "부산광역시 해운대구 해운대로 456 빌딩")]
+        detections = _build_pass2_detections(
+            text, findings, occupied_spans=[], allowlist=set()
+        )
+        assert len(detections) == 1
+        assert detections[0].matched == "부산광역시 해운대구 해운대로 456"
 
     def test_github_handle_rejected(self) -> None:
         text = "사용자 Jimmy-Jung 등록"
@@ -557,6 +602,23 @@ class TestBuildPass2Detections:
         findings = [("unknown_category_xyz", "이상한_단어")]
         with pytest.raises(KeyError):
             _build_pass2_detections(text, findings, [], set())
+
+
+class TestFindWatchlistOrgs:
+    def test_detects_korean_company_when_model_misses(self) -> None:
+        text = "당근마켓 채용 — John Smith 추천."
+        assert ("org_name", "당근마켓") in _find_watchlist_orgs(text)
+
+    def test_does_not_duplicate_model_findings(self) -> None:
+        text = "당근마켓 채용"
+        findings = [("org_name", "당근마켓")]
+        detections = _build_pass2_detections(
+            text,
+            findings + _find_watchlist_orgs(text),
+            occupied_spans=[],
+            allowlist=set(),
+        )
+        assert len(detections) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -776,4 +838,4 @@ class TestRedactFull:
 def test_pass2_categories_consistent_with_placeholders() -> None:
     from synapse_memory.redaction.pass2 import PASS2_PLACEHOLDERS
 
-    assert PASS2_CATEGORIES == set(PASS2_PLACEHOLDERS.keys())
+    assert set(PASS2_PLACEHOLDERS.keys()) == PASS2_CATEGORIES
