@@ -30,6 +30,11 @@ from synapse_memory.cards.project import (
     ProjectCard,
     list_project_cards,
 )
+from synapse_memory.feedback.apply import (
+    DEFAULT_FEEDBACK_SCORE,
+    card_feedback_scores,
+)
+from synapse_memory.feedback.events import load_feedback_events
 from synapse_memory.rag.embeddings import embed_texts
 from synapse_memory.rag.vector_store import (
     VectorRecord,
@@ -191,6 +196,7 @@ def index_cards(
 
     projects = list_project_cards(vault_path=vault_path)
     companies = list_company_cards(vault_path=vault_path)
+    feedback_scores = card_feedback_scores(load_feedback_events(recover=True))
 
     # ---- Project Card ----
     if projects:
@@ -198,7 +204,9 @@ def index_cards(
         texts = [project_card_to_text(c) for c in projects]
         vectors = embed_texts(texts, batch_size=batch_size)
 
-        for i, (card, text, vec) in enumerate(zip(projects, texts, vectors)):
+        for i, (card, text, vec) in enumerate(
+            zip(projects, texts, vectors, strict=False)
+        ):
             if on_progress:
                 on_progress("project", i + 1, len(projects))
             project_records.append(
@@ -206,7 +214,14 @@ def index_cards(
                     id=f"{PREFIX_PROJECT}{card.project_id}",
                     document=text,
                     embedding=vec,
-                    metadata=_project_meta(card),
+                    metadata={
+                        **_project_meta(card),
+                        "feedback_score": feedback_scores.get(
+                            card.project_id
+                        ).score
+                        if card.project_id in feedback_scores
+                        else DEFAULT_FEEDBACK_SCORE,
+                    },
                 )
             )
             stats.bytes_indexed += len(text.encode("utf-8"))
@@ -214,7 +229,7 @@ def index_cards(
         try:
             store.upsert(project_records)
             stats.project_cards = len(project_records)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             stats.failed.append(("project_upsert", str(exc)))
 
     # ---- Company Card ----
@@ -223,7 +238,9 @@ def index_cards(
         texts = [company_card_to_text(c) for c in companies]
         vectors = embed_texts(texts, batch_size=batch_size)
 
-        for i, (card, text, vec) in enumerate(zip(companies, texts, vectors)):
+        for i, (card, text, vec) in enumerate(
+            zip(companies, texts, vectors, strict=False)
+        ):
             if on_progress:
                 on_progress("company", i + 1, len(companies))
             company_records.append(
@@ -231,7 +248,14 @@ def index_cards(
                     id=f"{PREFIX_COMPANY}{card.company_id}",
                     document=text,
                     embedding=vec,
-                    metadata=_company_meta(card),
+                    metadata={
+                        **_company_meta(card),
+                        "feedback_score": feedback_scores.get(
+                            card.company_id
+                        ).score
+                        if card.company_id in feedback_scores
+                        else DEFAULT_FEEDBACK_SCORE,
+                    },
                 )
             )
             stats.bytes_indexed += len(text.encode("utf-8"))
@@ -239,7 +263,7 @@ def index_cards(
         try:
             store.upsert(company_records)
             stats.company_cards = len(company_records)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             stats.failed.append(("company_upsert", str(exc)))
 
     return stats

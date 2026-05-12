@@ -52,9 +52,10 @@ class TestVectorStore:
                 raise ImportError("nope")
             return real(name, *a, **kw)
 
-        with patch("builtins.__import__", side_effect=fake_import):
-            with pytest.raises(VectorStoreError, match="미설치"):
-                store.upsert([VectorRecord("x", "doc", [0.1])])
+        with patch("builtins.__import__", side_effect=fake_import), pytest.raises(
+            VectorStoreError, match="미설치"
+        ):
+            store.upsert([VectorRecord("x", "doc", [0.1])])
 
     def test_upsert_calls_collection(self, tmp_path: Path) -> None:
         coll = MagicMock()
@@ -99,6 +100,25 @@ class TestVectorStore:
         assert rec0.document == "doc-a"
         assert rec0.metadata["kind"] == "card"
         assert dist0 == 0.0
+
+    def test_query_applies_feedback_score(self, tmp_path: Path) -> None:
+        coll = MagicMock()
+        coll.query.return_value = {
+            "ids": [["low", "high"]],
+            "documents": [["low doc", "high doc"]],
+            "metadatas": [[
+                {"feedback_score": 0.5},
+                {"feedback_score": 1.5},
+            ]],
+            "embeddings": [[[0.1], [0.2]]],
+            "distances": [[0.2, 0.2]],
+        }
+        with patch.dict("sys.modules", {"chromadb": self._fake_chroma(coll)}):
+            store = VectorStore(persist_dir=tmp_path / "c")
+            results = store.query([0.1], top_k=2)
+
+        assert [record.id for record, _ in results] == ["high", "low"]
+        assert results[0][1] < results[1][1]
 
     def test_count(self, tmp_path: Path) -> None:
         coll = MagicMock()

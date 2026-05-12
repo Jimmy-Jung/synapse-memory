@@ -21,14 +21,17 @@ from synapse_memory.cards.project import (
     ProjectMetric,
     save_project_card,
 )
+from synapse_memory.feedback.events import append_feedback_event, build_feedback_event
 from synapse_memory.rag.indexer import (
     PREFIX_COMPANY,
     PREFIX_PROJECT,
+    VectorRecord,
     company_card_to_text,
     index_cards,
     project_card_to_text,
 )
 from synapse_memory.rag.vector_store import VectorStore
+from synapse_memory.storage.l0 import L0_ENV_VAR
 
 
 @pytest.fixture
@@ -212,3 +215,34 @@ class TestIndexCards:
         kinds = {r.metadata.get("source_kind") for r in captured}
         assert "card_project" in kinds
         assert "card_company" in kinds
+
+    def test_metadata_includes_feedback_score(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        save_project_card(
+            ProjectCard(project_id="dansim-ios", display_name="단심"),
+            vault_path=vault,
+        )
+        append_feedback_event(
+            build_feedback_event(
+                target_kind="card",
+                target_ref="dansim-ios",
+                action="reject",
+                reason="관련 없음",
+            )
+        )
+        store = self._fake_store()
+        captured: list[VectorRecord] = []
+
+        def _capture(records):
+            captured.extend(records)
+
+        store.upsert.side_effect = _capture
+        with patch(
+            "synapse_memory.rag.indexer.embed_texts",
+            return_value=[[0.1] * 1024],
+        ):
+            index_cards(store=store, vault_path=vault)
+
+        assert captured[0].metadata["feedback_score"] == 0.85

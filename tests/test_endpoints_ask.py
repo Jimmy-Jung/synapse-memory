@@ -6,19 +6,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import synapse_memory.endpoints.ask as ask_mod
 from synapse_memory.endpoints.ask import (
-    AskResult,
-    SourceCitation,
     _build_context,
     ask,
 )
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag.vector_store import VectorRecord
+from synapse_memory.storage.l0 import L0_ENV_VAR
+from synapse_memory.storage.last_response import load_last_answer
 
 
 def _claude_env() -> ClaudeEnvironment:
@@ -92,6 +93,28 @@ class TestAsk:
         assert len(result.sources) == 2
         assert result.sources[0].card_id == "dansim"
         assert result.sources[0].source_kind == "card_project"
+
+    def test_records_last_answer_reference(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
+        records = [
+            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
+        ]
+        store = self._setup_store(records)
+        with patch.object(
+            ask_mod, "embed_query", return_value=[0.0]
+        ), patch.object(
+            ask_mod.claude_api,
+            "complete",
+            return_value="단심앱입니다 [dansim].",
+        ):
+            ask("뭐 만들었어?", store=store, claude_env=_claude_env())
+
+        ref = load_last_answer()
+        assert ref is not None
+        assert ref.command == "ask"
+        assert ref.citations[0].target_ref == "dansim"
 
     def test_passes_where_filter(self) -> None:
         store = self._setup_store([])
