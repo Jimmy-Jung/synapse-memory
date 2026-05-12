@@ -23,3 +23,19 @@ venv/
 
 # synapse-memory local
 .synapse_local/
+
+# claude
+.claude/
+CLAUDE.md
+
+# codex agents
+.agents/
+
+# specify
+.specify/
+
+#firebase
+firebase-debug.log
+
+# mitm mcp
+mitm_mcp_traffic.db
