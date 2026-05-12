@@ -1,10 +1,10 @@
-"""raw → ProfileFact / DecisionPattern 추출 (Claude).
+"""raw → ProfileFact / DecisionPattern 추출 (AI provider).
 
 데이터 소스: L0 raw/claude-code/history.jsonl (사용자 명령 패턴 가장 풍부)
 
 흐름::
 
-    history.jsonl 마지막 N entry → redact_full → Claude → JSON → ProfileFact 리스트
+    history.jsonl 마지막 N entry → redact_full → AI provider → JSON → ProfileFact 리스트
     → MemoryInbox/Profile-YYYY-MM-DD.md에 저장 (사용자 승인 후 vault 진실원본)
 
 저자: JunyoungJung <joony300@gmail.com>
@@ -18,9 +18,9 @@ import json
 from pathlib import Path
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.llm import claude as claude_api
+from synapse_memory.llm import ai_api
+from synapse_memory.llm.ai_api import AIEnvironment, AIError
 from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.llm.claude import ClaudeEnvironment, ClaudeError
 from synapse_memory.profile.schema import (
     PROFILE_CATEGORIES,
     DecisionPattern,
@@ -118,14 +118,14 @@ def extract_profile_facts(
     *,
     sample_lines: int = DEFAULT_SAMPLE_LINES,
     model: str = DEFAULT_MODEL,
-    claude_env: ClaudeEnvironment | None = None,
+    ai_env: AIEnvironment | None = None,
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
 ) -> list[ProfileFact]:
     """Claude Code history → ProfileFact 후보.
 
     Raises:
-        ClaudeError: API 호출 실패.
+        AIError: AI provider 호출 실패.
         FileNotFoundError: history.jsonl 없음.
     """
     history = history_path or (
@@ -147,16 +147,16 @@ def extract_profile_facts(
         f"# 지시\n위에서 반복 패턴으로 드러나는 사용자 성향 사실을 JSON으로 추출."
     )
 
-    response = claude_api.complete_structured(
+    response = ai_api.complete_structured(
         user_prompt,
         system=PROFILE_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
         timeout=DEFAULT_TIMEOUT,
     )
 
     if not isinstance(response, dict):
-        raise ClaudeError(f"응답이 dict 아님: {type(response).__name__}")
+        raise AIError(f"응답이 dict 아님: {type(response).__name__}")
     raw_facts = response.get("facts", [])
     if not isinstance(raw_facts, list):
         return []
@@ -192,7 +192,7 @@ def extract_decision_patterns(
     *,
     sample_lines: int = DEFAULT_SAMPLE_LINES,
     model: str = DEFAULT_MODEL,
-    claude_env: ClaudeEnvironment | None = None,
+    ai_env: AIEnvironment | None = None,
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
 ) -> list[DecisionPattern]:
@@ -211,16 +211,16 @@ def extract_decision_patterns(
         f"# 지시\n위에서 의사결정 패턴(트리거→행동→이유)을 JSON으로 추출."
     )
 
-    response = claude_api.complete_structured(
+    response = ai_api.complete_structured(
         user_prompt,
         system=DECISION_PATTERN_SYSTEM,
         model=model,
-        env=claude_env,
+        env=ai_env,
         timeout=DEFAULT_TIMEOUT,
     )
 
     if not isinstance(response, dict):
-        raise ClaudeError(f"응답이 dict 아님: {type(response).__name__}")
+        raise AIError(f"응답이 dict 아님: {type(response).__name__}")
     raw_patterns = response.get("patterns", [])
     if not isinstance(raw_patterns, list):
         return []
@@ -273,7 +273,7 @@ def save_profile_update(
 
     lines: list[str] = [
         "---",
-        f"type: profile_update",
+        "type: profile_update",
         f"generated: {today}",
         f"fact_count: {len(facts)}",
         f"pattern_count: {len(patterns) if patterns else 0}",

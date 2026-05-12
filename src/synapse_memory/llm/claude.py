@@ -21,8 +21,14 @@ import json
 import re
 import shutil
 import subprocess
+import sys
+import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
+
+from synapse_memory.cost.events import append_cost_event, build_cost_event
+from synapse_memory.cost.pricing import price_usage
+from synapse_memory.llm.apfel import estimate_tokens
 
 CLAUDE_BIN = "claude"
 DEFAULT_MODEL = "sonnet"
@@ -94,7 +100,7 @@ def _build_cmd(
     *,
     system: str | None,
     model: str | None,
-    json_schema: dict | None,
+    json_schema: dict[str, Any] | None,
     max_budget_usd: float | None,
 ) -> list[str]:
     """공통 옵션 — non-interactive + json envelope + system-prompt 강제.
@@ -125,8 +131,10 @@ def _run_claude(
     *,
     prompt: str,
     timeout: int,
-) -> dict:
+) -> dict[str, Any]:
     """subprocess + envelope JSON 파싱. envelope dict 반환."""
+    started = time.monotonic()
+    model = _model_from_cmd(cmd)
     try:
         result = subprocess.run(
             [*cmd, prompt],
@@ -136,11 +144,38 @@ def _run_claude(
             check=False,
         )
     except subprocess.TimeoutExpired as exc:
+        elapsed = time.monotonic() - started
+        _record_claude_cost(
+            model=model,
+            prompt=prompt,
+            result_text="",
+            status="timeout",
+            elapsed_s=elapsed,
+            error_kind="timeout",
+        )
         raise ClaudeError(f"claude 호출 타임아웃 ({timeout}s)") from exc
     except OSError as exc:
+        elapsed = time.monotonic() - started
+        _record_claude_cost(
+            model=model,
+            prompt=prompt,
+            result_text="",
+            status="error",
+            elapsed_s=elapsed,
+            error_kind="os_error",
+        )
         raise ClaudeError(f"claude 실행 실패: {exc}") from exc
+    elapsed = time.monotonic() - started
 
     if result.returncode != 0:
+        _record_claude_cost(
+            model=model,
+            prompt=prompt,
+            result_text="",
+            status="error",
+            elapsed_s=elapsed,
+            error_kind="nonzero_exit",
+        )
         msg = (
             result.stderr.strip()
             or result.stdout.strip()[:500]
@@ -153,17 +188,135 @@ def _run_claude(
     try:
         envelope = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
+        _record_claude_cost(
+            model=model,
+            prompt=prompt,
+            result_text="",
+            status="error",
+            elapsed_s=elapsed,
+            error_kind="invalid_envelope_json",
+        )
         raise ClaudeError(
             f"envelope JSON 파싱 실패: {result.stdout[:200]!r}"
         ) from exc
 
-    envelope = _normalize_envelope(envelope)
+    normalized = _normalize_envelope(envelope)
 
-    if envelope.get("is_error"):
-        msg = envelope.get("result") or envelope.get("subtype") or "unknown"
+    if normalized.get("is_error"):
+        _record_claude_cost(
+            model=_model_from_envelope(normalized, fallback=model),
+            prompt=prompt,
+            result_text=str(normalized.get("result") or ""),
+            status="error",
+            elapsed_s=elapsed,
+            envelope=normalized,
+            error_kind=str(normalized.get("subtype") or "envelope_error"),
+        )
+        msg = normalized.get("result") or normalized.get("subtype") or "unknown"
         raise ClaudeError(f"Claude 응답 에러: {msg}")
 
-    return envelope
+    _record_claude_cost(
+        model=_model_from_envelope(normalized, fallback=model),
+        prompt=prompt,
+        result_text=str(normalized.get("result") or ""),
+        status="success",
+        elapsed_s=elapsed,
+        envelope=normalized,
+    )
+    return normalized
+
+
+def _record_claude_cost(
+    *,
+    model: str,
+    prompt: str,
+    result_text: str,
+    status: str,
+    elapsed_s: float,
+    envelope: dict[str, Any] | None = None,
+    error_kind: str | None = None,
+) -> None:
+    envelope = envelope or {}
+    input_tokens, output_tokens = _usage_from_envelope(envelope)
+    if input_tokens == 0:
+        input_tokens = estimate_tokens(prompt)
+    if output_tokens == 0 and result_text:
+        output_tokens = estimate_tokens(result_text)
+    provider_usd = _provider_usd(envelope)
+    priced = price_usage(
+        provider="claude",
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        provider_usd=provider_usd,
+    )
+    try:
+        append_cost_event(
+            build_cost_event(
+                provider="claude",
+                model=model,
+                status=status,  # type: ignore[arg-type]
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                usd=priced.usd,
+                pricing_source=priced.pricing_source,
+                elapsed_s=elapsed_s,
+                error_kind=error_kind,
+            )
+        )
+    except Exception as exc:
+        print(f"⚠ cost event 기록 실패: {exc}", file=sys.stderr)
+
+
+def _model_from_cmd(cmd: list[str]) -> str:
+    if "--model" in cmd:
+        idx = cmd.index("--model")
+        if idx + 1 < len(cmd):
+            return cmd[idx + 1]
+    return DEFAULT_MODEL
+
+
+def _model_from_envelope(envelope: dict[str, Any], *, fallback: str) -> str:
+    raw = envelope.get("model") or envelope.get("model_id")
+    return str(raw) if raw else fallback
+
+
+def _usage_from_envelope(envelope: dict[str, Any]) -> tuple[int, int]:
+    usage = envelope.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+    input_tokens = _first_int(
+        envelope,
+        usage,
+        keys=("input_tokens", "prompt_tokens"),
+    )
+    output_tokens = _first_int(
+        envelope,
+        usage,
+        keys=("output_tokens", "completion_tokens"),
+    )
+    return input_tokens, output_tokens
+
+
+def _first_int(*sources: dict[str, Any], keys: tuple[str, ...]) -> int:
+    for source in sources:
+        for key in keys:
+            value = source.get(key)
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int):
+                return max(0, value)
+            if isinstance(value, float) and value.is_integer():
+                return max(0, int(value))
+    return 0
+
+
+def _provider_usd(envelope: dict[str, Any]) -> float | None:
+    for key in ("total_cost_usd", "cost_usd", "usd"):
+        value = envelope.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    return None
 
 
 def _normalize_envelope(envelope: Any) -> dict[str, Any]:
@@ -174,7 +327,7 @@ def _normalize_envelope(envelope: Any) -> dict[str, Any]:
     that older single-dict output exposed directly.
     """
     if isinstance(envelope, dict):
-        return envelope
+        return cast(dict[str, Any], envelope)
 
     if isinstance(envelope, list):
         for event in reversed(envelope):
@@ -190,7 +343,7 @@ def complete(
     *,
     system: str | None = None,
     model: str | None = None,
-    json_schema: dict | None = None,
+    json_schema: dict[str, Any] | None = None,
     max_budget_usd: float | None = None,
     timeout: int = DEFAULT_TIMEOUT_SEC,
     env: ClaudeEnvironment | None = None,
@@ -234,7 +387,7 @@ def complete_structured(
     *,
     system: str | None = None,
     model: str | None = None,
-    json_schema: dict | None = None,
+    json_schema: dict[str, Any] | None = None,
     max_budget_usd: float | None = None,
     timeout: int = DEFAULT_TIMEOUT_SEC,
     env: ClaudeEnvironment | None = None,

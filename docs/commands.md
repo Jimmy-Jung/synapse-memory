@@ -9,7 +9,7 @@ synapse-memory <command> --help
 
 ## Slash 명령 (Claude Code / Codex)
 
-이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 7개 slash 명령이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
+이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 8개 slash 명령이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
 
 | Slash | 대응 CLI | 인자 |
 |---|---|---|
@@ -17,6 +17,7 @@ synapse-memory <command> --help
 | `/synapse-recall` | `synapse-memory me what-did-i-think "..."` | `<주제>` |
 | `/synapse-decide` | `synapse-memory me decide "..."` | `<상황>` |
 | `/synapse-feedback` | `synapse-memory feedback ...` | `last --reject <이유>` 등 |
+| `/synapse-cost` | `synapse-memory cost summary ...` | `summary --days 30` 등 |
 | `/synapse-resume` | `synapse-memory me draft-resume <slug>` | `<회사 slug>` |
 | `/synapse-daily` | `synapse-memory daily [flags]` | (선택) `--profile-facts-only` 등 |
 | `/synapse-doctor` | `synapse-memory doctor` | 없음 |
@@ -260,6 +261,26 @@ AI 답변이나 Card/DecisionPattern 에 사용자 피드백을 남깁니다. `f
 | `--weight <delta>` | 직접 가중치 조정, 범위 `-1.0`~`1.0` |
 
 직전 답변 대상이 없으면 event 를 기록하지 않고 `No recent answer found. Run ask/me first, then retry feedback last.` 를 출력합니다. feedback event 는 `~/.synapse/private/feedback.jsonl` 에 append-only 로 저장되며, 다음 `rag index` 이후 Card 검색 가중치로 반영됩니다.
+
+## 비용 관측
+
+### `cost summary`
+
+```bash
+synapse-memory cost summary
+synapse-memory cost summary --days 7 --by command
+synapse-memory cost summary --days 30 --by model --json
+```
+
+Claude Code CLI 와 apfel 외부 호출이 남긴 `~/.synapse/private/cost.jsonl` 을 최근 N일 기준으로 집계합니다. `cost` 는 batch endpoint 이며 외부 LLM 을 호출하지 않습니다.
+
+| 옵션 | 기본값 | 동작 |
+|---|---:|---|
+| `--days N` | `30` | 최근 N일 event 만 포함 |
+| `--by command\|model` | `command` | command 또는 model 기준 그룹화 |
+| `--json` | off | 표 대신 JSON 출력 |
+
+로그가 없거나 기간 내 event 가 없으면 exit 0 으로 `데이터 없음 — 아직 기록된 cost event 가 없습니다.` 를 출력합니다. cost event 는 prompt/response 원문을 저장하지 않고 command, provider, model, token count, usd, elapsed, status 같은 metadata 만 저장합니다.
 
 ## 사용자 endpoint
 

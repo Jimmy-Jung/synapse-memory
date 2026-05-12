@@ -28,7 +28,7 @@ from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.rag.vector_store import VectorRecord
 
 
-def _claude_env() -> ClaudeEnvironment:
+def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(
         claude_path="/opt/homebrew/bin/claude",
         claude_version="2.1.x",
@@ -133,7 +133,7 @@ class TestDraftResume:
         ]
 
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api,
+            me_mod.ai_api,
             "complete",
             return_value=(
                 "---\n"
@@ -151,7 +151,7 @@ class TestDraftResume:
                 "danggeun",
                 vault_path=vault,
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
             )
 
         assert isinstance(result, ResumeDraft)
@@ -169,9 +169,9 @@ class TestDraftResume:
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api, "complete", return_value="---\ntitle: x\n---\n"
+            me_mod.ai_api, "complete", return_value="---\ntitle: x\n---\n"
         ):
-            draft_resume("danggeun", vault_path=vault, store=store, claude_env=_claude_env())
+            draft_resume("danggeun", vault_path=vault, store=store, ai_env=_ai_env())
         kw = store.query.call_args.kwargs
         assert kw["where"] == {"source_kind": "card_project"}
 
@@ -181,35 +181,36 @@ class TestDraftResume:
                 "nonexistent",
                 vault_path=vault,
                 store=MagicMock(),
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
             )
 
     def test_no_matches_raises(self, vault: Path) -> None:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = []
-        with patch.object(me_mod, "embed_query", return_value=[0.0]):
-            with pytest.raises(ValueError, match="ProjectCard"):
-                draft_resume(
-                    "danggeun",
-                    vault_path=vault,
-                    store=store,
-                    claude_env=_claude_env(),
-                )
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), pytest.raises(
+            ValueError, match="ProjectCard"
+        ):
+            draft_resume(
+                "danggeun",
+                vault_path=vault,
+                store=store,
+                ai_env=_ai_env(),
+            )
 
     def test_top_k_passed(self, vault: Path) -> None:
         self._setup_company(vault)
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api, "complete", return_value="---\ntitle: x\n---\n"
+            me_mod.ai_api, "complete", return_value="---\ntitle: x\n---\n"
         ):
             draft_resume(
                 "danggeun",
                 top_k_projects=10,
                 vault_path=vault,
                 store=store,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
             )
         assert store.query.call_args.kwargs["top_k"] == 10
 
@@ -218,10 +219,10 @@ class TestDraftResume:
         store = MagicMock()
         store.query.return_value = [(_mock_record("x"), 0.4)]
         with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod.claude_api, "complete", return_value="---\ntitle: x\n---\n"
+            me_mod.ai_api, "complete", return_value="---\ntitle: x\n---\n"
         ):
             result = draft_resume(
-                "danggeun", vault_path=vault, store=store, claude_env=_claude_env()
+                "danggeun", vault_path=vault, store=store, ai_env=_ai_env()
             )
         # 형식: Resume - 당근마켓 (YYYY-MM).md
         import re

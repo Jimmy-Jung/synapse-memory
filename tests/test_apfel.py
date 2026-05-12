@@ -29,7 +29,6 @@ from synapse_memory.llm.apfel import (
     estimate_tokens,
 )
 
-
 # ---------------------------------------------------------------------------
 # 토큰 추정
 # ---------------------------------------------------------------------------
@@ -225,6 +224,23 @@ class TestComplete:
             result = complete("프롬프트", env=_ready_env())
             assert result == "응답 텍스트"
 
+    def test_records_cost_event_on_success(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        monkeypatch.setenv("SYNAPSE_L0_ROOT", str(tmp_path / "private"))
+        monkeypatch.setenv("SYNAPSE_COMMAND", "redact.backfill")
+        with patch("synapse_memory.llm.apfel.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_run(stdout="응답 텍스트\n")
+            assert complete("프롬프트", env=_ready_env()) == "응답 텍스트"
+
+        data = json.loads((tmp_path / "private" / "cost.jsonl").read_text(encoding="utf-8"))
+        assert data["command"] == "redact.backfill"
+        assert data["provider"] == "apfel"
+        assert data["status"] == "success"
+        assert data["usd"] == 0.0
+
     def test_quiet_flag_always_added(self) -> None:
         with patch("synapse_memory.llm.apfel.subprocess.run") as mock_run:
             mock_run.return_value = _mock_run(stdout="ok")
@@ -263,6 +279,36 @@ class TestComplete:
             mock_run.return_value = _mock_run(returncode=1, stderr="모델 로드 실패")
             with pytest.raises(ApfelError, match="모델 로드 실패"):
                 complete("프롬프트", env=_ready_env())
+
+    def test_records_cost_event_on_error(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path,
+    ) -> None:
+        monkeypatch.setenv("SYNAPSE_L0_ROOT", str(tmp_path / "private"))
+        with patch("synapse_memory.llm.apfel.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_run(returncode=1, stderr="모델 로드 실패")
+            with pytest.raises(ApfelError, match="모델 로드 실패"):
+                complete("프롬프트", env=_ready_env())
+
+        data = json.loads((tmp_path / "private" / "cost.jsonl").read_text(encoding="utf-8"))
+        assert data["status"] == "error"
+        assert data["error_kind"] == "nonzero_exit"
+
+    def test_cost_logging_failure_does_not_change_success(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(
+            "synapse_memory.llm.apfel.append_cost_event",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk full")),
+        )
+        with patch("synapse_memory.llm.apfel.subprocess.run") as mock_run:
+            mock_run.return_value = _mock_run(stdout="ok")
+            assert complete("프롬프트", env=_ready_env()) == "ok"
+
+        assert "cost event 기록 실패" in capsys.readouterr().err
 
     def test_raises_on_unavailable_env(self) -> None:
         env = ApfelEnvironment(None, None, "26.2", True)

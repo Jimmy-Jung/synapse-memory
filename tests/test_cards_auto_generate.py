@@ -1,6 +1,6 @@
 """Card 자동 생성 테스트.
 
-Claude API는 mock — yaml 파싱 + 저장 흐름 검증.
+AI provider API는 mock — yaml 파싱 + 저장 흐름 검증.
 
 저자: JunyoungJung <joony300@gmail.com>
 작성일: 2026-05-10
@@ -20,11 +20,12 @@ from synapse_memory.cards.auto_generate import (
     generate_project_card,
 )
 from synapse_memory.clusters.identify import ProjectCluster
+from synapse_memory.llm.ai_api import AIError
 from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.llm.claude import ClaudeEnvironment, ClaudeError
+from synapse_memory.llm.claude import ClaudeEnvironment
 
 
-def _claude_env() -> ClaudeEnvironment:
+def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(
         claude_path="/opt/homebrew/bin/claude",
         claude_version="2.1.x",
@@ -151,14 +152,14 @@ class TestGenerateProjectCard:
         cluster = _make_cluster("dansim", ["dansim.md"])
 
         with patch(
-            "synapse_memory.cards.auto_generate.claude_api.complete"
+            "synapse_memory.cards.auto_generate.ai_api.complete"
         ) as mock_complete:
             mock_complete.return_value = _GOOD_PROJECT_RESPONSE
             card = generate_project_card(
                 cluster,
                 candidate_name="단심",
                 obs_root=obs_root,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
 
@@ -177,14 +178,14 @@ class TestGenerateProjectCard:
 
         wrapped = "```yaml\n" + _GOOD_PROJECT_RESPONSE + "```"
         with patch(
-            "synapse_memory.cards.auto_generate.claude_api.complete"
+            "synapse_memory.cards.auto_generate.ai_api.complete"
         ) as mock_complete:
             mock_complete.return_value = wrapped
             card = generate_project_card(
                 cluster,
                 candidate_name="단심",
                 obs_root=obs_root,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
         assert card.project_id == "dansim"
@@ -194,7 +195,7 @@ class TestGenerateProjectCard:
         cluster = _make_cluster("dansim", ["x.md"])
 
         with patch(
-            "synapse_memory.cards.auto_generate.claude_api.complete"
+            "synapse_memory.cards.auto_generate.ai_api.complete"
         ) as mock_complete:
             mock_complete.return_value = "그냥 텍스트, frontmatter 없음"
             with pytest.raises(ValueError, match="frontmatter"):
@@ -202,7 +203,7 @@ class TestGenerateProjectCard:
                     cluster,
                     candidate_name="x",
                     obs_root=obs_root,
-                    claude_env=_claude_env(),
+                    ai_env=_ai_env(),
                     apfel_env=_apfel_disabled(),
                 )
 
@@ -211,15 +212,15 @@ class TestGenerateProjectCard:
         cluster = _make_cluster("x", ["x.md"])
 
         with patch(
-            "synapse_memory.cards.auto_generate.claude_api.complete"
+            "synapse_memory.cards.auto_generate.ai_api.complete"
         ) as mock_complete:
-            mock_complete.side_effect = ClaudeError("API 오류")
-            with pytest.raises(ClaudeError):
+            mock_complete.side_effect = AIError("API 오류")
+            with pytest.raises(AIError):
                 generate_project_card(
                     cluster,
                     candidate_name="x",
                     obs_root=obs_root,
-                    claude_env=_claude_env(),
+                    ai_env=_ai_env(),
                     apfel_env=_apfel_disabled(),
                 )
 
@@ -257,14 +258,14 @@ class TestGenerateCompanyCard:
         cluster = _make_cluster("danggeun", ["danggeun.md"])
 
         with patch(
-            "synapse_memory.cards.auto_generate.claude_api.complete"
+            "synapse_memory.cards.auto_generate.ai_api.complete"
         ) as mock_complete:
             mock_complete.return_value = _GOOD_COMPANY_RESPONSE
             card = generate_company_card(
                 cluster,
                 candidate_name="당근마켓",
                 obs_root=obs_root,
-                claude_env=_claude_env(),
+                ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
 

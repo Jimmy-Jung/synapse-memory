@@ -60,6 +60,12 @@ from synapse_memory.collectors.obsidian import (
     get_vault_path,
 )
 from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault
+from synapse_memory.cost.events import command_context
+from synapse_memory.cost.summary import (
+    load_summary,
+    render_summary_json,
+    render_summary_table,
+)
 from synapse_memory.daily import STEPS, run_daily
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.endpoints.me import (
@@ -78,9 +84,8 @@ from synapse_memory.feedback.targets import (
     resolve_last_answer_targets,
     resolve_pattern_target,
 )
-from synapse_memory.llm import detect_claude_environment
+from synapse_memory.llm import AIError, detect_ai_environment
 from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment
-from synapse_memory.llm.claude import ClaudeError
 from synapse_memory.profile.extract import (
     extract_decision_patterns,
     extract_profile_facts,
@@ -185,17 +190,18 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     else:
         print(f"{FAIL} L0 루트 권한 갱신 실패: {l0} (현재 0{actual_mode:o})")
 
-    # Claude Code CLI
-    claude_env = detect_claude_environment()
-    if claude_env.ready:
-        ver = claude_env.claude_version or "(version unknown)"
+    # AI provider CLI
+    ai_env = detect_ai_environment()
+    if ai_env.ready:
+        ver = ai_env.version or "(version unknown)"
         print(
-            f"{OK} Claude Code CLI: {claude_env.claude_path} [{ver}] "
-            f"(model={claude_env.model})"
+            f"{OK} AI provider ({ai_env.provider}): {ai_env.path} [{ver}] "
+            f"(model={ai_env.model})"
         )
     else:
-        print(f"{FAIL} Claude Code CLI 미설치")
-        print("  설치: https://docs.claude.com/claude-code")
+        print(f"{FAIL} AI provider ({ai_env.provider}) 사용 불가")
+        for reason in ai_env.reasons_unavailable():
+            print(f"  - {reason}")
 
     print("=" * 44)
     if env.ready:
@@ -380,22 +386,22 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
         return 2
 
     # Claude 환경은 distance 모드에만 필수 (timeline 은 외부 LLM 미호출)
-    claude_env = None
+    ai_env = None
     if effective_by == "distance":
-        claude_env = detect_claude_environment(model=args.model)
-        if not claude_env.ready:
-            print(f"{FAIL} Claude 사용 불가", file=sys.stderr)
+        ai_env = detect_ai_environment(model=args.model)
+        if not ai_env.ready:
+            print(f"{FAIL} AI provider 사용 불가", file=sys.stderr)
             return 2
     try:
         result = what_did_i_think(
             args.topic,
             top_k=args.top_k,
             model=args.model,
-            claude_env=claude_env,
+            ai_env=ai_env,
             by=effective_by,  # type: ignore[arg-type]
             limit=limit,
         )
-    except (EmbeddingUnavailableError, VectorStoreError, ClaudeError, ValueError) as exc:
+    except (EmbeddingUnavailableError, VectorStoreError, AIError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
     print(f"주제: {result.topic}\n")
@@ -410,18 +416,18 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
 
 def cmd_me_decide(args: argparse.Namespace) -> int:
     _interactive_guard("me decide", "decide")
-    claude_env = detect_claude_environment(model=args.model)
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가", file=sys.stderr)
+    ai_env = detect_ai_environment(model=args.model)
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가", file=sys.stderr)
         return 2
     try:
         result = decide(
             args.situation,
             top_k=args.top_k,
             model=args.model,
-            claude_env=claude_env,
+            ai_env=ai_env,
         )
-    except (EmbeddingUnavailableError, VectorStoreError, ClaudeError, ValueError) as exc:
+    except (EmbeddingUnavailableError, VectorStoreError, AIError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
     print(f"상황: {result.situation}")
@@ -467,10 +473,10 @@ def cmd_daily(args: argparse.Namespace) -> int:
 def cmd_me_update_profile(args: argparse.Namespace) -> int:
     """raw → Profile/DecisionPattern 후보 → MemoryInbox PR."""
     _interactive_guard("me update-profile", "update-profile")
-    claude_env = detect_claude_environment(model=args.model)
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
-        for r in claude_env.reasons_unavailable():
+    ai_env = detect_ai_environment(model=args.model)
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
             print(f"  - {r}", file=sys.stderr)
         return 2
 
@@ -479,7 +485,7 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
         facts = extract_profile_facts(
             sample_lines=args.sample_lines,
             model=args.model,
-            claude_env=claude_env,
+            ai_env=ai_env,
         )
         print(f"  → {len(facts)} fact 추출")
 
@@ -489,13 +495,13 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
             patterns = extract_decision_patterns(
                 sample_lines=args.sample_lines,
                 model=args.model,
-                claude_env=claude_env,
+                ai_env=ai_env,
             )
             print(f"  → {len(patterns)} pattern 추출")
     except FileNotFoundError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
-    except ClaudeError as exc:
+    except AIError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -508,10 +514,10 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
 def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     """회사 맞춤 이력서 자동 생성 → vault Drafts."""
     _interactive_guard("me draft-resume", "resume")
-    claude_env = detect_claude_environment(model=args.model)
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
-        for r in claude_env.reasons_unavailable():
+    ai_env = detect_ai_environment(model=args.model)
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
             print(f"  - {r}", file=sys.stderr)
         return 2
 
@@ -520,7 +526,7 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
             args.company_id,
             top_k_projects=args.top_k,
             model=args.model,
-            claude_env=claude_env,
+            ai_env=ai_env,
         )
     except FileNotFoundError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
@@ -528,7 +534,7 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     except (EmbeddingUnavailableError, VectorStoreError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
-    except (EmbeddingError, ClaudeError, ValueError) as exc:
+    except (EmbeddingError, AIError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -540,12 +546,12 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
-    """자연어 질의 → RAG → Claude 답변."""
+    """자연어 질의 → RAG → AI 답변."""
     _interactive_guard("ask", "ask")
-    claude_env = detect_claude_environment(model=args.model)
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
-        for r in claude_env.reasons_unavailable():
+    ai_env = detect_ai_environment(model=args.model)
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
             print(f"  - {r}", file=sys.stderr)
         return 2
 
@@ -558,13 +564,13 @@ def cmd_ask(args: argparse.Namespace) -> int:
             args.query,
             top_k=args.top_k,
             model=args.model,
-            claude_env=claude_env,
+            ai_env=ai_env,
             where=where,
         )
     except (EmbeddingUnavailableError, VectorStoreError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
-    except (EmbeddingError, ClaudeError) as exc:
+    except (EmbeddingError, AIError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -624,6 +630,24 @@ def cmd_feedback(args: argparse.Namespace) -> int:
     )
     refs = ", ".join(e.target_ref for e in events)
     print(f"  → next index will apply updated feedback_score: {refs}")
+    return 0
+
+
+def cmd_cost_summary(args: argparse.Namespace) -> int:
+    """최근 cost event 집계."""
+    if args.days < 1:
+        print("--days must be >= 1", file=sys.stderr)
+        return 1
+    try:
+        summary = load_summary(days=args.days, by=args.by)
+    except (OSError, ValueError) as exc:
+        print(f"{FAIL} cost summary 실패: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(render_summary_json(summary))
+    else:
+        print(render_summary_table(summary))
     return 0
 
 
@@ -693,10 +717,10 @@ def cmd_rag_search(args: argparse.Namespace) -> int:
 
 def cmd_card_generate(args: argparse.Namespace) -> int:
     """classify된 cluster들로 ProjectCard/CompanyCard 자동 생성."""
-    claude_env = detect_claude_environment()
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
-        for r in claude_env.reasons_unavailable():
+    ai_env = detect_ai_environment()
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
             print(f"  - {r}", file=sys.stderr)
         return 2
 
@@ -752,7 +776,7 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
                     cluster,
                     candidate_name=name,
                     obs_root=obs_root,
-                    claude_env=claude_env,
+                    ai_env=ai_env,
                     model=args.model,
                 )
                 path = save_project_card(card)
@@ -767,14 +791,14 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
                     cluster,
                     candidate_name=name,
                     obs_root=obs_root,
-                    claude_env=claude_env,
+                    ai_env=ai_env,
                     model=args.model,
                 )
                 path = save_company_card(card_c)
 
             saved_cards.append(path)
             print(f"[{i}/{len(targets)}] {cid:<25} → {kind} → {path.name}")
-        except (ClaudeError, ValueError) as exc:
+        except (AIError, ValueError) as exc:
             fails.append((cid, str(exc)))
             print(
                 f"[{i}/{len(targets)}] {cid} — 실패: {exc}",
@@ -789,10 +813,10 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
 
 def cmd_cluster_classify(args: argparse.Namespace) -> int:
     """모든 cluster를 LLM 분류 → classifications.json 저장."""
-    claude_env = detect_claude_environment()
-    if not claude_env.ready:
-        print(f"{FAIL} Claude 사용 불가:", file=sys.stderr)
-        for r in claude_env.reasons_unavailable():
+    ai_env = detect_ai_environment()
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
             print(f"  - {r}", file=sys.stderr)
         return 2
 
@@ -814,7 +838,7 @@ def cmd_cluster_classify(args: argparse.Namespace) -> int:
     if args.limit and args.limit > 0:
         clusters = clusters[: args.limit]
 
-    print(f"분류 시작: {len(clusters)} cluster (Claude API 호출)")
+    print(f"분류 시작: {len(clusters)} cluster (AI provider 호출)")
 
     classifications = dict(existing)
     fails: list[tuple[str, str]] = []
@@ -823,7 +847,7 @@ def cmd_cluster_classify(args: argparse.Namespace) -> int:
             cls = classify_cluster(
                 cluster,
                 obs_root=obs_root,
-                claude_env=claude_env,
+                ai_env=ai_env,
                 model=args.model,
             )
             classifications[cls.cluster_id] = cls
@@ -831,7 +855,7 @@ def cmd_cluster_classify(args: argparse.Namespace) -> int:
                 f"[{i}/{len(clusters)}] {cluster.cluster_id:<25} → "
                 f"{cls.kind:<8} ({cls.candidate_name})"
             )
-        except ClaudeError as exc:
+        except AIError as exc:
             fails.append((cluster.cluster_id, str(exc)))
             print(
                 f"[{i}/{len(clusters)}] {cluster.cluster_id} — 실패: {exc}",
@@ -1285,7 +1309,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_card_gen.add_argument(
         "--model",
         default="sonnet",
-        help="Claude 모델 (sonnet 권장 — yaml 형식 안정적)",
+        help="AI 모델 (sonnet 권장 — yaml 형식 안정적)",
     )
     p_card_gen.add_argument(
         "--force", action="store_true", help="기존 Card 덮어쓰기"
@@ -1319,7 +1343,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cl_class.add_argument(
         "--model",
         default="haiku",
-        help="Claude 모델 (haiku/sonnet/opus). 기본 haiku — 단순 분류에 충분",
+        help="AI 모델 (haiku/sonnet/opus). 기본 haiku — 단순 분류에 충분",
     )
     p_cl_class.set_defaults(func=cmd_cluster_classify)
 
@@ -1341,7 +1365,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rag_search.set_defaults(func=cmd_rag_search)
 
     p_ask = sub.add_parser(
-        "ask", help="자연어 질의 → RAG retrieve → Claude 답변"
+        "ask", help="자연어 질의 → RAG retrieve → AI 답변"
     )
     p_ask.add_argument("query", help="자연어 질문")
     p_ask.add_argument("--top-k", type=int, default=5)
@@ -1377,6 +1401,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_fb_pattern = feedback_sub.add_parser("pattern", help="특정 DecisionPattern에 피드백")
     p_fb_pattern.add_argument("target_ref", help="pattern id")
     add_feedback_action_args(p_fb_pattern)
+
+    p_cost = sub.add_parser("cost", help="비용/토큰 관측")
+    cost_sub = p_cost.add_subparsers(dest="action", required=True, metavar="ACTION")
+    p_cost_summary = cost_sub.add_parser("summary", help="최근 비용 요약")
+    p_cost_summary.add_argument("--days", type=int, default=30)
+    p_cost_summary.add_argument("--by", choices=("command", "model"), default="command")
+    p_cost_summary.add_argument("--json", action="store_true", help="JSON 출력")
+    p_cost_summary.set_defaults(func=cmd_cost_summary)
 
     p_me = sub.add_parser("me", help="클론 모드 endpoints")
     me_sub = p_me.add_subparsers(dest="action", required=True, metavar="ACTION")
@@ -1475,7 +1507,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return int(args.func(args))
+    with command_context(_command_name(args)):
+        return int(args.func(args))
+
+
+def _command_name(args: argparse.Namespace) -> str:
+    cmd = str(getattr(args, "cmd", "unknown") or "unknown")
+    parts = [cmd]
+    for attr in ("source", "kind", "action", "feedback_target"):
+        value = getattr(args, attr, None)
+        if isinstance(value, str) and value:
+            parts.append(value.replace("-", "_"))
+    return ".".join(parts)
 
 
 if __name__ == "__main__":
