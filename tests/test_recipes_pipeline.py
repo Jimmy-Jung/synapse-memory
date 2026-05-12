@@ -65,11 +65,31 @@ def _builtin_recipe_dir_with_rag_mode(tmp_path: Path, rag_mode: str) -> Path:
     return d
 
 
+def _builtin_recipe_dir_with_options(
+    tmp_path: Path,
+    *,
+    rag_mode: str = "dense",
+    domain_aware: bool = False,
+) -> Path:
+    d = _builtin_recipe_dir(tmp_path)
+    recipe_path = d / "echo.md"
+    text = recipe_path.read_text(encoding="utf-8")
+    text = text.replace("rag_top_k: 3\n", f"rag_top_k: 3\nrag_mode: {rag_mode}\n")
+    text = text.replace(
+        "domain_aware: false\n",
+        f"domain_aware: {str(domain_aware).lower()}\n",
+    )
+    recipe_path.write_text(text, encoding="utf-8")
+    return d
+
+
 class _StoreStub:
     def __init__(self, hits: list[tuple[Any, float]] | None = None) -> None:
         self._hits = hits or []
+        self.queries: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
 
     def query(self, *_args: Any, **_kwargs: Any) -> list[tuple[Any, float]]:
+        self.queries.append((_args, _kwargs))
         return list(self._hits)
 
 
@@ -195,6 +215,145 @@ def test_pipeline_result_reports_recipe_rag_mode(tmp_path: Path) -> None:
         mocked.assert_not_called()
 
     assert result.rag_mode == "hybrid"
+
+
+def test_pipeline_generate_embeds_dense_rag_query_before_store_query(tmp_path: Path) -> None:
+    """Actual VectorStore requires a dense embedding, not ``None``."""
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir(tmp_path)
+    store = _StoreStub()
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        return_value=[0.1, 0.2, 0.3],
+    ) as mocked_embed, mock.patch(
+        "synapse_memory.recipes.pipeline.ai_api_complete",
+        return_value="ok",
+    ):
+        generate(
+            "echo",
+            inputs={"topic": "dense query smoke"},
+            vault_path=vault,
+            store=store,
+            builtin_dir=builtin,
+            dry_run=True,
+        )
+
+    mocked_embed.assert_called_once()
+    assert "dense query smoke" in mocked_embed.call_args.args[0]
+    assert store.queries
+    assert store.queries[0][0][0] == [0.1, 0.2, 0.3]
+    assert store.queries[0][1]["top_k"] == 3
+
+
+def test_pipeline_generate_hybrid_uses_hybrid_search_and_adapts_hits(
+    tmp_path: Path,
+) -> None:
+    from synapse_memory.rag.hybrid import RetrievalHit
+    from synapse_memory.rag.vector_store import VectorRecord
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_options(tmp_path, rag_mode="hybrid")
+    store = _StoreStub()
+    record = VectorRecord(
+        id="card_project:hyb",
+        document="Hybrid matched document with [EMAIL_1]",
+        embedding=[],
+        metadata={
+            "source_kind": "card_project",
+            "card_id": "hyb",
+            "display_name": "Hybrid Project",
+        },
+    )
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        return_value=[0.4, 0.5],
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.hybrid_search",
+        return_value=[
+            RetrievalHit(
+                record=record,
+                dense_rank=2,
+                dense_distance=0.4,
+                bm25_rank=1,
+                bm25_score=3.0,
+                rrf_score=0.03,
+            )
+        ],
+    ) as mocked_hybrid:
+        result = generate(
+            "echo",
+            inputs={"topic": "hybrid smoke"},
+            vault_path=vault,
+            store=store,
+            builtin_dir=builtin,
+            dry_run=True,
+        )
+
+    mocked_hybrid.assert_called_once()
+    assert mocked_hybrid.call_args.kwargs["store"] is store
+    assert mocked_hybrid.call_args.kwargs["top_k"] == 3
+    assert mocked_hybrid.call_args.kwargs["where"] is None
+    assert result.source_ids == ["hyb"]
+    assert "Hybrid matched document" in result.answer_markdown
+    assert "[EMAIL_1]" in result.answer_markdown
+    assert result.rag_mode == "hybrid"
+
+
+def test_pipeline_generate_hybrid_preserves_domain_tags(tmp_path: Path) -> None:
+    from synapse_memory.rag.hybrid import RetrievalHit
+    from synapse_memory.rag.vector_store import VectorRecord
+    from synapse_memory.recipes.pipeline import generate
+
+    vault = _build_vault(tmp_path)
+    builtin = _builtin_recipe_dir_with_options(
+        tmp_path,
+        rag_mode="hybrid",
+        domain_aware=True,
+    )
+    record = VectorRecord(
+        id="card_project:domain",
+        document="domain aware document",
+        embedding=[],
+        metadata={
+            "source_kind": "card_project",
+            "card_id": "domain",
+            "display_name": "Domain Project",
+            "tags": ["software"],
+        },
+    )
+
+    with mock.patch(
+        "synapse_memory.recipes.pipeline.embed_query",
+        return_value=[0.1],
+    ), mock.patch(
+        "synapse_memory.recipes.pipeline.hybrid_search",
+        return_value=[
+            RetrievalHit(
+                record=record,
+                dense_rank=None,
+                dense_distance=None,
+                bm25_rank=1,
+                bm25_score=2.0,
+                rrf_score=0.02,
+            )
+        ],
+    ):
+        result = generate(
+            "echo",
+            inputs={"topic": "domain"},
+            vault_path=vault,
+            store=_StoreStub(),
+            builtin_dir=builtin,
+            dry_run=True,
+        )
+
+    assert result.domain == "software"
+    assert result.domain_source == "tags"
 
 
 def test_pipeline_generate_records_last_answer(tmp_path: Path) -> None:

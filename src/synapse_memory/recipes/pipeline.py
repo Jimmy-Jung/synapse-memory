@@ -23,6 +23,8 @@ from typing import Any
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
+from synapse_memory.rag.embeddings import embed_query
+from synapse_memory.rag.hybrid import hybrid_search
 from synapse_memory.recipes.domain import resolve_domain
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
 from synapse_memory.recipes.locale import resolve_locale
@@ -203,6 +205,49 @@ def _validate_inputs(recipe: GenerationRecipe, inputs: dict[str, str]) -> None:
         )
 
 
+def _build_rag_query(recipe: GenerationRecipe, inputs: dict[str, str]) -> str:
+    parts = [recipe.name, recipe.description]
+    parts.extend(f"{key}: {value}" for key, value in inputs.items() if value)
+    return "\n".join(parts)
+
+
+def _retrieve_matches(
+    *,
+    recipe: GenerationRecipe,
+    inputs: dict[str, str],
+    store: Any,
+    top_k_override: int | None,
+) -> list[tuple[Any, float]]:
+    if store is None:
+        return []
+
+    rag_top_k = top_k_override or recipe.rag_top_k
+    rag_query = _build_rag_query(recipe, inputs)
+    query_embedding = embed_query(rag_query)
+
+    if recipe.rag_mode == "hybrid":
+        hits = hybrid_search(
+            rag_query,
+            query_embedding=query_embedding,
+            store=store,
+            top_k=rag_top_k,
+            where=recipe.rag_filter,
+        )
+        return [(hit.record, hit.rrf_score) for hit in hits]
+
+    try:
+        return list(
+            store.query(
+                query_embedding,
+                top_k=rag_top_k,
+                where=recipe.rag_filter,
+            )
+        )
+    except TypeError:
+        # store.query signature variation tolerance (for stubs / future stores)
+        return list(store.query())
+
+
 def generate(
     recipe_name: str,
     *,
@@ -256,20 +301,12 @@ def generate(
         else ("한국어", "default")
     )
 
-    matched: list[tuple[Any, float]] = []
-    if store is not None:
-        rag_top_k = top_k_override or recipe.rag_top_k
-        try:
-            matched = list(
-                store.query(
-                    None,
-                    top_k=rag_top_k,
-                    where=recipe.rag_filter,
-                )
-            )
-        except TypeError:
-            # store.query signature variation tolerance (for stubs / future stores)
-            matched = list(store.query())
+    matched = _retrieve_matches(
+        recipe=recipe,
+        inputs=inputs,
+        store=store,
+        top_k_override=top_k_override,
+    )
 
     if require_matched and not matched:
         raise ValueError(
