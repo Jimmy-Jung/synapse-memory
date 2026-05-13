@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -83,6 +84,25 @@ def test_macos_installer_activates_claude_and_codex_plugins() -> None:
     assert "codex debug prompt-input" in script
     assert "sm:sm" in script
     assert "SYNAPSE_ACTIVATE_PLUGINS" in script
+
+
+def test_codex_marketplace_catalog_points_to_plugin_manifest() -> None:
+    marketplace = json.loads(Path(".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+    manifest = json.loads(Path(".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+
+    assert marketplace["name"] == "synapse-memory-marketplace"
+    assert marketplace["interface"]["displayName"] == "Synapse Memory"
+
+    plugins = marketplace["plugins"]
+    assert len(plugins) == 1
+    plugin = plugins[0]
+    assert plugin["name"] == manifest["name"] == "sm"
+    assert plugin["source"] == {"source": "local", "path": "./"}
+    assert plugin["policy"] == {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+    }
+    assert plugin["category"] == manifest["interface"]["category"]
 
 
 def test_macos_installer_records_structured_state_manifest() -> None:
