@@ -21,7 +21,8 @@
 
 3. [명령과 문제 해결](reference.md)
 
-   매일 쓰는 slash 명령과 CLI 명령, 설정 변경, 환경 복구 방법만 모았습니다.
+   Claude Code slash 명령, Codex skill 요청, CLI 명령, 설정 변경, 환경 복구 방법만
+   모았습니다.
 
 ## 한 문장으로 이해하기
 
@@ -31,5 +32,6 @@ Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 정리해 
 ## 어디부터 시작해야 하나요?
 
 처음이라면 바로 [처음부터 끝까지 사용하기](start-here.md)를 읽으면 됩니다. 이미 설치를
-마쳤다면 `/sm:doctor`, `/sm:daily`, `/sm:ask` 세 명령만 먼저 기억하면
-충분합니다.
+마쳤다면 Claude Code에서는 `/sm:doctor`, `/sm:daily`, `/sm:ask`를 먼저 기억하면
+충분합니다. Codex TUI에서는 `$doctor`, `$daily`, `$ask`처럼 `$`로 skill을 검색하고
+실행합니다.

@@ -8,13 +8,24 @@
 
 ## 먼저 기억할 세 명령
 
-| 상황 | Claude Code / Codex | 터미널 |
-| --- | --- | --- |
-| 환경이 정상인지 확인 | `/sm:doctor` | `synapse-memory doctor` |
-| 새 자료 정리 | `/sm:daily` | `synapse-memory daily --quick` |
-| 내 자료에 질문 | `/sm:ask "질문"` | `synapse-memory ask "질문"` |
+| 상황 | Claude Code | Codex | 터미널 |
+| --- | --- | --- | --- |
+| 환경이 정상인지 확인 | `/sm:doctor` | `$doctor` | `synapse-memory doctor` |
+| 새 자료 정리 | `/sm:daily` | `$daily` | `synapse-memory daily --quick` |
+| 내 자료에 질문 | `/sm:ask "질문"` | `$ask "질문"` | `synapse-memory ask "질문"` |
 
 처음에는 이 세 개만으로 충분합니다.
+
+Codex TUI의 Plugins 브라우저에는 custom git marketplace가 표시되지 않을 수 있습니다.
+그래도 `$ask`처럼 `$`로 skill을 검색했을 때 `ask (sm)`가 보이면 사용할 수 있습니다.
+아래 명령에 출력이 있으면 `sm:*` skill은 모델 입력에도 로드된 상태입니다.
+
+```bash
+codex debug prompt-input \
+  --disable apps --disable memories --disable chronicle --disable multi_agent \
+  "Synapse Memory plugin visibility check" \
+  | grep "sm:doctor"
+```
 
 ## 오늘 할 일을 추천받기
 
@@ -22,7 +33,7 @@
 /sm:assistant
 ```
 
-현재 상태를 읽고 다음 작업을 제안합니다.
+Codex에서는 `$assistant`를 실행합니다. 현재 상태를 읽고 다음 작업을 제안합니다.
 
 - 마지막 daily가 오래됐는지
 - MemoryInbox에 검토할 후보가 있는지
@@ -57,6 +68,13 @@ synapse-memory daily-status --watch
 /sm:ask "최근 이력서에 넣을 만한 성과를 찾아줘"
 ```
 
+Codex에서는 `$ask`를 씁니다.
+
+```text
+$ask "TCA를 왜 도입했지?"
+$ask "최근 이력서에 넣을 만한 성과를 찾아줘"
+```
+
 터미널에서는 다음과 같습니다.
 
 ```bash
@@ -73,6 +91,8 @@ synapse-memory ask "TCA를 왜 도입했지?"
 ```text
 /sm:recall "AI 코딩 도구"
 ```
+
+Codex에서는 `$recall "AI 코딩 도구"`를 실행합니다.
 
 터미널에서는 다음과 같습니다.
 
@@ -92,6 +112,8 @@ synapse-memory persona what-did-i-think "AI 코딩 도구" --timeline
 /sm:decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"
 ```
 
+Codex에서는 `$decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"`를 실행합니다.
+
 터미널에서는 다음과 같습니다.
 
 ```bash
@@ -106,6 +128,8 @@ Profile과 DecisionPatterns가 비어 있으면 일반 조언에 가까워집니
 ```text
 /sm:resume examplecorp
 ```
+
+Codex에서는 `$resume examplecorp`를 실행합니다.
 
 터미널에서는 다음과 같습니다.
 
@@ -134,11 +158,18 @@ synapse-memory persona draft-resume examplecorp
 
 ## 설정 바꾸기
 
-Claude Code/Codex에서는 자연어로 요청할 수 있습니다.
+Claude Code에서는 slash 명령으로 요청할 수 있습니다.
 
 ```text
 /sm:config cleanup inbox를 60일로 바꿔줘
 /sm:config ask 결과는 8개로 보여줘
+```
+
+Codex에서는 `$config`를 씁니다.
+
+```text
+$config cleanup inbox를 60일로 바꿔줘
+$config ask 결과는 8개로 보여줘
 ```
 
 터미널에서는 직접 설정합니다.
@@ -170,6 +201,8 @@ synapse-memory cost summary --days 7 --by model
 /sm:cleanup
 ```
 
+Codex에서는 `$cleanup`을 실행합니다.
+
 터미널에서는 먼저 scan으로 후보만 확인합니다.
 
 ```bash
@@ -182,8 +215,8 @@ synapse-memory cleanup scan
 
 순서는 고정입니다.
 
-1. `/sm:doctor` 또는 `synapse-memory doctor`
-2. `/sm:fix` 또는 `synapse-memory doctor --fix`
+1. Claude Code `/sm:doctor`, Codex `$doctor`, 또는 `synapse-memory doctor`
+2. Claude Code `/sm:fix`, Codex `$fix`, 또는 `synapse-memory doctor --fix`
 3. Obsidian vault 경로 확인
 4. `synapse-memory config validate`
 5. 그래도 안 되면 GitHub Issues에 doctor 출력과 상황을 남깁니다.
