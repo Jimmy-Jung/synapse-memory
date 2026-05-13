@@ -202,7 +202,15 @@ synapse-memory ask "iOS 클린 아키텍처 어떻게 도입했지?"
 synapse-memory persona what-did-i-think "TCA 아키텍처"
 synapse-memory persona decide "다음 회사 지원할 때 어떤 프로젝트를 강조할까?"
 synapse-memory persona draft-resume examplecorp
+
+# 외부 자료 (회고록·일기) 흡수해서 Persona 보강
+synapse-memory persona ingest --file ~/Documents/diary-2025.md
+
+# 새 프로젝트를 내 스타일로 설계
+synapse-memory persona design-project "iOS Todo 앱 새로 시작"
 ```
+
+> 두 번째 명령 (`persona ingest`) 으로 외부 markdown / txt 를 흡수하면 `tech` · `work_style` · `voice` 카테고리에 후보가 쌓입니다. 세 번째 (`persona design-project`) 의 결과 품질은 Profile 의 두께에 직접 비례합니다.
 
 ## 10. 매일 실행하기
 

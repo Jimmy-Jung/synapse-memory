@@ -68,7 +68,13 @@
 
 **쉬운 설명**: "이 사람은 ~한 사람이다" 한 줄짜리 메모.
 
-**기술 정의**: `persona decide`가 의사결정 컨텍스트로 사용. `90_System/AI/Profile.md`에서 승인됨.
+**기술 정의**: `persona decide`·`persona design-project`·`persona draft-resume` 등이 의사결정·생성 컨텍스트로 사용. `90_System/AI/Profile.md`에서 승인됨. 카테고리: `work_style`, `preference`, `strength`, `weakness`, `tech`, `interest`, `workflow`, `value`, `voice` (총 9개).
+
+### voice 카테고리 🆕
+
+**쉬운 설명**: "이 사람은 이런 말투·문장 길이·표현 선호를 가진다" 사실.
+
+**기술 정의**: ProfileFact 의 9번째 카테고리. 외부 자료 (`persona ingest`) 흡수로 가장 잘 추출되며, claude history 만으로는 추출이 빈약함. `persona design-project` 의 결과 톤 결정에 직접 사용.
 
 ### DecisionPattern (의사결정 패턴)
 
@@ -200,7 +206,15 @@
 
 ### Update Profile (프로필 업데이트)
 
-`persona update-profile` — raw에서 ProfileFact 후보 추출 → MemoryInbox에 작성.
+`persona update-profile` — claude history 에서 ProfileFact 후보 추출 → MemoryInbox에 작성.
+
+### Ingest (외부 자료 흡수) 🆕
+
+`persona ingest --file <path>` — vault 밖 markdown / txt 파일 (회고록 · 일기 · 기획서 초안 등) 흡수. raw 는 `~/.synapse/private/raw/persona/` 에 0600 으로 mirror, redacted 텍스트로 ProfileFact 후보 추출 → MemoryInbox 같은 PR 에 append. `voice` 카테고리 보강에 핵심.
+
+### Design Project (프로젝트 설계 초안) 🆕
+
+`persona design-project "<아이디어>"` — Profile (`tech`/`work_style`/`voice`) + DecisionPatterns + ProjectCard RAG 종합 → 사용자 스타일이 반영된 설계 markdown 을 `20_Projects/Drafts/` 에 저장. system prompt 가 `[Profile: <category>]` 인용 + 비사용 프레임워크 금지 규칙 강제.
 
 ---
 

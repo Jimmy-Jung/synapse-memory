@@ -26,7 +26,9 @@ synapse-memory <command> --help
 | "내 자료에 자연어로 묻기" | `ask "..."` | `/synapse-ask` |
 | "작년 결정 이유 시간순으로 보여줘" | `persona what-did-i-think "..."` | `/synapse-recall` |
 | "결정에 도움이 필요해" | `persona decide "..."` | `/synapse-decide` |
+| "회고록·일기를 Persona 에 학습" | `persona ingest --file <path>` | (CLI only) |
 | "회사 맞춤 이력서 초안" | `persona draft-resume <회사>` | `/synapse-resume` |
+| "새 프로젝트 내 스타일로 설계 초안" | `persona design-project "<아이디어>"` | (CLI only) |
 | "내 성향·결정 패턴 후보 추출" | `persona update-profile [--facts-only]` | (자동) |
 | "이 회사명은 절대 외부에 보내지 마" | `redactlist {add,remove,show}` | (자동 적용) |
 | "이미 모은 raw에 마스킹을 다시 적용" | `redact backfill <소스> [--limit ...]` | — |
@@ -433,6 +435,57 @@ synapse-memory persona update-profile --facts-only --sample-lines 200
 ```
 
 최근 raw 활동에서 ProfileFact와 DecisionPattern 후보를 추출해 `90_System/AI/MemoryInbox/`에 작성합니다.
+
+### `persona ingest`
+
+```bash
+synapse-memory persona ingest --file ~/Documents/diary-2025.md
+synapse-memory persona ingest \
+    --file ~/Documents/retro-q4.md \
+    --file ~/Documents/proposal-draft.md
+```
+
+vault 밖 markdown / txt 파일을 흡수해 ProfileFact 후보를 추출합니다.
+
+흐름:
+
+1. raw 텍스트는 `~/.synapse/private/raw/persona/<sha-prefix>/<파일명>` 에 0600 권한으로 mirror. vault 에는 절대 raw 가 노출되지 않습니다.
+2. Pass 1 + Pass 2 redaction 통과한 텍스트로 LLM 호출.
+3. 후보 ProfileFact 가 `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` 에 PR 로 append 됩니다 (`persona update-profile` 과 같은 파일).
+4. unsupported 확장자 (PDF, docx 등) 는 fail-fast 로 안내 후 exit 1.
+
+옵션:
+
+- `--file PATH` (반복 가능, required): 흡수할 파일. 지원: `.md`, `.markdown`, `.txt`.
+- `--model MODEL`: AI provider model override.
+
+`voice` 카테고리는 외부 자료에서 가장 잘 추출됩니다 (말투·문장 길이). claude history 만으로는 voice 후보가 빈약합니다.
+
+### `persona design-project`
+
+```bash
+synapse-memory persona design-project "iOS Todo 앱 새로 시작"
+synapse-memory persona design-project "사내 RAG 검색 도구" --top-k 8
+```
+
+Profile (`tech` / `work_style` / `voice` fact) + DecisionPatterns + ProjectCard RAG 를 종합해 사용자 스타일이 반영된 설계 markdown 을 `20_Projects/Drafts/` 에 저장합니다.
+
+system prompt 가 강제하는 규칙:
+
+- 모든 추천에 `[Profile: <category>]` 인용 (예: `[Profile: tech]`).
+- 사용자가 안 쓰는 프레임워크 (Profile 에 없는 React/Flutter 등) 등장 금지.
+- Profile 비어있으면 generic 추천만 + 본문 상단 nudge 메시지.
+- 출력에 `[card_id]` 출처 인용 (ProjectCard RAG hit).
+
+옵션:
+
+- `idea` (positional): 프로젝트 아이디어 한 줄.
+- `--top-k N`: RAG 검색 결과 수 (기본 6).
+- `--model MODEL`: AI provider model override.
+
+내부적으로는 `persona generate design_project --input idea=...` 와 동등하며, RAG store 가 없거나 ProjectCard 가 없어도 Profile 기반으로 진행됩니다.
+
+권장 선행: `persona ingest` + `persona update-profile` 로 Profile 충분히 채운 후 호출.
 
 ## 일일 통합 파이프라인
 

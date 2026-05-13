@@ -37,8 +37,10 @@ Synapse Memory의 핵심 목표는 개인 자료를 안전하게 모아 "내 맥
 | AI 비서 | `ask` | 내 Card를 검색해서 질문에 답합니다. |
 | 세컨드 브레인 | `persona what-did-i-think` | 특정 주제에 대한 과거 생각을 회상합니다. |
 | 내 클론 | `persona decide` | Profile과 DecisionPatterns를 근거로 결정을 돕습니다. |
+| 외부 자료 학습 | `persona ingest` | 회고록·일기·기획서 초안을 흡수해 ProfileFact 후보로 보강합니다. |
+| 프로젝트 설계 | `persona design-project` | Profile + ProjectCard 종합 → 본인 스타일이 반영된 새 프로젝트 설계 초안. |
 
-`persona draft-resume`은 이 세 흐름을 조합한 대표 use case입니다.
+`persona draft-resume` 과 `persona design-project` 는 위 흐름을 조합한 대표 use case 입니다.
 
 ## 설계 원칙
 
@@ -70,9 +72,11 @@ graph TD
     CC[Claude Code logs] --> C1[collect claude-code]
     CX[Codex session logs] --> CXP[launchd codex-poller]
     OBS[Obsidian vault] --> C2[collect obsidian]
+    EXT[외부 markdown/txt<br/>회고록·일기·메모] --> INGEST[persona ingest]
     C1 --> L0[L0 raw]
     CXP --> L0
     C2 --> L0
+    INGEST --> L0
     L0 --> RED[redaction Pass 1 + Pass 2]
     RED --> L1[L1 redacted]
     L0 --> CL[cluster scan]
@@ -84,10 +88,13 @@ graph TD
     L3 --> ASK[ask]
     L3 --> WDT[what-did-i-think]
     L3 --> RESUME[draft-resume]
+    L3 --> DESIGN[design-project]
     L0 --> PROF[update-profile]
+    INGEST --> PROF
     PROF --> MI[MemoryInbox]
     MI --> PROFILE[Profile.md / DecisionPatterns.md]
     PROFILE --> DECIDE[persona decide]
+    PROFILE --> DESIGN
     L3 --> DECIDE
 ```
 

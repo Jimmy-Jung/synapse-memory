@@ -139,10 +139,12 @@ Claude Code 또는 Codex 안에서 `/synapse-ask "..."` 한 번 부르면
 
 | 단계 | 명령/위치 | 역할 |
 |---|---|---|
-| 후보 추출 | `persona update-profile` | raw 패턴 → ProfileFact 후보 |
-| 후보 보관 | `MemoryInbox/` | "검토 대기" 받은편지함 |
+| 후보 추출 (claude history) | `persona update-profile` | raw 패턴 → ProfileFact 후보 |
+| 후보 추출 (외부 자료) | `persona ingest --file <path>` | 회고록·일기·메모 → ProfileFact 후보 (`voice` 카테고리 보강에 핵심) |
+| 후보 보관 | `MemoryInbox/` | "검토 대기" 받은편지함 — `update-profile` 과 `ingest` 가 같은 PR 파일 공유 |
 | 승인 (수동) | Obsidian 편집 | `Profile.md` / `DecisionPatterns.md`로 이동 |
 | 결정 도움 | `/synapse-decide` | 승인된 패턴 기반 권장 |
+| 프로젝트 설계 | `persona design-project "<아이디어>"` | 승인된 Profile 로 새 프로젝트 설계 초안 → `20_Projects/Drafts/` |
 
 ---
 

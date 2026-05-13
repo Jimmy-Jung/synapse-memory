@@ -40,17 +40,19 @@ flowchart LR
 **요약 카드**를 만들고, 외부 AI에 질문할 때는 **마스킹된 요약**과
 승인된 자료만 들고 갑니다. 원본 raw 데이터는 Mac 안에 남습니다.
 
-## Synapse가 풀어주는 5가지 답답함
+## Synapse가 풀어주는 7가지 답답함
 
 평소 한 번이라도 부딪혔다면 이 도구가 맞습니다.
 
-| # | 답답함 | Synapse가 해주는 일 | 담당 슬래시 |
+| # | 답답함 | Synapse가 해주는 일 | 담당 명령 |
 |---|---|---|---|
 | 1 | **"그 노트 어디 있더라?"** — 노트 1,000개 쌓이니 검색해도 안 나옴 | 매일 같은 회사·프로젝트끼리 자동으로 묶어 **한 장짜리 카드**로 압축 | `/synapse-daily` |
 | 2 | **"Claude한테 매번 내 맥락을 처음부터 설명한다"** | 슬래시 한 줄로 **관련 카드 6장 + 출처**를 자동 주입 | `/synapse-ask` |
 | 3 | **"AI에 개인 자료 던지자니 회사 NDA가…"** | 원본은 외부 차단 + **마스킹 2단계**(정규식 + 로컬 AI) + NDA 강제 차단 | (자동) |
 | 4 | **"회사마다 이력서를 6시간씩 다시 쓴다"** | 회사 카드 + 내 프로젝트 매칭 → **30초 초안** | `/synapse-resume` |
 | 5 | **"사소한 결정에 매일 피로하다"** | 내 결정 패턴 후보 → 내가 검토·승인 → **결정 코파일럿** | `/synapse-decide` |
+| 6 | **"회고록·일기·기획서 초안을 비서가 학습했으면"** 🆕 | 외부 markdown / txt 흡수 → 말투·기술 선호·실수까지 ProfileFact 후보로 추출 | `persona ingest --file` |
+| 7 | **"새 프로젝트를 내 기술 스택으로 빠르게 설계하고 싶다"** 🆕 | Profile + ProjectCard 종합 → **내가 직접 쓴 듯한 설계 초안** | `persona design-project` |
 
 > 더 자세히:
 > [5가지 답답함이 어떻게 풀리는가
@@ -85,6 +87,27 @@ Domain–Data–Presentation 3계층 + Repository + DIContainer 조합으로 도
 $ /synapse-resume 샘플회사B
 ✓ 이력서 생성: 30_Creative/Drafts/Resume - 샘플회사B (2026-05).md
   매칭 카드 6개: sample-ios-app, 이력서-2026, mobile-ios-tablet-app, ...
+```
+
+```text
+$ synapse-memory persona ingest --file ~/Documents/diary-2025.md
+INGESTED: 1 files mirrored to L0 private storage
+ProfileFact 추출 중 (외부 자료 기반)...
+  → 4 fact 추출
+✓ MemoryInbox PR 저장: ...90_System/AI/MemoryInbox/Profile-2026-05-13.md
+```
+
+```text
+$ synapse-memory persona design-project "iOS Todo 앱 새로 시작"
+## 추천 기술 스택
+- Swift + SwiftUI [Profile: tech]
+- CoreData 로컬 저장 [prj-todo-ios-2025]
+
+## 단계별 진행 [Profile: work_style]
+1. 의사코드로 데이터 모델 정리
+...
+
+✓ 설계 초안 저장: 20_Projects/Drafts/design_project - iOS Todo 앱 (2026-05-13).md
 ```
 
 ## 빠른 시작 — 비개발자

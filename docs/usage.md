@@ -10,7 +10,9 @@
 | "Obsidian 검색해도 그 노트가 안 나온다" | [§2 내 자료에 질문하기](#2-내-자료에-질문하기) | `ask` |
 | "작년 결정 이유가 기억 안 난다" | [§3 과거의 내 생각 회상하기](#3-과거의-내-생각-회상하기) | `persona what-did-i-think` |
 | "사소한 결정에 매일 피로하다" | [§4 의사결정 도움 받기](#4-의사결정-도움-받기) | `persona decide` |
+| "회고록·일기를 학습시켜서 비서/세컨드브레인처럼 쓰고 싶다" | [§4a 외부 자료 학습시키기](#4a-외부-자료-학습시키기) | `persona ingest` |
 | "회사마다 이력서를 6시간씩 다시 쓴다" | [§5 회사 맞춤 이력서 만들기](#5-회사-맞춤-이력서-만들기) | `persona draft-resume` |
+| "새 프로젝트를 내 기술 스택으로 빠르게 설계하고 싶다" | [§5a 새 프로젝트 설계 초안](#5a-새-프로젝트-설계-초안) | `persona design-project` |
 | "새 프로젝트 카드를 미리 만들고 싶다" | [§6 새 프로젝트나 회사 추가하기](#6-새-프로젝트나-회사-추가하기) | `card new` |
 | "이 회사명은 절대 외부에 보내지 마" | [§7 NDA 키워드 마스킹하기](#7-nda-키워드-마스킹하기) | `redactlist add` |
 | "색인을 처음부터 다시 만들고 싶다" | [§8 다시 만들기와 백필](#8-다시-만들기와-백필) | `rag index --rebuild` |
@@ -26,7 +28,9 @@
 > | 자연어 질의 | `synapse-memory ask "..."` | `/synapse-ask ...` |
 > | 시간순 회상 | `synapse-memory persona what-did-i-think "..."` | `/synapse-recall ...` |
 > | 의사결정 | `synapse-memory persona decide "..."` | `/synapse-decide ...` |
+> | 외부 자료 학습 | `synapse-memory persona ingest --file <path>` | (CLI only) |
 > | 이력서 | `synapse-memory persona draft-resume <slug>` | `/synapse-resume <slug>` |
+> | 프로젝트 설계 초안 | `synapse-memory persona design-project "<아이디어>"` | (CLI only) |
 > | 환경 진단 | `synapse-memory doctor` | `/synapse-doctor` |
 > | 환경 복구 | `synapse-memory doctor --fix` | `/synapse-fix` |
 
@@ -137,6 +141,28 @@ synapse-memory persona update-profile --facts-only
 
 그 뒤 `MemoryInbox`에 생성된 후보를 직접 검토해서 `Profile.md`나 `DecisionPatterns.md`로 옮깁니다.
 
+## 4a. 외부 자료 학습시키기
+
+회고록·일기·기획서 초안 같은 **vault 밖 markdown / txt 파일**을 Persona 에 흡수시킬 수 있습니다. 본인 말투, 기술 선호, 작업 방식이 Profile 에 두텁게 쌓일수록 `persona decide`·`persona design-project` 같은 후속 명령의 결과 품질이 올라갑니다.
+
+```bash
+synapse-memory persona ingest --file ~/Documents/diary-2025.md
+synapse-memory persona ingest \
+    --file ~/Documents/retro-q4.md \
+    --file ~/Documents/proposal-draft.md
+```
+
+흐름:
+
+1. raw 텍스트는 `~/.synapse/private/raw/persona/<sha-prefix>/<파일명>` 에 0600 으로 mirror 됩니다. vault 에는 절대 raw 가 노출되지 않습니다.
+2. Pass 1 + Pass 2 redaction 통과한 텍스트로 ProfileFact 후보를 추출합니다.
+3. 후보는 `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` 에 PR 로 append 됩니다. `persona update-profile` 과 같은 파일을 공유하므로 한 번에 검토 가능합니다.
+4. Obsidian 에서 PR 을 열어 accepted 항목만 `Profile.md` 로 직접 복사합니다.
+
+지원 확장자: `.md`, `.markdown`, `.txt`. PDF·docx 는 현재 unsupported — fail-fast 로 안내됩니다.
+
+> 💡 `voice` 카테고리는 외부 자료에서 가장 잘 잡힙니다 (말투·문장 길이·표현 선호). claude history 만으로는 voice 추출이 빈약합니다.
+
 ## 5. 회사 맞춤 이력서 만들기
 
 회사 Card와 프로젝트 Card를 바탕으로 이력서 초안을 만듭니다.
@@ -159,6 +185,48 @@ synapse-memory persona draft-resume examplecorp --model sonnet
 4. `persona draft-resume`을 다시 실행합니다.
 
 생성된 이력서는 초안입니다. 지원 전에 반드시 문장, 수치, 민감 정보를 직접 확인합니다.
+
+## 5a. 새 프로젝트 설계 초안
+
+"이런 아이디어로 새 프로젝트 시작" 이라고 할 때, **본인 기술 스택 · 작업 방식 · 말투** 가 반영된 설계 markdown 을 `20_Projects/Drafts/` 에 만듭니다. ChatGPT 일반 답변이 아니라 "내가 직접 쓴 것 같은" 초안이 목표입니다.
+
+```bash
+synapse-memory persona design-project "iOS Todo 앱 새로 시작"
+synapse-memory persona design-project "사내 RAG 검색 도구" --top-k 8
+```
+
+출력 파일:
+
+```text
+20_Projects/Drafts/design_project - <아이디어> (YYYY-MM-DD).md
+```
+
+내용 구성 (Profile 의 `domain` 에 따라 섹션 가이드 자동 선택):
+
+1. 요약
+2. 추천 기술 스택 — `[Profile: tech]` 인용 강제
+3. 아키텍처 개요
+4. 단계별 진행 — `[Profile: work_style]` 인용
+5. 유사 과거 프로젝트 — ProjectCard RAG hit 인용 (`[card_id]`)
+6. 첫 주 작업 (3-5개)
+7. 유의사항 — Profile 에 weakness 가 있으면 인용
+
+품질을 결정하는 두 변수:
+
+- **Profile 두께**: `tech` / `work_style` / `voice` 카테고리에 fact 가 최소 2-3개씩 있을 때 데모 가치가 큽니다. 비어있으면 출력 상단에 nudge 메시지가 뜨고 generic 추천만 나옵니다.
+- **ProjectCard RAG 인덱스**: 유사 과거 프로젝트가 있어야 학습 포인트 인용이 풍부해집니다. `synapse-memory rag index` 가 최신인지 확인하세요.
+
+권장 선행 작업:
+
+```bash
+synapse-memory persona ingest --file ~/Documents/회고록.md
+synapse-memory persona update-profile
+# Obsidian 에서 MemoryInbox PR 검토 후 Profile.md 에 반영
+synapse-memory rag index
+synapse-memory persona design-project "<아이디어>"
+```
+
+> 출력에 사용자가 안 쓰는 프레임워크 (React/Flutter 같은) 가 등장하지 않아야 정상. 등장한다면 Profile.md 의 tech fact 가 부족하다는 신호 — `persona update-profile` 보강 후 재시도.
 
 ## 6. 새 프로젝트나 회사 추가하기
 
@@ -183,8 +251,9 @@ Synapse는 [PARA Method](https://fortelabs.com/blog/para/)와 [Johnny.Decimal](h
 | `10_Active/<회사>/<프로젝트>/...` | **사용자** | **cluster 식별의 주된 소스** — 폴더 segment가 cluster_id로 변환됨 | 진행 중 프로젝트 노트를 여기에 둠 |
 | `20_Reference/Projects/*.md` | **Synapse 자동 생성** (`card generate`) | ProjectCard 저장 | `status: draft` → 검토 후 `active`로 승격 |
 | `20_Reference/Companies/*.md` | **Synapse 자동 생성** (`card generate`) | CompanyCard 저장 | 회사 카드 보강 (포지션·키워드) |
+| `20_Projects/Drafts/` | **Synapse 자동 생성** (`persona design-project`) | 새 프로젝트 설계 초안 저장 | 다듬어서 `10_Active/...` 로 이동 |
 | `30_Creative/Drafts/` | **Synapse 자동 생성** (`persona draft-resume`) | 이력서 초안 저장 | 다듬어서 사용 |
-| `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` | **Synapse 자동 생성** (`update_profile`) | ProfileFact/DecisionPattern 후보 | 검토 후 `Profile.md` / `DecisionPatterns.md`로 승격 |
+| `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` | **Synapse 자동 생성** (`update_profile`, `ingest`) | ProfileFact/DecisionPattern 후보 | 검토 후 `Profile.md` / `DecisionPatterns.md`로 승격 |
 | `90_System/AI/{Profile,DecisionPatterns}.md` | **사용자가 승격** | `persona decide`의 의사결정 컨텍스트 | 진실원본으로 유지 |
 | `90_System/AI/DailyReports/YYYY-MM-DD.md` | **Synapse 자동 생성** (daily `report` 단계) | 그날 단계별 status/elapsed/실패 로그 | 결과 검토 |
 | `90_System/AI/recipes/` | 사용자 정의 (선택) | `persona generate <recipe>` | 커스텀 prompt recipe |
@@ -253,7 +322,9 @@ synapse-memory redact backfill claude-code --limit 3 --max-bytes-per-file 50000
 | `cluster classify --resume` | 낮음, 기본 haiku |
 | `card generate` | Card 수에 비례 |
 | `ask`, `persona decide`, `persona what-did-i-think` | 질문 길이와 검색 결과 수에 비례 |
+| `persona ingest --file ...` | 파일 크기에 비례 (redaction Pass 2 + fact 추출 1회) |
 | `persona draft-resume` | 이력서 1개 단위로 발생 |
+| `persona design-project` | 초안 1개 단위 (Profile 텍스트 + RAG hit + 생성 1회) |
 
 정확한 비용은 Claude Code의 모델, 구독, 내부 과금 정책에 따라 달라질 수 있습니다.
 
