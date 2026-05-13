@@ -59,11 +59,38 @@ class AssistantStatus:
 
 
 def resolve_vault_path() -> Path | None:
-    """env에서 vault 경로 해결. 없으면 None."""
+    """vault 경로 해결 — fallback 체인.
+
+    우선순위:
+    1. ``SYNAPSE_OBSIDIAN_VAULT`` 환경변수
+    2. ``~/.synapse/config.yaml`` 의 ``vault`` 키
+    3. ``~/Library/Mobile Documents/iCloud~md~obsidian/Documents`` (기본 iCloud Obsidian)
+
+    daily/config 파이프라인과 동일한 소스를 참조해 entrypoint 간 불일치를 방지한다.
+    어떤 단계도 해결하지 못하면 ``None`` 반환.
+    """
     raw = os.environ.get("SYNAPSE_OBSIDIAN_VAULT")
-    if not raw:
-        return None
-    return Path(raw).expanduser()
+    if raw:
+        return Path(raw).expanduser()
+
+    try:
+        from synapse_memory.config import load_config
+
+        cfg_vault = load_config().vault
+    except Exception:
+        cfg_vault = None
+    if cfg_vault:
+        return Path(cfg_vault).expanduser()
+
+    try:
+        from synapse_memory.collectors.obsidian.mirror import DEFAULT_VAULT_PATH
+
+        if DEFAULT_VAULT_PATH.exists():
+            return DEFAULT_VAULT_PATH
+    except Exception:
+        pass
+
+    return None
 
 
 def gather_status(*, vault_path: Path | None = None) -> AssistantStatus:
@@ -168,7 +195,9 @@ def recommend_actions(status: AssistantStatus) -> list[str]:
 
     if not status.vault_path:
         recs.append(
-            "Obsidian vault 경로 설정 — `export SYNAPSE_OBSIDIAN_VAULT='<vault 경로>'`"
+            "Obsidian vault 경로 설정 — "
+            "`synapse-memory config set vault '<vault 경로>'` 또는 "
+            "`export SYNAPSE_OBSIDIAN_VAULT='<vault 경로>'`"
         )
         return recs
 
