@@ -182,8 +182,8 @@ def test_sc_008_timeline_does_not_call_recipe_pipeline() -> None:
     """
     from unittest.mock import MagicMock
 
-    import synapse_memory.endpoints.me as me_mod
-    from synapse_memory.endpoints.me import what_did_i_think
+    import synapse_memory.endpoints.persona as me_mod
+    from synapse_memory.endpoints.persona import what_did_i_think
 
     store = MagicMock()
     store.query.return_value = []

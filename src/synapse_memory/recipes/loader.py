@@ -1,7 +1,7 @@
 """Recipe markdown loader — frontmatter parse + validation + 32KB cap.
 
-Spec: ``specs/007-me-recipes/spec.md`` FR-015, FR-016, FR-019
-Research: ``specs/007-me-recipes/research.md`` R-2
+Spec: ``specs/007-persona-recipes/spec.md`` FR-015, FR-016, FR-019
+Research: ``specs/007-persona-recipes/research.md`` R-2
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-12

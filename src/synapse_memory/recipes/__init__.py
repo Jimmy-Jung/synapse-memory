@@ -6,8 +6,8 @@ Public API:
     - ``GenerationRecipe`` / ``GenerationResult`` / ``GenerationContext`` — data model.
     - Errors: ``RecipeNotFoundError``, ``RecipeValidationError``, ``InputValidationError``.
 
-Spec: ``specs/007-me-recipes/spec.md``
-Plan: ``specs/007-me-recipes/plan.md``
+Spec: ``specs/007-persona-recipes/spec.md``
+Plan: ``specs/007-persona-recipes/plan.md``
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-12

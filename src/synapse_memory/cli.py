@@ -81,7 +81,7 @@ from synapse_memory.doctor import (
     planned_fix_actions,
 )
 from synapse_memory.endpoints.ask import ask
-from synapse_memory.endpoints.me import (
+from synapse_memory.endpoints.persona import (
     decide,
     draft_resume,
     what_did_i_think,
@@ -1245,7 +1245,7 @@ def _parse_input_kv(items: list[str]) -> dict[str, str]:
 
 
 def cmd_me_generate(args: argparse.Namespace) -> int:
-    """Recipe-based generator (007-me-recipes) — persona generate <recipe>."""
+    """Recipe-based generator (007-persona-recipes) — persona generate <recipe>."""
     _enforce_cost_cap(f"persona generate {args.recipe}")
     from synapse_memory.recipes import (
         InputValidationError,
@@ -1335,7 +1335,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
         pass
 
     sys.stderr.write(
-        f"[me.generate.{result.recipe_name}] "
+        f"[persona.generate.{result.recipe_name}] "
         f"source={recipe_source} "
         f"rag_mode={result.rag_mode} "
         f"locale={result.locale_source}:{result.locale} "
@@ -2487,7 +2487,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_gen = me_sub.add_parser(
         "generate",
-        help="recipe 기반 결과물 생성 (007-me-recipes: weekly_report / journal / ...)",
+        help="recipe 기반 결과물 생성 (007-persona-recipes: weekly_report / journal / ...)",
     )
     p_gen.add_argument("recipe", help="recipe 이름 (persona recipes list 로 확인 — 추후)")
     p_gen.add_argument(
@@ -2521,7 +2521,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_recipes = me_sub.add_parser(
         "recipes",
-        help="recipe 목록·상세 (007-me-recipes)",
+        help="recipe 목록·상세 (007-persona-recipes)",
     )
     recipes_sub = p_recipes.add_subparsers(
         dest="recipes_action", required=True, metavar="RECIPES_ACTION"

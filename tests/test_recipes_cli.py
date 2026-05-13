@@ -127,7 +127,7 @@ def test_me_generate_weekly_report_invocation(
     captured = capsys.readouterr()
     assert rc == 0
     assert "이번 주 한 일" in captured.out
-    assert "[me.generate.weekly_report]" in captured.err
+    assert "[persona.generate.weekly_report]" in captured.err
     assert "profile_used=" in captured.err
     assert "matched=" in captured.err
     assert "[saved]" in captured.out

@@ -1,6 +1,6 @@
 """Domain precedence resolver.
 
-Spec: ``specs/007-me-recipes/spec.md`` FR-006.
+Spec: ``specs/007-persona-recipes/spec.md`` FR-006.
 
 precedence:
   1. CLI --domain arg

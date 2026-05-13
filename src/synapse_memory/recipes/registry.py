@@ -1,7 +1,7 @@
 """RecipeRegistry — stateless scan of builtin + user recipe directories.
 
-Spec: ``specs/007-me-recipes/spec.md`` FR-003, FR-010, FR-015
-Research: ``specs/007-me-recipes/research.md`` R-7 (out of scope: daemon mode)
+Spec: ``specs/007-persona-recipes/spec.md`` FR-003, FR-010, FR-015
+Research: ``specs/007-persona-recipes/research.md`` R-7 (out of scope: daemon mode)
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-12

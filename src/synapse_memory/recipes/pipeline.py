@@ -1,8 +1,8 @@
 """Recipe generator pipeline — single entry point ``generate()``.
 
-Spec: ``specs/007-me-recipes/spec.md`` FR-002, FR-007, FR-011, FR-012, FR-014
-Data-model: ``specs/007-me-recipes/data-model.md`` §3 construction order
-Research: ``specs/007-me-recipes/research.md`` R-1 (timeout), R-5 (filename), R-6 (last_answer)
+Spec: ``specs/007-persona-recipes/spec.md`` FR-002, FR-007, FR-011, FR-012, FR-014
+Data-model: ``specs/007-persona-recipes/data-model.md`` §3 construction order
+Research: ``specs/007-persona-recipes/research.md`` R-1 (timeout), R-5 (filename), R-6 (last_answer)
 
 Construction order:
     inputs validate → profile → locale → RAG → domain → render system & user prompt
@@ -69,13 +69,19 @@ def _hybrid_unavailable_error() -> RecipeHybridUnavailableError:
 
 
 def _load_profile_text(vault: Path) -> str:
+    """vault Profile/DecisionPatterns/DecisionQualityRegistry 전체 로드.
+
+    이전: 파일당 5000자 silent truncation 으로 사용자가 알아챌 수 없는 손실 발생.
+    이후 (B2, eng-review 2026-05-13): 전체 로드. 시스템 prompt 32KB cap 이 자동
+    안전망 — Profile 이 너무 크면 ``RecipePromptTooLargeError`` 로 명시적 실패 (silent X).
+    """
     parts: list[str] = []
     base = vault / "90_System" / "AI"
     for fname in _PROFILE_FILES:
         p = base / fname
         if p.is_file():
             try:
-                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')[:5000]}")
+                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')}")
             except OSError:
                 continue
     return "\n\n".join(parts)
@@ -198,7 +204,7 @@ def _build_last_answer(
         )
     query = " ".join(v for v in inputs.values() if v) or recipe.name
     return new_answer_reference(
-        command=f"me.generate.{recipe.name}",
+        command=f"persona.generate.{recipe.name}",
         query=query,
         citations=tuple(citations),
     )

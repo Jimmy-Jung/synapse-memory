@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from synapse_memory.endpoints.me import (
+from synapse_memory.endpoints.persona import (
     _format_timeline_output,
     _group_by_quarter,
     _resolve_sort_ts,
@@ -337,8 +337,8 @@ def test_kendall_tau_golden(today: _datetime.date) -> None:
 
 from unittest.mock import MagicMock, patch  # noqa: E402  (kept near integration tests)
 
-import synapse_memory.endpoints.me as me_mod  # noqa: E402
-from synapse_memory.endpoints.me import what_did_i_think  # noqa: E402
+import synapse_memory.endpoints.persona as me_mod  # noqa: E402
+from synapse_memory.endpoints.persona import what_did_i_think  # noqa: E402
 from synapse_memory.rag.vector_store import VectorRecord  # noqa: E402
 
 

@@ -16,7 +16,7 @@ from synapse_memory.cards.company import (
     JobPosition,
     save_company_card,
 )
-from synapse_memory.endpoints.me import (
+from synapse_memory.endpoints.persona import (
     DRAFTS_SUBPATH,
     ResumeDraft,
     _build_resume_prompt,

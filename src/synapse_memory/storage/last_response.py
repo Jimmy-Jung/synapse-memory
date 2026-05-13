@@ -11,9 +11,24 @@ from synapse_memory.feedback.events import new_event_id
 from synapse_memory.storage.l0 import ensure_l0_root_secure, l0_root, secure_write_text
 
 AnswerCommand: TypeAlias = str
-"""Open string alias. Recognized values: "ask", "me.what_did_i_think", "me.decide",
-and dynamic "me.generate.<recipe_name>" identifiers introduced by 007-me-recipes.
-Validation in :func:`LastAnswerReference.from_dict` accepts any non-empty string."""
+"""Open string alias. Recognized values: "ask", "persona.what_did_i_think", "persona.decide",
+and dynamic "persona.generate.<recipe_name>" identifiers introduced by 007-persona-recipes.
+Validation in :func:`LastAnswerReference.from_dict` accepts any non-empty string.
+
+Legacy command identifiers from pre-rename (`me.what_did_i_think`, `me.decide`,
+`me.generate.*`) are auto-migrated to the `persona.*` form on load — see
+``_normalize_legacy_command``. Writes always use the new form."""
+
+
+def _normalize_legacy_command(cmd: str) -> str:
+    """pre-M1a rename 시점 의 `me.*` command 식별자를 `persona.*` 로 변환.
+
+    M1a 는 backward-compat 의도로 내부 식별자를 보존했으나, deep rename 결정 후
+    legacy file 을 silent 마이그레이션 한다. 새 파일은 항상 `persona.*` 로 기록.
+    """
+    if cmd.startswith("me."):
+        return "persona." + cmd[len("me.") :]
+    return cmd
 
 CitationTargetKind: TypeAlias = Literal["card", "pattern"]
 LAST_RESPONSE_FILENAME = "last_response.json"
@@ -66,6 +81,7 @@ class LastAnswerReference:
         command = data.get("command")
         if not isinstance(command, str) or not command.strip():
             raise ValueError(f"command must be non-empty string, got {command!r}")
+        command = _normalize_legacy_command(command)
         raw_citations = data.get("citations", [])
         if not isinstance(raw_citations, list):
             raise ValueError("citations must be a list")

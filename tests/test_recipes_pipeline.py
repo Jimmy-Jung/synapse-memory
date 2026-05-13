@@ -528,6 +528,6 @@ def test_pipeline_generate_records_last_answer(tmp_path: Path) -> None:
         )
     assert len(save_calls) == 1
     ref = save_calls[0]
-    assert ref.command == "me.generate.echo"
+    assert ref.command == "persona.generate.echo"
     assert "x" in ref.query
     assert result.last_answer_ref is ref
