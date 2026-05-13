@@ -4,10 +4,10 @@
   "version": "0.6.2",
   "author": {
     "name": "Synapse Memory Maintainers",
-    "url": "https://github.com/example-org"
+    "url": "https://github.com/Jimmy-Jung"
   },
-  "homepage": "https://github.com/example-org/synapse-memory",
-  "repository": "https://github.com/example-org/synapse-memory",
+  "homepage": "https://github.com/Jimmy-Jung/synapse-memory",
+  "repository": "https://github.com/Jimmy-Jung/synapse-memory",
   "license": "MIT",
   "keywords": [
     "synapse",
