@@ -15,9 +15,32 @@ Obsidian vault + Claude Code 활동 로그를 mirror·redact한 뒤 Project / Co
 - "Y 회사 지원할건데 이력서 써줘" → `/synapse-resume <회사>`
 - "Z 상황에서 어떻게 결정하지?" → `/synapse-decide <상황>`
 - "vault에서 X 찾아줘" / 자연어 질의 → `/synapse-ask <질의>`
+- "내 회고록/일기/메모를 학습시켜줘" → `persona ingest --file <path>` (M1b)
 - "오늘자 정리 한 번 돌려" → `/synapse-daily`
 - "환경 정상인지 봐줘" → `/synapse-doctor`
 - "설치가 깨진 것 같아 / 고쳐줘" → `/synapse-fix`
+
+## 외부 자료 학습 (`persona ingest`)
+
+사용자의 **회고록 · 일기 · 외부 메모** 를 Persona 에 흡수해 말투 · 기술 선호 · 작업
+방식을 더 풍부하게 만드는 경로입니다. 새 프로젝트 설계나 본인 스타일의 문서
+생성을 하려면 이 자료가 두텁게 쌓여 있을수록 결과 품질이 높습니다.
+
+```bash
+synapse-memory persona ingest --file ~/Documents/diary-2025.md
+synapse-memory persona ingest \
+    --file ~/Documents/retro-q4.md \
+    --file ~/Documents/proposal-draft.md
+```
+
+흐름:
+
+1. raw 텍스트는 `~/.synapse/private/raw/persona/<sha-prefix>/` 에 0600 으로 mirror.
+2. Pass 1+2 redaction 통과한 텍스트로 `extract_profile_facts` 호출.
+3. 후보 ProfileFact 들이 `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` 에 PR 로 추가.
+4. 사용자가 Obsidian 에서 PR 를 검토하고 accepted 항목만 `Profile.md` 로 복사.
+
+지원 확장자: `.md`, `.markdown`, `.txt`. PDF · docx 등은 현재 unsupported.
 
 ## 핵심 보안 원칙 (반드시 준수)
 

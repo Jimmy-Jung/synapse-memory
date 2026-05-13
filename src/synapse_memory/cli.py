@@ -106,6 +106,10 @@ from synapse_memory.profile.extract import (
     extract_profile_facts,
     save_profile_update,
 )
+from synapse_memory.profile.ingest import (
+    SUPPORTED_EXTENSIONS,
+    ingest_files,
+)
 from synapse_memory.rag import (
     embed_query,
     index_cards,
@@ -992,6 +996,71 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
     path = save_profile_update(facts, patterns)
     print(f"\n{OK} MemoryInbox PR 저장: {path}")
     print("  검토 후 vault 90_System/AI/Profile.md, DecisionPatterns.md 반영")
+    return 0
+
+
+def cmd_persona_ingest(args: argparse.Namespace) -> int:
+    """외부 markdown/txt 파일 → L0 mirror → ProfileFact 후보 → MemoryInbox PR.
+
+    M1b: 회고록 · 일기 · 외부 메모를 흡수해 사용자 성향을 보강한다.
+    """
+    args.model = _resolve_model(args.model, "update_profile")
+    _enforce_cost_cap("persona ingest")
+    _interactive_guard("persona ingest", "update-profile")
+
+    paths = [Path(p) for p in args.file]
+    try:
+        result = ingest_files(paths)
+    except FileNotFoundError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 2
+
+    for f in result.files:
+        if f.skipped_reason == "unsupported":
+            ext_list = ", ".join(sorted(SUPPORTED_EXTENSIONS))
+            print(
+                f"  SKIPPED (unsupported): {f.source_path.name} "
+                f"(지원: {ext_list})",
+                file=sys.stderr,
+            )
+        elif f.skipped_reason == "empty_redacted":
+            print(
+                f"  SKIPPED (redaction empty): {f.source_path.name} "
+                f"— raw 는 L0 에 보존됨, redactlist 조정 후 재시도",
+                file=sys.stderr,
+            )
+
+    if not result.combined_redacted:
+        print(f"{FAIL} 흡수 가능한 텍스트 없음", file=sys.stderr)
+        return 1
+
+    print(
+        f"INGESTED: {result.accepted_count} files mirrored to L0 private storage"
+    )
+
+    ai_env = detect_ai_environment(model=args.model)
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
+            print(f"  - {r}", file=sys.stderr)
+        return 2
+
+    try:
+        print("ProfileFact 추출 중 (외부 자료 기반)...")
+        facts = extract_profile_facts(
+            sample_lines=0,  # history 무시 — ingest 가 자료의 출처
+            model=args.model,
+            ai_env=ai_env,
+            extra_text=result.combined_redacted,
+        )
+        print(f"  → {len(facts)} fact 추출")
+    except AIError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+
+    path = save_profile_update(facts, patterns=None)
+    print(f"\n{OK} MemoryInbox PR 저장: {path}")
+    print("  검토 후 vault 90_System/AI/Profile.md 반영")
     return 0
 
 
@@ -2220,6 +2289,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="DecisionPattern 추출 skip (비용 절감)",
     )
     p_up.set_defaults(func=cmd_me_update_profile)
+
+    p_ingest = me_sub.add_parser(
+        "ingest",
+        help="외부 markdown/txt 흡수 → L0 mirror + ProfileFact 후보 → MemoryInbox PR",
+    )
+    p_ingest.add_argument(
+        "--file",
+        action="append",
+        required=True,
+        metavar="PATH",
+        help="흡수할 파일 (반복 가능). 지원 확장자: .md, .markdown, .txt",
+    )
+    p_ingest.add_argument("--model", default=None)
+    p_ingest.set_defaults(func=cmd_persona_ingest)
 
     p_wdt = me_sub.add_parser(
         "what-did-i-think", help="주제에 대한 과거 사고 회상"
