@@ -64,3 +64,19 @@ def test_macos_installer_detects_existing_claude_cli_before_cask_install() -> No
     assert "command -v claude" in script
     assert "path=$(command -v claude)" in script
     assert "brew install --cask claude-code" in script
+
+
+def test_macos_installer_activates_claude_and_codex_plugins() -> None:
+    script = Path("installer/SynapseMemory-Installer.command").read_text(encoding="utf-8")
+
+    assert "activate_plugins()" in script
+    assert "claude plugin marketplace add" in script
+    assert "claude plugin install" in script
+    assert "claude plugin enable" in script
+    assert "codex plugin marketplace add" in script
+    assert "install_codex_plugin_cache" in script
+    assert "plugins/cache/${CODEX_MARKETPLACE_NAME}" in script
+    assert 'plugins."{plugin_ref}"' in script
+    assert "codex debug prompt-input" in script
+    assert "synapse-memory:synapse-memory" in script
+    assert "SYNAPSE_ACTIVATE_PLUGINS" in script
