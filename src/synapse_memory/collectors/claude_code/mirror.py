@@ -16,6 +16,7 @@ claude-code/projects/<slug>/<sessionId>.jsonl``로 복제. 매 호출마다 새 
 
 from __future__ import annotations
 
+import contextlib
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -85,10 +86,8 @@ def _write_offset_atomic(offset_path: Path, value: int) -> None:
         f.write(str(value))
         f.flush()
         os.fsync(f.fileno())
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(tmp, L0_FILE_MODE)
-    except OSError:
-        pass
     os.replace(tmp, offset_path)
 
 
@@ -159,10 +158,8 @@ def mirror_jsonl(
         os.fsync(f.fileno())
 
     # 파일 권한 (최초 생성 시)
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(dst, L0_FILE_MODE)
-    except OSError:
-        pass
 
     # offset 갱신 (atomic)
     new_offset = last_offset + safe_len

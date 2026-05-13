@@ -22,9 +22,9 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -173,7 +173,7 @@ def _slug_from_segment(name: str) -> str:
 
 def _enumerate_vault_folder_clusters(
     obs_root: Path,
-) -> dict[str, dict]:
+) -> dict[str, dict[str, Any]]:
     """vault 폴더 segment 기반 cluster 후보.
 
     규칙:
@@ -190,7 +190,7 @@ def _enumerate_vault_folder_clusters(
     if not obs_root.is_dir():
         return {}
 
-    by_id: dict[str, dict] = {}
+    by_id: dict[str, dict[str, Any]] = {}
     for md in sorted(obs_root.rglob("*.md")):
         rel = md.relative_to(obs_root)
         parts = rel.parts

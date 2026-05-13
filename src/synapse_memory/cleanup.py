@@ -19,6 +19,7 @@ import shutil
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -94,7 +95,7 @@ def _file_age_days(path: Path, now: datetime.datetime) -> int:
     return (now - mtime).days
 
 
-def _read_frontmatter(path: Path) -> dict | None:
+def _read_frontmatter(path: Path) -> dict[str, Any] | None:
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
@@ -118,7 +119,7 @@ def _is_protected(rel_path: Path) -> bool:
     return any(rel.startswith(d + "/") for d in PROTECTED_DIRS)
 
 
-def _has_skip_marker(fm: dict | None) -> bool:
+def _has_skip_marker(fm: dict[str, Any] | None) -> bool:
     if not fm:
         return False
     if fm.get("pinned") is True:
@@ -136,7 +137,7 @@ def _archive_target(vault: Path, source: Path, *, archive_date: str) -> Path:
     return archive_root / rel
 
 
-def _is_card_empty(fm: dict | None) -> bool:
+def _is_card_empty(fm: dict[str, Any] | None) -> bool:
     if not fm:
         return False
     status = str(fm.get("status") or "").lower()

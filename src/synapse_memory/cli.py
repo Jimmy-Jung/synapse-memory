@@ -26,7 +26,9 @@ import os
 import stat
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from synapse_memory import __version__
 from synapse_memory.cards import (
@@ -86,8 +88,13 @@ from synapse_memory.eval.golden import (
     evaluate,
     load_golden_set,
 )
-from synapse_memory.feedback.events import append_feedback_event, build_feedback_event
+from synapse_memory.feedback.events import (
+    FeedbackAction,
+    append_feedback_event,
+    build_feedback_event,
+)
 from synapse_memory.feedback.targets import (
+    FeedbackTarget,
     resolve_card_target,
     resolve_last_answer_targets,
     resolve_pattern_target,
@@ -162,7 +169,7 @@ def _interactive_guard(command: str, slash: str) -> None:
         if not cfg.interactive_guard.enabled:
             return
         delay = cfg.interactive_guard.delay_seconds
-    except Exception:  # noqa: BLE001
+    except Exception:
         delay = _INTERACTIVE_GUARD_DELAY_SECONDS
     sys.stderr.write(
         _INTERACTIVE_GUARD_MESSAGE.format(command=command, slash=slash, delay=delay)
@@ -171,7 +178,7 @@ def _interactive_guard(command: str, slash: str) -> None:
     time.sleep(delay)
 
 
-def _arg_or_config(arg_value, cfg_path: str, fallback=None):
+def _arg_or_config(arg_value: Any, cfg_path: str, fallback: Any = None) -> Any:
     """CLI 인자가 None이면 config 값으로 폴백.
 
     우선순위: CLI 인자 > ``~/.synapse/config.yaml`` > fallback 인자 > None.
@@ -187,7 +194,7 @@ def _arg_or_config(arg_value, cfg_path: str, fallback=None):
         from synapse_memory.config import get_config, get_value
 
         return get_value(get_config(), cfg_path)
-    except (KeyError, Exception):  # noqa: BLE001
+    except (KeyError, Exception):
         return fallback
 
 
@@ -216,7 +223,7 @@ def _resolve_model(arg_model: str | None, task: str) -> str | None:
         if provider_models is None:
             return None
         return getattr(provider_models, task, None)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -330,13 +337,13 @@ def cmd_card_list(args: argparse.Namespace) -> int:
                 f"{'ID':<25} {'STATUS':<12} {'ROLE':<25} {'PERIOD':<20}"
             )
             print("-" * 85)
-            for c in cards:
-                period = c.period_start or ""
-                if c.period_end:
-                    period = f"{period} ~ {c.period_end}"
+            for project_card in cards:
+                period = project_card.period_start or ""
+                if project_card.period_end:
+                    period = f"{period} ~ {project_card.period_end}"
                 print(
-                    f"{c.project_id:<25} {c.status:<12} "
-                    f"{(c.role or '')[:24]:<25} {period:<20}"
+                    f"{project_card.project_id:<25} {project_card.status:<12} "
+                    f"{(project_card.role or '')[:24]:<25} {period:<20}"
                 )
             shown += len(cards)
 
@@ -348,10 +355,10 @@ def cmd_card_list(args: argparse.Namespace) -> int:
                 f"{'ID':<25} {'STATUS':<14} {'COUNTRY':<8} {'POSITIONS':<5}"
             )
             print("-" * 85)
-            for c in cards_c:
+            for company_card in cards_c:
                 print(
-                    f"{c.company_id:<25} {c.status:<14} "
-                    f"{(c.country or ''):<8} {len(c.positions):<5}"
+                    f"{company_card.company_id:<25} {company_card.status:<14} "
+                    f"{(company_card.country or ''):<8} {len(company_card.positions):<5}"
                 )
             shown += len(cards_c)
 
@@ -367,11 +374,11 @@ def cmd_card_show(args: argparse.Namespace) -> int:
     cid = args.card_id
     try:
         if args.type == "company":
-            card = load_company_card(cid)
-            print(serialize_company_card(card))
+            company_card = load_company_card(cid)
+            print(serialize_company_card(company_card))
         else:
-            card = load_project_card(cid)
-            print(serialize_project_card(card))
+            project_card = load_project_card(cid)
+            print(serialize_project_card(project_card))
     except FileNotFoundError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
@@ -632,12 +639,12 @@ def cmd_daily_status(args: argparse.Namespace) -> int:
     import time as _time
 
     interval = max(0.5, float(args.interval))
-    last_signature: tuple | None = None
+    last_signature: tuple[str, str, int, str] | None = None
     print(f"watching {STATUS_FILE} (Ctrl-C로 종료, {interval:.1f}s 간격)")
     try:
         while True:
             status = read_status()
-            signature: tuple = (
+            signature: tuple[str, str, int, str] | None = (
                 None
                 if status is None
                 else (
@@ -1106,7 +1113,8 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
             user_dir=_vault / "90_System" / "AI" / "recipes",
         )
         _reg.scan()
-        recipe_source = _reg.recipes.get(result.recipe_name).source if result.recipe_name in _reg.recipes else "?"
+        recipe = _reg.recipes.get(result.recipe_name)
+        recipe_source = recipe.source if recipe is not None else "?"
     except Exception:  # observability 보조라 silent fallback
         pass
 
@@ -1124,7 +1132,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     return 0
 
 
-def _recipes_registry_for_vault(vault_arg: str | None):
+def _recipes_registry_for_vault(vault_arg: str | None) -> Any:
     """me recipes list/show 의 공통 helper — RecipeRegistry 인스턴스 반환."""
     from synapse_memory.recipes.registry import RecipeRegistry
 
@@ -1140,7 +1148,7 @@ def _recipes_registry_for_vault(vault_arg: str | None):
     return reg
 
 
-def _format_recipes_table(recipes: list) -> str:
+def _format_recipes_table(recipes: list[Any]) -> str:
     """plain-text 표 — list[GenerationRecipe] → 정렬된 stdout 문자열."""
     headers = ("NAME", "SOURCE", "REQUIRED INPUTS", "DESCRIPTION")
     rows: list[tuple[str, str, str, str]] = [headers]
@@ -1158,7 +1166,9 @@ def _format_recipes_table(recipes: list) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _recipes_envelope(ok: bool, data, errors=None) -> str:
+def _recipes_envelope(
+    ok: bool, data: object, errors: Iterable[object] | None = None
+) -> str:
     """contracts/cli-contracts.md §5 의 JSON envelope."""
     import json
 
@@ -1283,7 +1293,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
             print(f"  - {r}", file=sys.stderr)
         return 2
 
-    where = None
+    where: dict[str, object] | None = None
     if args.kind:
         where = {"source_kind": f"card_{args.kind}"}
 
@@ -1332,7 +1342,7 @@ def cmd_feedback(args: argparse.Namespace) -> int:
         for target in targets:
             events.append(
                 build_feedback_event(
-                    target_kind=target.target_kind,  # type: ignore[arg-type]
+                    target_kind=target.target_kind,
                     target_ref=target.target_ref,
                     action=action,
                     reason=args.reject,
@@ -1381,7 +1391,7 @@ def cmd_cost_summary(args: argparse.Namespace) -> int:
     return 0
 
 
-def _feedback_action(args: argparse.Namespace) -> str:
+def _feedback_action(args: argparse.Namespace) -> FeedbackAction:
     actions = [
         bool(args.accept),
         bool(args.reject is not None),
@@ -1396,7 +1406,7 @@ def _feedback_action(args: argparse.Namespace) -> str:
     return "weight"
 
 
-def _feedback_targets(args: argparse.Namespace):
+def _feedback_targets(args: argparse.Namespace) -> list[FeedbackTarget]:
     vault_path = Path(args.vault_path).expanduser() if args.vault_path else None
     if args.feedback_target == "last":
         last_ref = load_last_answer()

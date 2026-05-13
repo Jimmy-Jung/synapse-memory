@@ -30,7 +30,6 @@ from synapse_memory.collectors.claude_code.mirror import (
 )
 from synapse_memory.storage.l0 import L0_DIR_MODE
 
-
 # ---------------------------------------------------------------------------
 # fixtures
 # ---------------------------------------------------------------------------

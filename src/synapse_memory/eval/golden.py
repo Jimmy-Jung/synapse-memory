@@ -22,7 +22,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from synapse_memory.llm.apfel import ApfelEnvironment, detect_environment
 from synapse_memory.redaction import redact_full
@@ -112,7 +112,11 @@ def _to_multiset(items: Iterable[tuple[str, str]]) -> Counter[tuple[str, str]]:
 def _diff_multisets(
     detected: Counter[tuple[str, str]],
     expected: Counter[tuple[str, str]],
-) -> tuple[Counter, Counter, Counter]:
+) -> tuple[
+    Counter[tuple[str, str]],
+    Counter[tuple[str, str]],
+    Counter[tuple[str, str]],
+]:
     """multi-set 비교 → (TP, FP, FN) Counter. 0 count entry는 포함하지 않음."""
     tp: Counter[tuple[str, str]] = Counter()
     fp: Counter[tuple[str, str]] = Counter()

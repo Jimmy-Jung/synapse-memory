@@ -24,12 +24,12 @@ import tempfile
 import typing
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import yaml
 
-
 DEFAULT_CONFIG_PATH = Path.home() / ".synapse" / "config.yaml"
+T = TypeVar("T")
 
 
 @dataclass
@@ -174,13 +174,13 @@ def is_protected_path(path: str) -> bool:
     return any(path == p or path.startswith(p + ".") for p in PROTECTED_PREFIXES)
 
 
-def _from_dict(cls, data: dict | None) -> Any:
+def _from_dict(cls: type[T], data: dict[str, Any] | None) -> T:
     """nested dataclass를 dict에서 만들어줌. 알 수 없는 키는 무시."""
     if data is None or not isinstance(data, dict):
         return cls()
     try:
         annotations = typing.get_type_hints(cls)
-    except Exception:  # noqa: BLE001
+    except Exception:
         annotations = getattr(cls, "__annotations__", {})
     kwargs: dict[str, Any] = {}
     for field_name, field_type in annotations.items():
@@ -188,7 +188,7 @@ def _from_dict(cls, data: dict | None) -> Any:
             continue
         value = data[field_name]
         if isinstance(value, dict) and is_dataclass(field_type):
-            kwargs[field_name] = _from_dict(field_type, value)
+            kwargs[field_name] = _from_dict(cast(type[Any], field_type), value)
         else:
             kwargs[field_name] = value
     return cls(**kwargs)
@@ -401,7 +401,7 @@ _cached_mtime: float | None = None
 
 def get_config(*, refresh: bool = False) -> SynapseConfig:
     """프로세스 단위 캐시된 config 반환. config 파일 mtime 변경 시 자동 reload."""
-    global _cached, _cached_mtime  # noqa: PLW0603
+    global _cached, _cached_mtime
     path = DEFAULT_CONFIG_PATH
     current_mtime = path.stat().st_mtime if path.exists() else None
     if refresh or _cached is None or current_mtime != _cached_mtime:
@@ -412,6 +412,6 @@ def get_config(*, refresh: bool = False) -> SynapseConfig:
 
 def clear_cache() -> None:
     """테스트용 캐시 무효화."""
-    global _cached, _cached_mtime  # noqa: PLW0603
+    global _cached, _cached_mtime
     _cached = None
     _cached_mtime = None

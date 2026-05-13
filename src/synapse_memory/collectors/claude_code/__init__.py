@@ -7,15 +7,15 @@
 """
 
 from synapse_memory.collectors.claude_code.mirror import (
-    CollectStats,
     DEFAULT_CLAUDE_HOME,
+    CollectStats,
     collect_claude_code,
     mirror_jsonl,
 )
 
 __all__ = [
-    "CollectStats",
     "DEFAULT_CLAUDE_HOME",
+    "CollectStats",
     "collect_claude_code",
     "mirror_jsonl",
 ]

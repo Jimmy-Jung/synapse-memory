@@ -17,10 +17,10 @@ from synapse_memory.collectors.obsidian.mirror import (
 )
 
 __all__ = [
-    "CollectStats",
     "DEFAULT_VAULT_PATH",
     "ENV_VAR_VAULT",
     "EXCLUDED_DIRS",
+    "CollectStats",
     "FileState",
     "collect_obsidian",
     "get_vault_path",

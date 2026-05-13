@@ -261,7 +261,7 @@ def load_allowlist(path: Path | None = None) -> set[str]:
     return items
 
 
-def _normalize_model_response(result: object) -> list[dict]:
+def _normalize_model_response(result: object) -> list[dict[str, object]]:
     """모델이 schema를 어겼을 때 가능한 형식들을 정규화.
 
     수용 가능한 형식 (apfel + Apple 소형 모델 관찰 기준):

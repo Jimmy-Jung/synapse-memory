@@ -24,7 +24,6 @@ from synapse_memory.collectors.obsidian.mirror import (
 )
 from synapse_memory.storage.l0 import L0_DIR_MODE, L0_FILE_MODE
 
-
 # ---------------------------------------------------------------------------
 # fixtures
 # ---------------------------------------------------------------------------

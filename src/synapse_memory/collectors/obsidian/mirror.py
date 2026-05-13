@@ -18,6 +18,7 @@ vault 경로
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -111,10 +112,7 @@ def _is_excluded(rel_path: Path) -> bool:
     for ex in EXCLUDED_DIRS:
         if rel_str == ex or rel_str.startswith(ex + "/"):
             return True
-    for sub in EXCLUDED_SUBSTRINGS:
-        if sub in rel_str:
-            return True
-    return False
+    return any(sub in rel_str for sub in EXCLUDED_SUBSTRINGS)
 
 
 def _file_sha256(path: Path) -> str:
@@ -179,10 +177,8 @@ def _save_states_atomic(meta_path: Path, states: dict[str, FileState]) -> None:
         f.write(payload)
         f.flush()
         os.fsync(f.fileno())
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(tmp, L0_FILE_MODE)
-    except OSError:
-        pass
     os.replace(tmp, meta_path)
 
 
@@ -255,10 +251,8 @@ def collect_obsidian(
             ensure_secure_dir(dst_file.parent)
             content = src.read_bytes()
             dst_file.write_bytes(content)
-            try:
+            with contextlib.suppress(OSError):
                 os.chmod(dst_file, L0_FILE_MODE)
-            except OSError:
-                pass
 
             stats.files_mirrored += 1
             stats.bytes_added += size

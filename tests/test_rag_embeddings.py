@@ -42,9 +42,11 @@ class TestGetEmbedder:
                 raise ImportError("no module")
             return real_import(name, *args, **kwargs)
 
-        with patch("builtins.__import__", side_effect=fake_import):
-            with pytest.raises(EmbeddingUnavailableError, match="미설치"):
-                get_embedder()
+        with (
+            patch("builtins.__import__", side_effect=fake_import),
+            pytest.raises(EmbeddingUnavailableError, match="미설치"),
+        ):
+            get_embedder()
 
     def test_caches_instance(self) -> None:
         """같은 모델 두 번 요청 → 같은 instance."""
@@ -87,9 +89,11 @@ class TestEmbedTexts:
     def test_encode_failure_wrapped(self) -> None:
         fake = MagicMock()
         fake.encode.side_effect = RuntimeError("OOM")
-        with patch("synapse_memory.rag.embeddings.get_embedder", return_value=fake):
-            with pytest.raises(EmbeddingError, match="OOM"):
-                embed_texts(["x"])
+        with (
+            patch("synapse_memory.rag.embeddings.get_embedder", return_value=fake),
+            pytest.raises(EmbeddingError, match="OOM"),
+        ):
+            embed_texts(["x"])
 
 
 class TestEmbedQuery:

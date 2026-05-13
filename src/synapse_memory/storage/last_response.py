@@ -72,7 +72,7 @@ class LastAnswerReference:
         return cls(
             answer_id=str(data["answer_id"]),
             ts=str(data["ts"]),
-            command=command,  # type: ignore[arg-type]
+            command=command,
             query=str(data.get("query", "")),
             citations=tuple(
                 AnswerCitation.from_dict(c)

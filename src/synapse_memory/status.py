@@ -20,7 +20,6 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-
 STATUS_DIR = Path.home() / ".synapse" / "run"
 STATUS_FILE = STATUS_DIR / "daily.status.json"
 

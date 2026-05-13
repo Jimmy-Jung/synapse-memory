@@ -18,6 +18,7 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import time
 from collections.abc import Callable, Mapping
@@ -173,10 +174,8 @@ def _emit_progress(
         status_sink.update_item(index=index, total=total, label=label)
     import sys
 
-    try:
+    with contextlib.suppress(Exception):
         sys.stdout.flush()
-    except Exception:
-        pass
 
 
 def _resume_skip_reason(resume_from: str) -> str:

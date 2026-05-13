@@ -14,8 +14,8 @@ from synapse_memory.clusters.identify import (
 )
 
 __all__ = [
-    "ProjectCluster",
     "VAULT_CLUSTER_TOP_LEVELS",
+    "ProjectCluster",
     "extract_github_repos",
     "extract_tags",
     "identify_clusters",

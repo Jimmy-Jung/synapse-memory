@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 # Profile 카테고리 — 안정적 사용자 성향
 PROFILE_CATEGORIES: tuple[str, ...] = (
@@ -31,7 +32,7 @@ class ProfileFact:
     source_ids: list[str] = field(default_factory=list)
     extracted_at: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "category": self.category,
             "statement": self.statement,
@@ -52,7 +53,7 @@ class DecisionPattern:
     examples: list[str] = field(default_factory=list)
     extracted_at: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "trigger": self.trigger,
             "action": self.action,

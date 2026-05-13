@@ -32,9 +32,9 @@ from synapse_memory.cards.project import (
 )
 
 __all__ = [
-    "CompanyCard",
     "DEFAULT_COMPANIES_SUBPATH",
     "DEFAULT_PROJECTS_SUBPATH",
+    "CompanyCard",
     "JobPosition",
     "ProjectCard",
     "ProjectMetric",

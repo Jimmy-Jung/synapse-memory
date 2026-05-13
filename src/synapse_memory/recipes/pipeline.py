@@ -19,7 +19,7 @@ import datetime
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
@@ -268,7 +268,7 @@ def _retrieve_matches(
                 query_embedding=query_embedding,
                 store=store,
                 top_k=rag_top_k,
-                where=rag_filter,
+                where=cast(dict[str, object] | None, rag_filter),
             )
         except BM25IndexError as exc:
             raise _hybrid_unavailable_error() from exc
@@ -279,7 +279,7 @@ def _retrieve_matches(
             store.query(
                 query_embedding,
                 top_k=rag_top_k,
-                where=rag_filter,
+                where=cast(dict[str, object] | None, rag_filter),
             )
         )
     except TypeError:
