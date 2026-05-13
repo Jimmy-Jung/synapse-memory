@@ -78,6 +78,7 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 | `interactive_guard.enabled` | false 시 사람 직접 호출에서 안내가 사라짐 (자동화에 유용). |
 | `automation.codex_poller.enabled` | launchd 데몬 동작 토글. 적용은 `synapse-memory install-agent` 재실행 필요 (미구현). |
 | `cost.summary_days` | `/synapse-cost` 기본 윈도우. |
+| `cost.monthly_cap_usd` | 월 한도 USD. **초과 시 ask/me/card_generate/cluster_classify 호출 차단** (SystemExit 7). 우회: `SYNAPSE_FORCE_COST=1`. 80% 도달 시 경고. `null`이면 무제한. |
 
 ## advanced 키를 묻는 경우
 

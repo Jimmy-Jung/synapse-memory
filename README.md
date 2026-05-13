@@ -294,6 +294,7 @@ Intel Mac · macOS 25 이하는 지원하지 않습니다
 | 개발자 / 직접 설치 | [Getting Started (수동 설치)](docs/getting-started.md) |
 | 코드 기여자 | [개발자 가이드](docs/development.md) · [Architecture (개발자판)](docs/architecture.md) |
 | 용어가 헷갈리는 분 | [용어집](docs/glossary.md) |
+| 설정 키별 의미·default·영향 | [Config 레퍼런스](docs/config.md) |
 
 ## 라이선스
 

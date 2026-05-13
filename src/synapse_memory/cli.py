@@ -198,6 +198,19 @@ def _arg_or_config(arg_value: Any, cfg_path: str, fallback: Any = None) -> Any:
         return fallback
 
 
+def _enforce_cost_cap(command: str) -> None:
+    """ask/me 계열 호출 직전 월 cap 검사. lazy import."""
+    try:
+        from synapse_memory.cost.cap import enforce_cost_cap
+
+        enforce_cost_cap(command)
+    except SystemExit:
+        raise
+    except Exception:  # noqa: BLE001
+        # cap 시스템 자체가 실패해도 호출은 진행 (best-effort)
+        pass
+
+
 def _resolve_model(arg_model: str | None, task: str) -> str | None:
     """task별 model 폴백 — provider 인식.
 
@@ -480,6 +493,7 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
 def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
     args.top_k = _arg_or_config(args.top_k, "top_k.recall", 8)
     args.model = _resolve_model(args.model, "recall")
+    _enforce_cost_cap("me what-did-i-think")
     _interactive_guard("me what-did-i-think", "recall")
 
     # FR-009 — --timeline + --by distance 충돌 검증
@@ -550,6 +564,7 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
 def cmd_me_decide(args: argparse.Namespace) -> int:
     args.top_k = _arg_or_config(args.top_k, "top_k.decide", 6)
     args.model = _resolve_model(args.model, "decide")
+    _enforce_cost_cap("me decide")
     _interactive_guard("me decide", "decide")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -940,6 +955,7 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
     """raw → Profile/DecisionPattern 후보 → MemoryInbox PR."""
     args.sample_lines = _arg_or_config(args.sample_lines, "profile.sample_lines", 200)
     args.model = _resolve_model(args.model, "update_profile")
+    _enforce_cost_cap("me update-profile")
     _interactive_guard("me update-profile", "update-profile")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -983,6 +999,7 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     """회사 맞춤 이력서 자동 생성 → vault Drafts."""
     args.top_k = _arg_or_config(args.top_k, "top_k.resume", 6)
     args.model = _resolve_model(args.model, "resume")
+    _enforce_cost_cap("me draft-resume")
     _interactive_guard("me draft-resume", "resume")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -1031,6 +1048,7 @@ def _parse_input_kv(items: list[str]) -> dict[str, str]:
 
 def cmd_me_generate(args: argparse.Namespace) -> int:
     """Recipe-based generator (007-me-recipes) — me generate <recipe>."""
+    _enforce_cost_cap(f"me generate {args.recipe}")
     from synapse_memory.recipes import (
         InputValidationError,
         RecipeHybridUnavailableError,
@@ -1285,6 +1303,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
     """자연어 질의 → RAG → AI 답변."""
     args.top_k = _arg_or_config(args.top_k, "top_k.ask", 5)
     args.model = _resolve_model(args.model, "ask")
+    _enforce_cost_cap("ask")
     _interactive_guard("ask", "ask")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -1459,6 +1478,7 @@ def cmd_rag_search(args: argparse.Namespace) -> int:
 def cmd_card_generate(args: argparse.Namespace) -> int:
     """classify된 cluster들로 ProjectCard/CompanyCard 자동 생성."""
     args.model = _resolve_model(args.model, "card_generate")
+    _enforce_cost_cap("card generate")
     ai_env = detect_ai_environment()
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
@@ -1556,6 +1576,7 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
 def cmd_cluster_classify(args: argparse.Namespace) -> int:
     """모든 cluster를 LLM 분류 → classifications.json 저장."""
     args.model = _resolve_model(args.model, "classify")
+    _enforce_cost_cap("cluster classify")
     ai_env = detect_ai_environment()
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)

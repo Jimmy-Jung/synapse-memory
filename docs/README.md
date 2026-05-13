@@ -36,6 +36,8 @@
 
 [**용어집**](glossary.md) — Vault · Card · Profile · L0~L3 · RAG · apfel · slash command 일관 정의.
 
+[**Config 레퍼런스**](config.md) — `~/.synapse/config.yaml` 키별 의미·default·변경 시 영향.
+
 ## 한눈에 보기
 
 | 하고 싶은 일 | 먼저 볼 문서 | 대표 명령 |
