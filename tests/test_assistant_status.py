@@ -15,6 +15,7 @@ from synapse_memory.assistant_status import (
     gather_status,
     recommend_actions,
     render_status,
+    resolve_vault_path,
 )
 from synapse_memory.cards.company import CompanyCard, JobPosition, save_company_card
 from synapse_memory.cards.project import ProjectCard, save_project_card
@@ -265,6 +266,57 @@ def test_gather_status_includes_cleanup_signals(tmp_path):
 
     recs = recommend_actions(status)
     assert any("/sm:cleanup" in r for r in recs)
+
+
+def test_resolve_vault_path_env_takes_priority(tmp_path, monkeypatch):
+    """env var가 있으면 config.yaml/default보다 우선."""
+    env_vault = tmp_path / "env_vault"
+    cfg_vault = tmp_path / "cfg_vault"
+    env_vault.mkdir()
+    cfg_vault.mkdir()
+    monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(env_vault))
+    with mock.patch("synapse_memory.config.load_config") as m:
+        m.return_value = mock.Mock(vault=str(cfg_vault))
+        result = resolve_vault_path()
+    assert result == env_vault
+
+
+def test_resolve_vault_path_falls_back_to_config_yaml(tmp_path, monkeypatch):
+    """env 없으면 config.yaml의 vault 키 사용 — 이슈 #8 회귀 방지."""
+    cfg_vault = tmp_path / "cfg_vault"
+    cfg_vault.mkdir()
+    monkeypatch.delenv("SYNAPSE_OBSIDIAN_VAULT", raising=False)
+    with mock.patch("synapse_memory.config.load_config") as m:
+        m.return_value = mock.Mock(vault=str(cfg_vault))
+        result = resolve_vault_path()
+    assert result == cfg_vault
+
+
+def test_resolve_vault_path_falls_back_to_icloud_default(tmp_path, monkeypatch):
+    """env·config 모두 없고 iCloud 기본 경로가 실재하면 그 경로 반환."""
+    icloud = tmp_path / "icloud_default"
+    icloud.mkdir()
+    monkeypatch.delenv("SYNAPSE_OBSIDIAN_VAULT", raising=False)
+    with mock.patch("synapse_memory.config.load_config") as m_cfg, mock.patch(
+        "synapse_memory.collectors.obsidian.mirror.DEFAULT_VAULT_PATH", icloud
+    ):
+        m_cfg.return_value = mock.Mock(vault=None)
+        result = resolve_vault_path()
+    assert result == icloud
+
+
+def test_resolve_vault_path_returns_none_when_all_fallbacks_fail(
+    tmp_path, monkeypatch
+):
+    """모든 소스가 비어있으면 None — 메시지 기반 안내로 위임."""
+    monkeypatch.delenv("SYNAPSE_OBSIDIAN_VAULT", raising=False)
+    missing = tmp_path / "does_not_exist"
+    with mock.patch("synapse_memory.config.load_config") as m_cfg, mock.patch(
+        "synapse_memory.collectors.obsidian.mirror.DEFAULT_VAULT_PATH", missing
+    ):
+        m_cfg.return_value = mock.Mock(vault=None)
+        result = resolve_vault_path()
+    assert result is None
 
 
 def test_render_status_includes_recommendations():
