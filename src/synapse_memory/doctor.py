@@ -165,3 +165,99 @@ def _make_runtime_guidance_fix(target: Path) -> Callable[[], FixResult]:
         return _runtime_rerun_guidance(target)
 
     return apply
+
+
+def diagnose_vault_config_consistency(
+    config_vault: str | None,
+    *,
+    home: Path | None = None,
+) -> DiagnosticResult:
+    """config.yaml vault 경로와 vault detection 결과의 일관성 점검.
+
+    silent overwrite 위험 (사용자 의도 덮어쓰기) 회피를 위해
+    fix_action_id 는 `set_config_vault` 이며, planned_fix_actions 에는
+    포함되지 않는다. 적용은 `synapse-memory doctor --fix-config` 로만 가능.
+    """
+    from synapse_memory.vault_detector import detect_vault_candidates
+
+    detected = detect_vault_candidates(home=home)
+    real = [c for c in detected if not c.needs_creation]
+
+    if config_vault is None:
+        if real:
+            top = real[0]
+            return DiagnosticResult(
+                check_id="vault_config_consistency",
+                status=DiagnosticStatus.WARN,
+                message=(
+                    f"config.yaml vault 미설정. 감지된 vault: {top.path} "
+                    f"(source={top.source.value}, confidence={top.confidence}). "
+                    f"적용하려면 `synapse-memory doctor --fix-config`."
+                ),
+                fixable=True,
+                fix_action_id="set_config_vault",
+                target=top.path,
+            )
+        return DiagnosticResult(
+            check_id="vault_config_consistency",
+            status=DiagnosticStatus.WARN,
+            message=(
+                "config.yaml vault 미설정 + 자동 감지 실패. "
+                "installer 또는 수동 설정 필요."
+            ),
+            fixable=False,
+        )
+
+    config_path = Path(config_vault).expanduser().resolve()
+    if config_path.is_dir():
+        return DiagnosticResult(
+            check_id="vault_config_consistency",
+            status=DiagnosticStatus.OK,
+            message=f"config vault: {config_path}",
+            target=config_path,
+        )
+
+    if real:
+        top = real[0]
+        return DiagnosticResult(
+            check_id="vault_config_consistency",
+            status=DiagnosticStatus.WARN,
+            message=(
+                f"config vault ({config_path}) 가 존재하지 않음. "
+                f"감지된 vault: {top.path}. "
+                f"적용하려면 `synapse-memory doctor --fix-config`."
+            ),
+            fixable=True,
+            fix_action_id="set_config_vault",
+            target=top.path,
+        )
+
+    return DiagnosticResult(
+        check_id="vault_config_consistency",
+        status=DiagnosticStatus.FAIL,
+        message=(
+            f"config vault ({config_path}) 존재하지 않음 + 자동 감지 실패. "
+            "올바른 경로로 `synapse-memory config set vault <path>` 실행."
+        ),
+        fixable=False,
+    )
+
+
+def apply_set_config_vault(target: Path) -> FixResult:
+    """detection 결과를 config.yaml vault 키에 적용.
+
+    명시적 호출 전용 — `apply_fix_actions` 자동 dispatch에 포함되지 않는다.
+    silent overwrite 차단을 위해 CLI 의 `doctor --fix-config` 경로 또는
+    테스트에서 직접 호출.
+    """
+    from synapse_memory.config import load_config, save_config
+
+    cfg = load_config()
+    old = cfg.vault
+    cfg.vault = str(target)
+    save_config(cfg)
+    return FixResult(
+        action_id="set_config_vault",
+        status="success",
+        summary=f"config.vault: {old!r} → {target}",
+    )

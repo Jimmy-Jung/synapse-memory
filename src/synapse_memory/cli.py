@@ -72,9 +72,12 @@ from synapse_memory.cost.summary import (
 )
 from synapse_memory.daily import STEPS, StageStatus, run_daily
 from synapse_memory.doctor import (
+    DiagnosticStatus,
     apply_fix_actions,
+    apply_set_config_vault,
     diagnose_private_permissions,
     diagnose_runtime_shim,
+    diagnose_vault_config_consistency,
     planned_fix_actions,
 )
 from synapse_memory.endpoints.ask import ask
@@ -275,8 +278,48 @@ def run_doctor_fix(*, assume_yes: bool = False) -> int:
     return 1 if failed else 0
 
 
+def run_doctor_fix_config(*, assume_yes: bool = False) -> int:
+    """config.yaml vault 갱신 — silent overwrite 차단을 위해 별도 명시 flag.
+
+    diagnose_vault_config_consistency 가 fixable=True 인 경우에만 동작.
+    --yes 없으면 stdin 동의 필요.
+    """
+    from synapse_memory.config import load_config
+
+    cfg = load_config()
+    result = diagnose_vault_config_consistency(cfg.vault)
+
+    if result.status == DiagnosticStatus.OK:
+        print(f"{OK} {result.message}")
+        return 0
+
+    if not result.fixable or result.target is None:
+        print(f"{FAIL} {result.message}")
+        return 1
+
+    print("config.yaml vault 갱신 후보:")
+    print(f"  현재 config: {cfg.vault!r}")
+    print(f"  감지된 vault: {result.target}")
+    print(f"  사유: {result.message}")
+
+    if not assume_yes:
+        try:
+            answer = input("이 경로로 갱신할까요? [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer not in ("y", "yes"):
+            print("취소됨. config 변경 없음.")
+            return 0
+
+    fix_result = apply_set_config_vault(result.target)
+    print(f"{OK} {fix_result.summary}")
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """환경 진단 — apfel/macOS/Apple Silicon."""
+    if getattr(args, "fix_config", False):
+        return run_doctor_fix_config(assume_yes=bool(getattr(args, "yes", False)))
     if getattr(args, "fix", False):
         return run_doctor_fix(assume_yes=bool(getattr(args, "yes", False)))
 
@@ -316,6 +359,21 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"{OK} L0 루트: {l0} (0{L0_DIR_MODE:o})")
     else:
         print(f"{FAIL} L0 루트 권한 갱신 실패: {l0} (현재 0{actual_mode:o})")
+
+    # vault config 일관성 — config.yaml vault vs 실제 detection
+    try:
+        from synapse_memory.config import load_config
+
+        vc_cfg = load_config()
+        vc_result = diagnose_vault_config_consistency(vc_cfg.vault)
+        if vc_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {vc_result.message}")
+        elif vc_result.status == DiagnosticStatus.WARN:
+            print(f"⚠ {vc_result.message}")
+        else:
+            print(f"{FAIL} {vc_result.message}")
+    except Exception as exc:
+        print(f"⚠ vault config 진단 실패: {exc}")
 
     # AI provider CLI
     ai_env = detect_ai_environment()
@@ -2081,6 +2139,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doctor = sub.add_parser("doctor", help="환경 진단 (apfel/macOS/Apple Silicon)")
     p_doctor.add_argument("--fix", action="store_true", help="whitelist 기반 자동 복구")
+    p_doctor.add_argument(
+        "--fix-config",
+        action="store_true",
+        help="config.yaml vault 경로를 detection 결과로 갱신 (별도 명시 필요, --fix와 분리)",
+    )
     p_doctor.add_argument(
         "--yes",
         action="store_true",
