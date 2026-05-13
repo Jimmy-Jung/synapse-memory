@@ -47,11 +47,11 @@ class ClaudeModelsConfig:
 
 @dataclass
 class CodexModelsConfig:
-    """Codex 모델 이름 — gpt-5.4 등 OpenAI 체계."""
+    """Codex 모델 이름 — gpt-5.5 등 OpenAI 체계."""
 
-    classify: str = "gpt-5.4"
-    card_generate: str = "gpt-5.4"
-    ask: str | None = None  # None = provider default (gpt-5.4)
+    classify: str = "gpt-5.5"
+    card_generate: str = "gpt-5.5"
+    ask: str | None = None  # None = provider default (gpt-5.5)
     decide: str | None = None
     resume: str | None = None
     recall: str | None = None
