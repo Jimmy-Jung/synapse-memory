@@ -84,9 +84,6 @@ Intel Mac · macOS 25 이하는 지원하지 않습니다 (apfel 의존).
 
 [설치 zip 바로 다운로드][installer-zip]
 
-SHA256:
-`2237238dd22af1ebbcd89609822f94eefb236fada4a1d8694719d752c839a93d`
-
 다운로드한 zip을 압축 해제한 뒤
 `installer/SynapseMemory-Installer.command`를 더블클릭합니다.
 
