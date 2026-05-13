@@ -11,6 +11,10 @@ synapse-memory <command> --help
 
 | 통증·작업 | 명령 | 진입 슬래시 |
 |---|---|---|
+| "처음 설치했고 뭐부터 해야 할지 모르겠다" | (대화형 스크립트) | `/synapse-onboard` |
+| "오늘 뭐부터 하면 좋을까 추천해줘" | `assistant-status` + 대화 | `/synapse-assistant` |
+| "vault가 어지러워졌다 — 정리 도와줘" | `cleanup scan` / `cleanup apply` | `/synapse-cleanup` |
+| "설정을 바꾸고 싶다 (cleanup 임계값·모델·top_k)" | `config show/get/set/edit/reset/validate` | `/synapse-config` |
 | "노트가 매일 쌓이는데 정리할 시간이 없다" | `daily` | `/synapse-daily` |
 | "daily가 오래 걸리는데 진행 상황이 안 보인다" | `daily-status [--watch]` | (배경 도구) |
 | "환경이 깨졌나? 진단해줘" | `doctor` / `doctor --fix` | `/synapse-doctor` / `/synapse-fix` |

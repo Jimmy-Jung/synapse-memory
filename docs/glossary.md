@@ -154,6 +154,10 @@
 
 | Slash | 대응 CLI | 설명 |
 |---|---|---|
+| `/synapse-onboard` | (대화형 스크립트) | 최초 사용자 인도 — 답답함 1개 끝까지 체험 |
+| `/synapse-assistant` | `assistant-status` + 대화 | 일상 비서 — 추천 + 동의 시 대신 실행 (cleanup 후보도 추천) |
+| `/synapse-cleanup` | `cleanup scan` / `cleanup apply` | vault 청소 — 오래된·휴면·빈 자료를 archive로 이동 |
+| `/synapse-config` | `config show/get/set/edit/reset/validate` | 사용자 설정 — `~/.synapse/config.yaml` 자연어 변경 |
 | `/synapse-ask` | `ask` | 자연어 질의 |
 | `/synapse-recall` | `me what-did-i-think` | 시간순 회상 |
 | `/synapse-decide` | `me decide` | 의사결정 코파일럿 |

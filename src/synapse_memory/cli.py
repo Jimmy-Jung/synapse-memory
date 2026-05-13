@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime
+import json
 import os
 import stat
 import sys
@@ -145,18 +146,78 @@ def _stdout_is_tty() -> bool:
 
 
 def _interactive_guard(command: str, slash: str) -> None:
-    """대화형 endpoint 에서 사람의 직접 CLI 호출을 부드럽게 만류한다."""
+    """대화형 endpoint 에서 사람의 직접 CLI 호출을 부드럽게 만류한다.
+
+    config의 ``interactive_guard.enabled = false``이면 안내 자체를 생략.
+    대기 시간은 ``interactive_guard.delay_seconds`` 사용.
+    """
     if os.environ.get("SYNAPSE_FROM_AGENT"):
         return
     if not _stdout_is_tty():
         return
+    try:
+        from synapse_memory.config import get_config
+
+        cfg = get_config()
+        if not cfg.interactive_guard.enabled:
+            return
+        delay = cfg.interactive_guard.delay_seconds
+    except Exception:  # noqa: BLE001
+        delay = _INTERACTIVE_GUARD_DELAY_SECONDS
     sys.stderr.write(
-        _INTERACTIVE_GUARD_MESSAGE.format(
-            command=command, slash=slash, delay=_INTERACTIVE_GUARD_DELAY_SECONDS
-        )
+        _INTERACTIVE_GUARD_MESSAGE.format(command=command, slash=slash, delay=delay)
     )
     sys.stderr.flush()
-    time.sleep(_INTERACTIVE_GUARD_DELAY_SECONDS)
+    time.sleep(delay)
+
+
+def _arg_or_config(arg_value, cfg_path: str, fallback=None):
+    """CLI 인자가 None이면 config 값으로 폴백.
+
+    우선순위: CLI 인자 > ``~/.synapse/config.yaml`` > fallback 인자 > None.
+
+    Args:
+        arg_value: argparse가 채운 값. None이면 config 조회.
+        cfg_path: 점 표기 키 경로 (예: ``top_k.ask``).
+        fallback: config 조회 실패 시 사용할 최종 default.
+    """
+    if arg_value is not None:
+        return arg_value
+    try:
+        from synapse_memory.config import get_config, get_value
+
+        return get_value(get_config(), cfg_path)
+    except (KeyError, Exception):  # noqa: BLE001
+        return fallback
+
+
+def _resolve_model(arg_model: str | None, task: str) -> str | None:
+    """task별 model 폴백 — provider 인식.
+
+    1) CLI 인자 명시 → 그대로
+    2) ``SYNAPSE_AI_PROVIDER`` env → 그 provider의 task model
+    3) config ``ai_provider`` → 그 provider의 task model
+    4) provider가 ``auto``이거나 결정 불가 → None (detect_ai_environment가 자체 결정)
+
+    Args:
+        arg_model: argparse가 채운 값. None이면 config 폴백.
+        task: ``models.<provider>.<task>``의 task 이름 (예: ``ask``, ``classify``).
+    """
+    if arg_model is not None:
+        return arg_model
+    try:
+        from synapse_memory.config import get_config
+
+        provider = os.environ.get("SYNAPSE_AI_PROVIDER") or get_config().ai_provider
+        if provider == "auto":
+            return None
+        cfg = get_config()
+        provider_models = getattr(cfg.models, provider, None)
+        if provider_models is None:
+            return None
+        return getattr(provider_models, task, None)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def run_doctor_fix(*, assume_yes: bool = False) -> int:
@@ -410,6 +471,8 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
 
 
 def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
+    args.top_k = _arg_or_config(args.top_k, "top_k.recall", 8)
+    args.model = _resolve_model(args.model, "recall")
     _interactive_guard("me what-did-i-think", "recall")
 
     # FR-009 — --timeline + --by distance 충돌 검증
@@ -478,6 +541,8 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
 
 
 def cmd_me_decide(args: argparse.Namespace) -> int:
+    args.top_k = _arg_or_config(args.top_k, "top_k.decide", 6)
+    args.model = _resolve_model(args.model, "decide")
     _interactive_guard("me decide", "decide")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -548,7 +613,7 @@ def cmd_daily(args: argparse.Namespace) -> int:
 
 def cmd_daily_status(args: argparse.Namespace) -> int:
     """진행 중인/마지막 daily 진행률 조회."""
-    from synapse_memory.status import read_status, render_status, STATUS_FILE
+    from synapse_memory.status import STATUS_FILE, read_status, render_status
 
     def _print_once() -> int:
         status = read_status()
@@ -593,8 +658,281 @@ def cmd_daily_status(args: argparse.Namespace) -> int:
         return 130
 
 
+def cmd_config_show(args: argparse.Namespace) -> int:
+    """현재 효력 있는 config 출력."""
+    from synapse_memory.config import (
+        DEFAULT_CONFIG_PATH,
+        load_config,
+        render_config,
+    )
+
+    cfg = load_config()
+    if args.json:
+        from dataclasses import asdict
+        print(json.dumps(asdict(cfg), ensure_ascii=False, indent=2))
+        return 0
+    print(render_config(cfg, show_advanced=args.advanced))
+    if not DEFAULT_CONFIG_PATH.exists():
+        print()
+        print(f"(파일 없음 — default 값. 변경 시 자동 생성: {DEFAULT_CONFIG_PATH})")
+    return 0
+
+
+def cmd_config_get(args: argparse.Namespace) -> int:
+    """단일 키 조회."""
+    from synapse_memory.config import get_value, load_config
+
+    cfg = load_config()
+    try:
+        value = get_value(cfg, args.path)
+    except KeyError as e:
+        print(f"{FAIL} {e}", file=sys.stderr)
+        return 2
+    print(value if value is not None else "(미설정)")
+    return 0
+
+
+def cmd_config_set(args: argparse.Namespace) -> int:
+    """단일 키 설정 + 백업 + atomic write."""
+    from synapse_memory.config import (
+        is_advanced_path,
+        is_protected_path,
+        load_config,
+        save_config,
+        set_value,
+        validate_config,
+    )
+
+    if is_protected_path(args.path):
+        print(
+            f"{FAIL} 보호된 키 — config로 변경 불가: {args.path}\n"
+            "    (보안 핵심 — 코드 PR로만 변경)",
+            file=sys.stderr,
+        )
+        return 3
+
+    cfg = load_config()
+    if is_advanced_path(args.path) and not args.force:
+        print(
+            f"⚠ advanced 키: {args.path}\n"
+            "  잘못 변경 시 검색 품질 저하 또는 색인 재생성 필요.\n"
+            "  계속하려면 `--force`를 붙이세요.",
+            file=sys.stderr,
+        )
+        return 4
+
+    try:
+        set_value(cfg, args.path, args.value)
+    except (KeyError, ValueError) as e:
+        print(f"{FAIL} {e}", file=sys.stderr)
+        return 2
+
+    errors = validate_config(cfg)
+    if errors:
+        print(f"{FAIL} 검증 실패:", file=sys.stderr)
+        for err in errors:
+            print(f"  - {err}", file=sys.stderr)
+        return 5
+
+    save_config(cfg)
+    print(f"{OK} {args.path} = {args.value}")
+    return 0
+
+
+def cmd_config_edit(_args: argparse.Namespace) -> int:
+    """$EDITOR로 config.yaml 직접 편집 (없으면 안내)."""
+    from synapse_memory.config import (
+        DEFAULT_CONFIG_PATH,
+        load_config,
+        save_config,
+    )
+
+    if not DEFAULT_CONFIG_PATH.exists():
+        save_config(load_config(), make_backup=False)
+        print(f"{OK} default config 작성: {DEFAULT_CONFIG_PATH}")
+
+    editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
+    if not editor:
+        print(
+            "EDITOR 환경변수가 없습니다. 직접 열어 편집하세요:\n"
+            f"  {DEFAULT_CONFIG_PATH}",
+            file=sys.stderr,
+        )
+        return 0
+
+    import subprocess
+
+    rc = subprocess.run([editor, str(DEFAULT_CONFIG_PATH)]).returncode
+    return rc
+
+
+def cmd_config_reset(args: argparse.Namespace) -> int:
+    """전체 또는 단일 키를 default로 복원."""
+    from synapse_memory.config import (
+        SynapseConfig,
+        get_value,
+        load_config,
+        save_config,
+        set_value,
+    )
+
+    if args.path is None:
+        save_config(SynapseConfig())
+        print(f"{OK} 전체 config를 default로 복원")
+        return 0
+
+    default_cfg = SynapseConfig()
+    try:
+        default_val = get_value(default_cfg, args.path)
+    except KeyError as e:
+        print(f"{FAIL} {e}", file=sys.stderr)
+        return 2
+
+    cfg = load_config()
+    try:
+        set_value(cfg, args.path, default_val)
+    except (KeyError, ValueError) as e:
+        print(f"{FAIL} {e}", file=sys.stderr)
+        return 2
+
+    save_config(cfg)
+    print(f"{OK} {args.path}를 default({default_val})로 복원")
+    return 0
+
+
+def cmd_config_validate(_args: argparse.Namespace) -> int:
+    """현재 config 검증 (타입·범위·알려진 키)."""
+    from synapse_memory.config import load_config, validate_config
+
+    cfg = load_config()
+    errors = validate_config(cfg)
+    if not errors:
+        print(f"{OK} config 검증 통과")
+        return 0
+    print(f"{FAIL} 검증 실패 ({len(errors)}건):", file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
+    return 1
+
+
+def cmd_assistant_status(args: argparse.Namespace) -> int:
+    """비서 모드용 read-only 진단 묶음 (vault·doctor·inbox·draft·last-daily)."""
+    from synapse_memory.assistant_status import gather_status, render_status
+
+    status = gather_status()
+    if args.json:
+        print(status.to_json())
+    else:
+        print(render_status(status))
+    return 0
+
+
+def _resolve_vault_or_fail() -> Path:
+    """env 또는 인자에서 vault 경로 해결. 없으면 종료."""
+    from synapse_memory.assistant_status import resolve_vault_path
+
+    v = resolve_vault_path()
+    if v is None or not v.exists():
+        print(
+            f"{FAIL} vault 경로 없음 — `export SYNAPSE_OBSIDIAN_VAULT='<vault 경로>'`",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    return v
+
+
+def cmd_cleanup_scan(args: argparse.Namespace) -> int:
+    """vault read-only 스캔 — 청소 후보 출력 (이동 없음)."""
+    from synapse_memory.cleanup import scan_cleanup_candidates
+
+    vault = _resolve_vault_or_fail()
+    plan = scan_cleanup_candidates(
+        vault,
+        inbox_stale_days=args.inbox_days,
+        dormant_project_days=args.dormant_days,
+        old_resume_days=args.resume_days,
+        stale_memory_inbox_days=args.memory_inbox_days,
+        old_daily_reports_days=args.report_days,
+    )
+    if args.json:
+        print(plan.to_json())
+        return 0
+
+    by_kind = plan.by_kind()
+    if not plan.candidates:
+        print("정리 후보 없음 — vault가 깨끗합니다.")
+        return 0
+    print(f"vault: {plan.vault_path}")
+    print(f"scanned_at: {plan.scanned_at}")
+    print(f"총 후보: {len(plan.candidates)}건")
+    print()
+    for kind, items in by_kind.items():
+        print(f"[{kind}] {len(items)}건")
+        for c in items[:5]:
+            age_part = f" ({c.age_days}일)" if c.age_days is not None else ""
+            print(f"  - {c.source_path}{age_part} — {c.reason}")
+        if len(items) > 5:
+            print(f"  ... 외 {len(items) - 5}건")
+        print()
+    print(
+        "실제 이동하려면: `synapse-memory cleanup apply --apply "
+        "[--category <kind1,kind2>]`"
+    )
+    return 0
+
+
+def cmd_cleanup_apply(args: argparse.Namespace) -> int:
+    """선택된 청소 후보를 archive 폴더로 이동 + 매니페스트 작성."""
+    from synapse_memory.cleanup import (
+        apply_cleanup,
+        scan_cleanup_candidates,
+        write_cleanup_manifest,
+    )
+
+    vault = _resolve_vault_or_fail()
+    plan = scan_cleanup_candidates(
+        vault,
+        inbox_stale_days=args.inbox_days,
+        dormant_project_days=args.dormant_days,
+        old_resume_days=args.resume_days,
+        stale_memory_inbox_days=args.memory_inbox_days,
+        old_daily_reports_days=args.report_days,
+    )
+
+    selected = plan.candidates
+    if args.category:
+        wanted = {c.strip() for c in args.category.split(",") if c.strip()}
+        selected = [c for c in selected if c.kind.value in wanted]
+    if not selected:
+        print("선택된 후보 없음.")
+        return 0
+
+    dry_run = not args.apply
+    results = apply_cleanup(plan, selected=selected, dry_run=dry_run, vault=vault)
+    manifest = write_cleanup_manifest(vault, results)
+
+    moved = sum(1 for r in results if r.status == "moved")
+    dry = sum(1 for r in results if r.status == "dry_run")
+    skipped = sum(1 for r in results if r.status == "skipped")
+    failed = sum(1 for r in results if r.status == "failed")
+
+    if dry_run:
+        print(
+            f"dry-run: 이동 예정 {dry}건, 건너뜀 {skipped}건. "
+            f"실제 적용은 `--apply`를 붙이세요."
+        )
+    else:
+        print(
+            f"이동 {moved}건, 건너뜀 {skipped}건, 실패 {failed}건. "
+            f"매니페스트: {manifest}"
+        )
+    return 0 if failed == 0 else 1
+
+
 def cmd_me_update_profile(args: argparse.Namespace) -> int:
     """raw → Profile/DecisionPattern 후보 → MemoryInbox PR."""
+    args.sample_lines = _arg_or_config(args.sample_lines, "profile.sample_lines", 200)
+    args.model = _resolve_model(args.model, "update_profile")
     _interactive_guard("me update-profile", "update-profile")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -636,6 +974,8 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
 
 def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     """회사 맞춤 이력서 자동 생성 → vault Drafts."""
+    args.top_k = _arg_or_config(args.top_k, "top_k.resume", 6)
+    args.model = _resolve_model(args.model, "resume")
     _interactive_guard("me draft-resume", "resume")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -933,6 +1273,8 @@ def cmd_me_recipes_show(args: argparse.Namespace) -> int:
 
 def cmd_ask(args: argparse.Namespace) -> int:
     """자연어 질의 → RAG → AI 답변."""
+    args.top_k = _arg_or_config(args.top_k, "top_k.ask", 5)
+    args.model = _resolve_model(args.model, "ask")
     _interactive_guard("ask", "ask")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
@@ -1022,6 +1364,7 @@ def cmd_feedback(args: argparse.Namespace) -> int:
 
 def cmd_cost_summary(args: argparse.Namespace) -> int:
     """최근 cost event 집계."""
+    args.days = _arg_or_config(args.days, "cost.summary_days", 30)
     if args.days < 1:
         print("--days must be >= 1", file=sys.stderr)
         return 1
@@ -1069,6 +1412,7 @@ def _feedback_targets(args: argparse.Namespace):
 
 def cmd_rag_search(args: argparse.Namespace) -> int:
     """벡터 DB 검색 — dense (bge-m3 cosine)."""
+    args.top_k = _arg_or_config(args.top_k, "top_k.rag_search", 5)
     try:
         q_vec = embed_query(args.query)
         store = open_vector_store()
@@ -1104,6 +1448,7 @@ def cmd_rag_search(args: argparse.Namespace) -> int:
 
 def cmd_card_generate(args: argparse.Namespace) -> int:
     """classify된 cluster들로 ProjectCard/CompanyCard 자동 생성."""
+    args.model = _resolve_model(args.model, "card_generate")
     ai_env = detect_ai_environment()
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
@@ -1200,6 +1545,7 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
 
 def cmd_cluster_classify(args: argparse.Namespace) -> int:
     """모든 cluster를 LLM 분류 → classifications.json 저장."""
+    args.model = _resolve_model(args.model, "classify")
     ai_env = detect_ai_environment()
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
@@ -1701,8 +2047,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_card_gen.add_argument(
         "--model",
-        default="sonnet",
-        help="AI 모델 (sonnet 권장 — yaml 형식 안정적)",
+        default=None,
+        help="AI 모델 (생략 시 config.models.card_generate — 기본 sonnet)",
     )
     p_card_gen.add_argument(
         "--force", action="store_true", help="기존 Card 덮어쓰기"
@@ -1735,8 +2081,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_cl_class.add_argument(
         "--model",
-        default="haiku",
-        help="AI 모델 (haiku/sonnet/opus). 기본 haiku — 단순 분류에 충분",
+        default=None,
+        help="AI 모델 (생략 시 config.models.classify — 기본 haiku)",
     )
     p_cl_class.set_defaults(func=cmd_cluster_classify)
 
@@ -1756,7 +2102,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_rag_search = rag_sub.add_parser("search", help="자연어 query → top-k Card")
     p_rag_search.add_argument("query", help="검색 자연어")
-    p_rag_search.add_argument("--top-k", type=int, default=5)
+    p_rag_search.add_argument("--top-k", type=int, default=None)
     p_rag_search.add_argument(
         "--show-snippet", action="store_true", help="결과 본문 일부 출력"
     )
@@ -1766,7 +2112,7 @@ def build_parser() -> argparse.ArgumentParser:
         "ask", help="자연어 질의 → RAG retrieve → AI 답변"
     )
     p_ask.add_argument("query", help="자연어 질문")
-    p_ask.add_argument("--top-k", type=int, default=5)
+    p_ask.add_argument("--top-k", type=int, default=None)
     p_ask.add_argument("--model", default=None)
     p_ask.add_argument(
         "--kind",
@@ -1808,7 +2154,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cost = sub.add_parser("cost", help="비용/토큰 관측")
     cost_sub = p_cost.add_subparsers(dest="action", required=True, metavar="ACTION")
     p_cost_summary = cost_sub.add_parser("summary", help="최근 비용 요약")
-    p_cost_summary.add_argument("--days", type=int, default=30)
+    p_cost_summary.add_argument("--days", type=int, default=None)
     p_cost_summary.add_argument("--by", choices=("command", "model"), default="command")
     p_cost_summary.add_argument("--json", action="store_true", help="JSON 출력")
     p_cost_summary.set_defaults(func=cmd_cost_summary)
@@ -1822,7 +2168,7 @@ def build_parser() -> argparse.ArgumentParser:
         "company_id",
         help="CompanyCard 파일명 슬러그 (예: danggeun, 샘플회사)",
     )
-    p_resume.add_argument("--top-k", type=int, default=6)
+    p_resume.add_argument("--top-k", type=int, default=None)
     p_resume.add_argument("--model", default=None)
     p_resume.set_defaults(func=cmd_me_draft_resume)
 
@@ -1833,8 +2179,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_up.add_argument(
         "--sample-lines",
         type=int,
-        default=200,
-        help="history.jsonl 마지막 N줄 분석",
+        default=None,
+        help="history.jsonl 마지막 N줄 분석 (생략 시 config.profile.sample_lines)",
     )
     p_up.add_argument("--model", default=None)
     p_up.add_argument(
@@ -1848,7 +2194,7 @@ def build_parser() -> argparse.ArgumentParser:
         "what-did-i-think", help="주제에 대한 과거 사고 회상"
     )
     p_wdt.add_argument("topic", help="회상할 주제")
-    p_wdt.add_argument("--top-k", type=int, default=8)
+    p_wdt.add_argument("--top-k", type=int, default=None)
     p_wdt.add_argument("--model", default=None)
     p_wdt.add_argument(
         "--timeline",
@@ -1878,7 +2224,7 @@ def build_parser() -> argparse.ArgumentParser:
         "decide", help="의사결정 코파일럿 (Profile + Patterns + RAG)"
     )
     p_dec.add_argument("situation", help="결정할 상황")
-    p_dec.add_argument("--top-k", type=int, default=6)
+    p_dec.add_argument("--top-k", type=int, default=None)
     p_dec.add_argument("--model", default=None)
     p_dec.set_defaults(func=cmd_me_decide)
 
@@ -1984,6 +2330,92 @@ def build_parser() -> argparse.ArgumentParser:
         "--interval", type=float, default=2.0, help="--watch 폴링 주기(초)"
     )
     p_daily_status.set_defaults(func=cmd_daily_status)
+
+    p_config = sub.add_parser(
+        "config",
+        help="사용자 설정 관리 (~/.synapse/config.yaml)",
+    )
+    config_sub = p_config.add_subparsers(dest="action", required=True, metavar="ACTION")
+
+    p_cfg_show = config_sub.add_parser("show", help="현재 효력 있는 config 출력")
+    p_cfg_show.add_argument("--json", action="store_true")
+    p_cfg_show.add_argument(
+        "--advanced", action="store_true", help="advanced 섹션도 포함"
+    )
+    p_cfg_show.set_defaults(func=cmd_config_show)
+
+    p_cfg_get = config_sub.add_parser("get", help="단일 키 조회 (예: cleanup.inbox_stale_days)")
+    p_cfg_get.add_argument("path", help="점 표기 키 경로")
+    p_cfg_get.set_defaults(func=cmd_config_get)
+
+    p_cfg_set = config_sub.add_parser("set", help="단일 키 설정 + 자동 백업")
+    p_cfg_set.add_argument("path", help="점 표기 키 경로")
+    p_cfg_set.add_argument("value", help="설정할 값 (bool/int/float/str 자동 파싱)")
+    p_cfg_set.add_argument(
+        "--force", action="store_true", help="advanced 키 변경 시 경고 우회"
+    )
+    p_cfg_set.set_defaults(func=cmd_config_set)
+
+    p_cfg_edit = config_sub.add_parser("edit", help="$EDITOR로 config.yaml 직접 편집")
+    p_cfg_edit.set_defaults(func=cmd_config_edit)
+
+    p_cfg_reset = config_sub.add_parser(
+        "reset", help="전체 또는 단일 키를 default로 복원"
+    )
+    p_cfg_reset.add_argument(
+        "path", nargs="?", default=None, help="단일 키 복원 (생략 시 전체)"
+    )
+    p_cfg_reset.set_defaults(func=cmd_config_reset)
+
+    p_cfg_validate = config_sub.add_parser("validate", help="현재 config 검증")
+    p_cfg_validate.set_defaults(func=cmd_config_validate)
+
+    p_assist = sub.add_parser(
+        "assistant-status",
+        help="비서 모드용 read-only 진단 묶음 (vault·doctor·inbox·draft·last-daily)",
+    )
+    p_assist.add_argument(
+        "--json", action="store_true", help="JSON 원본 그대로 출력 (slash 명령용)"
+    )
+    p_assist.set_defaults(func=cmd_assistant_status)
+
+    p_cleanup = sub.add_parser(
+        "cleanup",
+        help="vault 청소 도우미 (오래된·휴면·빈 자료를 archive로 이동)",
+    )
+    cleanup_sub = p_cleanup.add_subparsers(dest="action", required=True, metavar="ACTION")
+
+    p_cleanup_scan = cleanup_sub.add_parser(
+        "scan", help="청소 후보 read-only 출력 (이동 없음)"
+    )
+    p_cleanup_scan.add_argument("--json", action="store_true")
+    p_cleanup_scan.add_argument("--inbox-days", type=int, default=30)
+    p_cleanup_scan.add_argument("--dormant-days", type=int, default=90)
+    p_cleanup_scan.add_argument("--resume-days", type=int, default=90)
+    p_cleanup_scan.add_argument("--memory-inbox-days", type=int, default=60)
+    p_cleanup_scan.add_argument("--report-days", type=int, default=90)
+    p_cleanup_scan.set_defaults(func=cmd_cleanup_scan)
+
+    p_cleanup_apply = cleanup_sub.add_parser(
+        "apply",
+        help="선택된 청소 후보를 archive 폴더로 이동 + 매니페스트 작성 (기본 dry-run)",
+    )
+    p_cleanup_apply.add_argument(
+        "--apply",
+        action="store_true",
+        help="실제 이동 실행 (생략 시 dry-run)",
+    )
+    p_cleanup_apply.add_argument(
+        "--category",
+        help="카테고리 필터 (콤마 구분): inbox_stale,dormant_project,old_resume,"
+        "stale_memory_inbox,empty_card,old_daily_report,empty_folder",
+    )
+    p_cleanup_apply.add_argument("--inbox-days", type=int, default=30)
+    p_cleanup_apply.add_argument("--dormant-days", type=int, default=90)
+    p_cleanup_apply.add_argument("--resume-days", type=int, default=90)
+    p_cleanup_apply.add_argument("--memory-inbox-days", type=int, default=60)
+    p_cleanup_apply.add_argument("--report-days", type=int, default=90)
+    p_cleanup_apply.set_defaults(func=cmd_cleanup_apply)
 
     p_rl = sub.add_parser(
         "redactlist", help="NDA 회사/프로젝트 강제 마스킹 리스트 관리"

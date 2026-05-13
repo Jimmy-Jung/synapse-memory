@@ -245,6 +245,10 @@ synapse-memory redactlist show
 
 | 명령 | 언제 쓰나 | 결과 |
 |---|---|---|
+| `/synapse-onboard` | **처음 설치 직후, 뭐부터 해야 할지 모를 때** | 답답함 1개를 골라 끝까지 체험 |
+| `/synapse-assistant` | **매일 진입 — 오늘 뭐 할지 추천받고 싶을 때** | 1~3개 추천 + 동의 시 대신 실행 |
+| `/synapse-cleanup` | **vault가 어지러워졌을 때 (월 1회 권장)** | 오래된·휴면·빈 자료를 archive로 이동 (영구 삭제 0건) |
+| `/synapse-config` | **cleanup 임계값·모델·top_k 등 사용자 설정 변경** | 자연어로 한 키 변경 + 백업 자동 |
 | `/synapse-daily` | 하루 한 번 정리 | 새 카드 + MemoryInbox 후보 |
 | `/synapse-ask <질문>` | 내 자료에서 답을 찾고 싶을 때 | 답변 + 출처 카드 |
 | `/synapse-recall <주제>` | 시간순 회상이 필요할 때 | 시간순 변화 |
