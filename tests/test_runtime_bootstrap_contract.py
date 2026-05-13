@@ -40,3 +40,10 @@ def test_bootstrap_script_preserves_canonical_command() -> None:
     assert "synapse-memory" in script
     assert "ln -sf" in script
     assert "/usr/bin/python3" not in script
+
+
+def test_macos_installer_does_not_assign_zsh_status_reserved_variable() -> None:
+    script = Path("installer/SynapseMemory-Installer.command").read_text(encoding="utf-8")
+
+    assert "local status=" not in script
+    assert "local step_status=" in script

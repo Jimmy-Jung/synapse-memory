@@ -80,12 +80,36 @@ Intel Mac · macOS 25 이하는 지원하지 않습니다 (apfel 의존).
 
 ## 빠른 시작
 
-### 비개발자 모드 — 더블클릭 설치
+### 비개발자 모드 — AI에게 설치 맡기기
 
-[설치 zip 바로 다운로드][installer-zip]
+Claude Code나 Codex에 아래 프롬프트를 그대로 붙여넣습니다.
+
+```text
+Synapse Memory를 설치해줘.
+
+설치 파일은 아래 링크에서 받아줘.
+https://github.com/Jimmy-Jung/synapse-memory/releases/download/v0.6.1/SynapseMemory-v0.6.1-macos-installer.zip
 
 다운로드한 zip을 압축 해제한 뒤
-`installer/SynapseMemory-Installer.command`를 더블클릭합니다.
+installer/SynapseMemory-Installer.command가 있는지 확인하고,
+zsh -n으로 문법 검사까지 해줘.
+
+그 다음에는 바로 실행하지 말고 멈춘 뒤,
+내가 직접 실행할 수 있는 방법을 안내해줘.
+
+내가 "실행해"라고 명시적으로 말하면 기본 preview 모드로 실행해줘.
+내가 "실제 적용해"라고 명시적으로 말하기 전까지는
+SYNAPSE_INSTALLER_DRY_RUN=0을 붙이지 마.
+
+설치 중 macOS 보안 경고가 뜨면 임의로 보안 설정을 바꾸지 말고,
+내가 직접 열 수 있도록 안내해줘.
+
+GUI 동의, Obsidian 저장소 위치 선택, Gatekeeper 우회, 실제 적용처럼
+내가 직접 승인해야 하는 단계에서는 멈추고 안내해줘.
+
+내가 설치를 실행했다고 알려주면,
+최신 로그 경로와 synapse-memory doctor 결과를 확인해서 요약해줘.
+```
 
 설치 프로그램은 GUI 동의 후 Homebrew, Obsidian, Claude Code, apfel,
 Synapse runtime, Obsidian vault 후보를 순서대로 확인합니다.
@@ -96,6 +120,8 @@ Synapse runtime, Obsidian vault 후보를 순서대로 확인합니다.
 실제 적용 모드는 constitution의 Installation Consent Scoping 정책이
 반영된 뒤 활성화합니다.
 로그는 `~/Library/Logs/SynapseMemory/` 아래에 남습니다.
+
+설치 파일을 직접 받고 싶다면 [설치 zip 바로 다운로드][installer-zip]을 사용합니다.
 
 #### macOS 보안 경고가 뜨는 경우
 
@@ -210,9 +236,9 @@ W5 ✓ me {draft-resume, what-did-i-think, decide, update-profile}
 W6 ✓ daily 통합 + 문서화 + GitHub publish (v0.3.0)
 W7 ✓ Claude Code / Codex plugin layer 부활 (v0.4.0+) — slash 명령 surface
 W8 ✓ me-recipes framework + hybrid retrieval (v0.5.0) — recipe 기반 생성 + dense/BM25 선택
-W9 ✓ 비개발자 온보딩 (v0.6.0) — 더블클릭 installer preview + iCloud vault 추천 + doctor --fix
+W9 ✓ 비개발자 온보딩 (v0.6.1) — 더블클릭 installer preview + iCloud vault 추천 + doctor --fix
 
-686 tests passed · v0.6.0
+687 tests passed · v0.6.1
 ```
 
 ## 라이선스
@@ -223,4 +249,4 @@ MIT — [LICENSE](LICENSE).
 
 Synapse Memory Maintainers
 
-[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v0.6.0/SynapseMemory-v0.6.0-macos-installer.zip
+[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v0.6.1/SynapseMemory-v0.6.1-macos-installer.zip

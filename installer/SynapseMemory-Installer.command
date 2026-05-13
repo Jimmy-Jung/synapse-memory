@@ -16,9 +16,9 @@ touch "${LOG_FILE}"
 
 log_step() {
   local step_id="$1"
-  local status="$2"
+  local step_status="$2"
   local summary="$3"
-  printf '%s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${step_id}" "${status}" "${summary}" | tee -a "${LOG_FILE}"
+  printf '%s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${step_id}" "${step_status}" "${summary}" | tee -a "${LOG_FILE}"
 }
 
 ask_consent() {
