@@ -540,7 +540,57 @@ def cmd_daily(args: argparse.Namespace) -> int:
             status = OK if s.ok else FAIL
             detail = s.summary or s.error
         print(f"  {status} {s.name:<22} {s.elapsed:>6.1f}s  {detail}")
+    from synapse_memory.status import STATUS_FILE as _DAILY_STATUS_FILE
+
+    print(f"\n진행률 status: {_DAILY_STATUS_FILE}  ('synapse-memory daily-status'로 조회)")
     return 1 if result.errors else 0
+
+
+def cmd_daily_status(args: argparse.Namespace) -> int:
+    """진행 중인/마지막 daily 진행률 조회."""
+    from synapse_memory.status import read_status, render_status, STATUS_FILE
+
+    def _print_once() -> int:
+        status = read_status()
+        if args.json:
+            if status is None:
+                print("{}")
+            else:
+                print(status.to_json())
+        else:
+            print(render_status(status))
+        return 0 if status is not None else 1
+
+    if not args.watch:
+        return _print_once()
+
+    import time as _time
+
+    interval = max(0.5, float(args.interval))
+    last_signature: tuple | None = None
+    print(f"watching {STATUS_FILE} (Ctrl-C로 종료, {interval:.1f}s 간격)")
+    try:
+        while True:
+            status = read_status()
+            signature: tuple = (
+                None
+                if status is None
+                else (
+                    status.updated_at,
+                    status.current_stage,
+                    status.current_item_index,
+                    status.state,
+                )
+            )
+            if signature != last_signature:
+                print("\n--- " + datetime.datetime.now().isoformat(timespec="seconds"))
+                print(render_status(status))
+                last_signature = signature
+            if status is not None and status.state in {"done", "failed"}:
+                return 0 if status.state == "done" else 1
+            _time.sleep(interval)
+    except KeyboardInterrupt:
+        return 130
 
 
 def cmd_me_update_profile(args: argparse.Namespace) -> int:
@@ -1917,6 +1967,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_daily.add_argument("--profile-facts-only", action="store_true")
     p_daily.add_argument("--dry-run", action="store_true", help="실행 안 하고 단계만")
     p_daily.set_defaults(func=cmd_daily)
+
+    p_daily_status = sub.add_parser(
+        "daily-status",
+        help="진행 중인/마지막 daily 진행률 조회 (~/.synapse/run/daily.status.json)",
+    )
+    p_daily_status.add_argument(
+        "--json", action="store_true", help="JSON 원본 그대로 출력"
+    )
+    p_daily_status.add_argument(
+        "--watch",
+        action="store_true",
+        help="2초 간격으로 폴링하여 상태 변화 추적",
+    )
+    p_daily_status.add_argument(
+        "--interval", type=float, default=2.0, help="--watch 폴링 주기(초)"
+    )
+    p_daily_status.set_defaults(func=cmd_daily_status)
 
     p_rl = sub.add_parser(
         "redactlist", help="NDA 회사/프로젝트 강제 마스킹 리스트 관리"

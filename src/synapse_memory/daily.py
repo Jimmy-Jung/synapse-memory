@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from synapse_memory.status import StatusSink, StatusWriter
+
 StageAction = Callable[[], Any]
 
 
@@ -150,6 +152,33 @@ def _run_step(
     return StepResult.success(name, elapsed, str(summary))
 
 
+def _emit_progress(
+    on_log: Callable[[str], None],
+    *,
+    index: int,
+    total: int,
+    label: str,
+    status: str,
+    elapsed: float | None = None,
+    status_sink: StatusSink | None = None,
+) -> None:
+    """클러스터 루프 진행 한 줄 출력 — `[i/N] label ... status`.
+
+    백그라운드/파이프 환경에서도 즉시 보이도록 stdout flush를 보장한다.
+    `status_sink`가 주어지면 status JSON에 현재 item도 반영한다.
+    """
+    suffix = f" ({elapsed:.1f}s)" if elapsed is not None else ""
+    on_log(f"  [{index}/{total}] {label} ... {status}{suffix}")
+    if status_sink is not None:
+        status_sink.update_item(index=index, total=total, label=label)
+    import sys
+
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
 def _resume_skip_reason(resume_from: str) -> str:
     return f"resume before {resume_from}"
 
@@ -183,12 +212,13 @@ def _build_stage_actions(
     profile_sample_lines: int,
     profile_facts_only: bool,
     on_log: Callable[[str], None],
+    status_sink: StatusSink | None = None,
 ) -> dict[str, StageAction]:
     return {
         "collect_claude_code": _collect_claude_code_action,
         "collect_obsidian": _collect_obsidian_action,
-        "classify": _build_classify_action(classify_model, on_log),
-        "generate": _build_generate_action(generate_model, on_log),
+        "classify": _build_classify_action(classify_model, on_log, status_sink),
+        "generate": _build_generate_action(generate_model, on_log, status_sink),
         "index": _index_action,
         "update_profile": _build_update_profile_action(
             profile_model=profile_model,
@@ -216,6 +246,7 @@ def _collect_obsidian_action() -> str:
 def _build_classify_action(
     classify_model: str,
     on_log: Callable[[str], None],
+    status_sink: StatusSink | None = None,
 ) -> StageAction:
     def step() -> str:
         from synapse_memory.cards.auto_classify import (
@@ -238,15 +269,34 @@ def _build_classify_action(
         obs_root = obs_path()
         cls_dict = dict(existing)
         failed = 0
-        for c in new_clusters:
+        total = len(new_clusters)
+        for i, c in enumerate(new_clusters, start=1):
+            t_cluster = time.monotonic()
             try:
                 cls = classify_cluster(
                     c, obs_root=obs_root, ai_env=env, model=classify_model
                 )
                 cls_dict[c.cluster_id] = cls
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=c.cluster_id,
+                    status="ok",
+                    elapsed=time.monotonic() - t_cluster,
+                    status_sink=status_sink,
+                )
             except Exception as exc:
                 failed += 1
-                on_log(f"    {c.cluster_id} 실패: {exc}")
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=c.cluster_id,
+                    status=f"실패: {exc}",
+                    elapsed=time.monotonic() - t_cluster,
+                    status_sink=status_sink,
+                )
         save_classifications(cls_dict)
         suffix = f", 실패 {failed}개" if failed else ""
         return f"신규 {len(new_clusters)}개 분류{suffix}"
@@ -257,6 +307,7 @@ def _build_classify_action(
 def _build_generate_action(
     generate_model: str,
     on_log: Callable[[str], None],
+    status_sink: StatusSink | None = None,
 ) -> StageAction:
     def step() -> str:
         from synapse_memory.cards.auto_classify import load_classifications
@@ -278,8 +329,8 @@ def _build_generate_action(
             return "classifications 비어있음"
         clusters = {c.cluster_id: c for c in identify_clusters()}
         obs_root = obs_path()
-        created = 0
-        failed = 0
+
+        pending: list[tuple[str, Any, str, Path]] = []
         for cid, cls in classifications.items():
             if cls.kind not in ("project", "company"):
                 continue
@@ -287,9 +338,23 @@ def _build_generate_action(
                 continue
             if cls.kind == "project":
                 target = projects_dir() / f"{cid}.md"
-                if target.exists():
-                    continue
-                try:
+            else:
+                target = companies_dir() / f"{cid}.md"
+            if target.exists():
+                continue
+            pending.append((cid, cls, cls.kind, target))
+
+        if not pending:
+            return "신규 Card 없음"
+
+        created = 0
+        failed = 0
+        total = len(pending)
+        for i, (cid, cls, kind, _target) in enumerate(pending, start=1):
+            label = f"{cid} ({kind})"
+            t_card = time.monotonic()
+            try:
+                if kind == "project":
                     card = generate_project_card(
                         clusters[cid],
                         candidate_name=cls.candidate_name,
@@ -298,15 +363,7 @@ def _build_generate_action(
                         model=generate_model,
                     )
                     save_project_card(card)
-                    created += 1
-                except Exception as exc:
-                    failed += 1
-                    on_log(f"    {cid} 실패: {exc}")
-            else:
-                target = companies_dir() / f"{cid}.md"
-                if target.exists():
-                    continue
-                try:
+                else:
                     card_c = generate_company_card(
                         clusters[cid],
                         candidate_name=cls.candidate_name,
@@ -315,10 +372,27 @@ def _build_generate_action(
                         model=generate_model,
                     )
                     save_company_card(card_c)
-                    created += 1
-                except Exception as exc:
-                    failed += 1
-                    on_log(f"    {cid} 실패: {exc}")
+                created += 1
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=label,
+                    status="ok",
+                    elapsed=time.monotonic() - t_card,
+                    status_sink=status_sink,
+                )
+            except Exception as exc:
+                failed += 1
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=label,
+                    status=f"실패: {exc}",
+                    elapsed=time.monotonic() - t_card,
+                    status_sink=status_sink,
+                )
         suffix = f", 실패 {failed}개" if failed else ""
         return f"신규 Card {created}개 생성{suffix}"
 
@@ -503,6 +577,7 @@ def run_daily(
     dry_run: bool = False,
     stage_actions: Mapping[str, StageAction] | None = None,
     on_log: Callable[[str], None] = print,
+    status_sink: StatusSink | None = None,
 ) -> DailyResult:
     """일일 파이프라인 실행.
 
@@ -542,6 +617,12 @@ def run_daily(
             on_log(f"{mark} {s}{suffix}")
         return result
 
+    if status_sink is None:
+        try:
+            status_sink = StatusWriter(total_stages=len(STEPS))
+        except Exception:
+            status_sink = StatusSink()
+
     actions = _build_stage_actions(
         classify_model=classify_model,
         generate_model=generate_model,
@@ -549,6 +630,7 @@ def run_daily(
         profile_sample_lines=profile_sample_lines,
         profile_facts_only=profile_facts_only,
         on_log=on_log,
+        status_sink=status_sink,
     )
     if stage_actions:
         actions.update(stage_actions)
@@ -568,12 +650,18 @@ def run_daily(
             on_log(f"\n=== [{stage.name}] ===")
             on_log(f"  건너뜀: {step_result.skip_reason}")
         else:
+            status_sink.begin_stage(stage.name, i + 1)
             action = actions[stage.name]
             if stage.name == "report" and stage.name not in (stage_actions or {}):
                 action = _build_report_action(result)
             step_result = _run_step(stage.name, action, on_log=on_log)
+            status_sink.end_stage(
+                stage.name,
+                failed=step_result.status == StageStatus.FAILED,
+            )
         result.steps.append(step_result)
         results_by_name[stage.name] = step_result
 
     result.total_elapsed = time.monotonic() - t_start
+    status_sink.finish(errors=result.errors)
     return result
