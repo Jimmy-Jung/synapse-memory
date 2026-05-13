@@ -2,6 +2,28 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.8.0] — 2026-05-13
+
+### Breaking — Slash 명령 prefix `synapse-memory` → `sm`
+
+- Plugin 이름이 `synapse-memory` → **`sm`** 로 변경. 슬래시 명령 표시가
+  `/synapse-memory:synapse-ask` → **`/sm:ask`** 로 짧아짐. command 파일명에서도
+  `synapse-` prefix 제거 (`commands/synapse-ask.md` → `commands/ask.md`).
+- Skill 폴더도 `skills/synapse-memory/` → `skills/sm/` 로 이동. Codex `plugins.*`
+  config key, claude `plugin install` ref 모두 `sm@synapse-memory-marketplace`.
+- 마이그레이션: 기존 사용자는 한 번 재설치 필요.
+  ```bash
+  claude plugin uninstall --scope user synapse-memory@synapse-memory-marketplace || true
+  claude plugin marketplace remove --scope user synapse-memory-marketplace || true
+  claude plugin marketplace add --scope user Jimmy-Jung/synapse-memory
+  claude plugin install --scope user sm@synapse-memory-marketplace
+  claude plugin enable --scope user sm@synapse-memory-marketplace
+  ```
+  Codex `~/.codex/config.toml` 의 `[plugins."synapse-memory@..."]` 블록을
+  `[plugins."sm@..."]` 로 교체.
+- CLI 바이너리(`synapse-memory`)와 marketplace 이름(`synapse-memory-marketplace`),
+  GitHub repo 이름은 **그대로**. 이름이 바뀐 것은 slash prefix와 skill name뿐.
+
 ## [0.7.0] — 2026-05-13
 
 ### Added — Persona OS (M1) + 신뢰 가드 + Quick mode
@@ -23,7 +45,7 @@ All notable changes to Synapse Memory are documented here.
 - `me` namespace → **`persona`** deep rename. CLI 표면뿐 아니라 모듈 / 함수 / `last_response`
   command 식별자 (`me.generate.*` → `persona.generate.*`) 모두 갱신. pre-product 단계라
   legacy migration 없음.
-- README hero 를 **2 entry meta** (`/synapse-onboard` + `/synapse-assistant`) 로 축소.
+- README hero 를 **2 entry meta** (`/sm:onboard` + `/sm:assistant`) 로 축소.
   13개 slash 명령을 4-tier (entry meta / direct atom / maintenance / power) 로 분류.
 - `persona.decide()` **신뢰 가드** 추가: RAG 매치 0개 또는 가장 가까운 distance > 0.6 →
   LLM 호출 차단 후 거부 응답. Profile 위장 인용으로 generic 답 만드는 위험 차단.

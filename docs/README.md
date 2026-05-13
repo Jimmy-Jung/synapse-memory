@@ -31,5 +31,5 @@ Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 정리해 
 ## 어디부터 시작해야 하나요?
 
 처음이라면 바로 [처음부터 끝까지 사용하기](start-here.md)를 읽으면 됩니다. 이미 설치를
-마쳤다면 `/synapse-doctor`, `/synapse-daily`, `/synapse-ask` 세 명령만 먼저 기억하면
+마쳤다면 `/sm:doctor`, `/sm:daily`, `/sm:ask` 세 명령만 먼저 기억하면
 충분합니다.

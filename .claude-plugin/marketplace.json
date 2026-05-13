@@ -7,9 +7,9 @@
   },
   "plugins": [
     {
-      "name": "synapse-memory",
+      "name": "sm",
       "source": "./",
-      "description": "Local-first RAG + 자동 메모리 시스템. /synapse-ask, /synapse-recall, /synapse-decide, /synapse-resume, /synapse-daily, /synapse-doctor, /synapse-fix slash 명령 제공."
+      "description": "Synapse Memory — Local-first RAG + 자동 메모리 시스템. /sm:ask, /sm:recall, /sm:decide, /sm:resume, /sm:daily, /sm:doctor, /sm:fix slash 명령 제공."
     }
   ]
 }

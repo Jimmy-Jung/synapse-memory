@@ -81,7 +81,7 @@ def test_macos_installer_activates_claude_and_codex_plugins() -> None:
     assert "plugins/cache/${CODEX_MARKETPLACE_NAME}" in script
     assert 'plugins."{plugin_ref}"' in script
     assert "codex debug prompt-input" in script
-    assert "synapse-memory:synapse-memory" in script
+    assert "sm:sm" in script
     assert "SYNAPSE_ACTIVATE_PLUGINS" in script
 
 

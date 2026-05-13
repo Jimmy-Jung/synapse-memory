@@ -220,7 +220,7 @@ def test_recommend_actions_fallback_to_free_ask():
     )
     recs = recommend_actions(status)
     assert len(recs) == 1
-    assert "/synapse-ask" in recs[0]
+    assert "/sm:ask" in recs[0]
 
 
 def test_to_json_round_trip():
@@ -264,7 +264,7 @@ def test_gather_status_includes_cleanup_signals(tmp_path):
     assert "inbox_stale" in status.cleanup_by_kind
 
     recs = recommend_actions(status)
-    assert any("/synapse-cleanup" in r for r in recs)
+    assert any("/sm:cleanup" in r for r in recs)
 
 
 def test_render_status_includes_recommendations():

@@ -10,16 +10,16 @@
 
 | 상황 | Claude Code / Codex | 터미널 |
 | --- | --- | --- |
-| 환경이 정상인지 확인 | `/synapse-doctor` | `synapse-memory doctor` |
-| 새 자료 정리 | `/synapse-daily` | `synapse-memory daily --quick` |
-| 내 자료에 질문 | `/synapse-ask "질문"` | `synapse-memory ask "질문"` |
+| 환경이 정상인지 확인 | `/sm:doctor` | `synapse-memory doctor` |
+| 새 자료 정리 | `/sm:daily` | `synapse-memory daily --quick` |
+| 내 자료에 질문 | `/sm:ask "질문"` | `synapse-memory ask "질문"` |
 
 처음에는 이 세 개만으로 충분합니다.
 
 ## 오늘 할 일을 추천받기
 
 ```text
-/synapse-assistant
+/sm:assistant
 ```
 
 현재 상태를 읽고 다음 작업을 제안합니다.
@@ -53,8 +53,8 @@ synapse-memory daily-status --watch
 ## 질문하기
 
 ```text
-/synapse-ask "TCA를 왜 도입했지?"
-/synapse-ask "최근 이력서에 넣을 만한 성과를 찾아줘"
+/sm:ask "TCA를 왜 도입했지?"
+/sm:ask "최근 이력서에 넣을 만한 성과를 찾아줘"
 ```
 
 터미널에서는 다음과 같습니다.
@@ -71,7 +71,7 @@ synapse-memory ask "TCA를 왜 도입했지?"
 ## 과거 생각 회상
 
 ```text
-/synapse-recall "AI 코딩 도구"
+/sm:recall "AI 코딩 도구"
 ```
 
 터미널에서는 다음과 같습니다.
@@ -89,7 +89,7 @@ synapse-memory persona what-did-i-think "AI 코딩 도구" --timeline
 ## 의사결정 도움
 
 ```text
-/synapse-decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"
+/sm:decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"
 ```
 
 터미널에서는 다음과 같습니다.
@@ -104,7 +104,7 @@ Profile과 DecisionPatterns가 비어 있으면 일반 조언에 가까워집니
 ## 이력서 초안
 
 ```text
-/synapse-resume examplecorp
+/sm:resume examplecorp
 ```
 
 터미널에서는 다음과 같습니다.
@@ -137,8 +137,8 @@ synapse-memory persona draft-resume examplecorp
 Claude Code/Codex에서는 자연어로 요청할 수 있습니다.
 
 ```text
-/synapse-config cleanup inbox를 60일로 바꿔줘
-/synapse-config ask 결과는 8개로 보여줘
+/sm:config cleanup inbox를 60일로 바꿔줘
+/sm:config ask 결과는 8개로 보여줘
 ```
 
 터미널에서는 직접 설정합니다.
@@ -167,7 +167,7 @@ synapse-memory cost summary --days 7 --by model
 오래된 초안이나 검토하지 않은 후보가 쌓였을 때 사용합니다.
 
 ```text
-/synapse-cleanup
+/sm:cleanup
 ```
 
 터미널에서는 먼저 scan으로 후보만 확인합니다.
@@ -182,8 +182,8 @@ synapse-memory cleanup scan
 
 순서는 고정입니다.
 
-1. `/synapse-doctor` 또는 `synapse-memory doctor`
-2. `/synapse-fix` 또는 `synapse-memory doctor --fix`
+1. `/sm:doctor` 또는 `synapse-memory doctor`
+2. `/sm:fix` 또는 `synapse-memory doctor --fix`
 3. Obsidian vault 경로 확인
 4. `synapse-memory config validate`
 5. 그래도 안 되면 GitHub Issues에 doctor 출력과 상황을 남깁니다.

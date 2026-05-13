@@ -26,14 +26,14 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 
 ### 우선순위 규칙
 
-1. **`doctor_ok: false`** → 환경 복구 (`/synapse-fix`)
+1. **`doctor_ok: false`** → 환경 복구 (`/sm:fix`)
 2. **`vault_path: null`** → vault 경로 설정 안내. 이후 추천 중단.
 3. **`inbox_pending_count >= 1`** → MemoryInbox 검토 권유 (시간 5분, 비용 무료)
 4. **`draft_project_count + draft_company_count >= 1`** → draft 카드 검토 + active 승격
-5. **`empty_company_count >= 1`** → 키워드 비어 있는 회사 카드 보강 (`/synapse-resume` 정확도에 영향)
-6. **`last_daily_at`가 24시간 이상 전이거나 `last_daily_state != "done"`** → `/synapse-daily` 실행
-7. **`cleanup_candidate_count >= 1`** → vault 청소 권유 (`/synapse-cleanup`). 영구 삭제 0건, archive 폴더로 이동만. `cleanup_by_kind`에서 카테고리별 건수를 사람 말로 짚어주세요 (예: "오래된 이력서 초안 3건, 묵은 MemoryInbox 후보 2건"). 청소 후 비용은 발생하지 않습니다 (로컬 작업).
-8. **모두 OK** → 자유 질문 (`/synapse-ask`) 또는 회상 (`/synapse-recall`) 안내
+5. **`empty_company_count >= 1`** → 키워드 비어 있는 회사 카드 보강 (`/sm:resume` 정확도에 영향)
+6. **`last_daily_at`가 24시간 이상 전이거나 `last_daily_state != "done"`** → `/sm:daily` 실행
+7. **`cleanup_candidate_count >= 1`** → vault 청소 권유 (`/sm:cleanup`). 영구 삭제 0건, archive 폴더로 이동만. `cleanup_by_kind`에서 카테고리별 건수를 사람 말로 짚어주세요 (예: "오래된 이력서 초안 3건, 묵은 MemoryInbox 후보 2건"). 청소 후 비용은 발생하지 않습니다 (로컬 작업).
+8. **모두 OK** → 자유 질문 (`/sm:ask`) 또는 회상 (`/sm:recall`) 안내
 
 ### 사용자에게 보여주는 형식
 
@@ -49,9 +49,9 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 
 예상 비용 가이드:
 - MemoryInbox 검토, draft 승격, 회사 카드 보강 → **무료** (Obsidian에서 직접)
-- `/synapse-daily` → 보통 $0.05~0.5 (변경량에 따라)
-- `/synapse-resume` → 보통 $0.3~0.8 (1장당)
-- `/synapse-ask`, `/synapse-decide`, `/synapse-recall` → 보통 $0.02~0.1
+- `/sm:daily` → 보통 $0.05~0.5 (변경량에 따라)
+- `/sm:resume` → 보통 $0.3~0.8 (1장당)
+- `/sm:ask`, `/sm:decide`, `/sm:recall` → 보통 $0.02~0.1
 
 ## 3단계 — 사용자 선택 후 *각 작업마다 동의 받고* 실행
 
@@ -92,19 +92,19 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 
 | 사용자 표현 패턴 | 매핑할 슬래시 |
 |---|---|
-| "X에 대해 알려줘", "X 정리해줘" | `/synapse-ask "X"` |
-| "X에 대해 예전에 뭐라 생각했지", "시간순으로" | `/synapse-recall "X"` |
-| "A vs B 어떤 게 좋을까", "결정 도와줘" | `/synapse-decide "..."` |
-| "<회사> 이력서", "<회사>에 지원할건데" | `/synapse-resume <회사>` |
-| "오늘 정리해줘", "데이터 갱신" | `/synapse-daily` |
-| "환경 점검", "doctor" | `/synapse-doctor` |
-| "<단어>를 외부에 보내지 마", "NDA 추가" | `/synapse-ask "redact-list에 '<단어>' 추가해줘"` |
+| "X에 대해 알려줘", "X 정리해줘" | `/sm:ask "X"` |
+| "X에 대해 예전에 뭐라 생각했지", "시간순으로" | `/sm:recall "X"` |
+| "A vs B 어떤 게 좋을까", "결정 도와줘" | `/sm:decide "..."` |
+| "<회사> 이력서", "<회사>에 지원할건데" | `/sm:resume <회사>` |
+| "오늘 정리해줘", "데이터 갱신" | `/sm:daily` |
+| "환경 점검", "doctor" | `/sm:doctor` |
+| "<단어>를 외부에 보내지 마", "NDA 추가" | `/sm:ask "redact-list에 '<단어>' 추가해줘"` |
 
 ### 사용자가 "skip"을 선택했을 때
 
 ```
 오늘은 추천만 보고 넘어갑니다.
-다음에 다시 `/synapse-assistant`를 부르면 갱신된 상태로 다시 추천합니다.
+다음에 다시 `/sm:assistant`를 부르면 갱신된 상태로 다시 추천합니다.
 ```
 
 종료.
@@ -126,7 +126,7 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 - ❌ `persona update-profile --auto-promote` 같은 자동 승격 (현재 미구현 + 의도적 수동 원칙)
 - ❌ MemoryInbox 후보를 *Synapse가 대신* Profile.md로 옮기기 (사용자가 직접 Obsidian에서)
 - ❌ 카드 status를 *Synapse가 대신* draft → active로 바꾸기
-- ❌ `/synapse-resume` 결과 파일을 사용자 확인 없이 *외부로 전송·게시*
+- ❌ `/sm:resume` 결과 파일을 사용자 확인 없이 *외부로 전송·게시*
 - ❌ Gatekeeper 우회, 보안 설정 변경, vault 외부 임의 파일 생성
 
 ## 사용자가 인자를 줬을 때
