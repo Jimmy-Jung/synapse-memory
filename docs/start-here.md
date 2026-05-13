@@ -1,0 +1,174 @@
+# 처음부터 끝까지 사용하기
+
+작성자: JunyoungJung  
+작성일: 2026-05-13
+
+Synapse Memory는 "내 자료를 AI가 다시 쓸 수 있게 정리하는 도구"입니다. 시작은
+거창하지 않습니다. Obsidian vault 하나를 고르고, 새 노트와 Claude Code/Codex 작업
+기록을 모으고, 필요한 순간에 질문하면 됩니다.
+
+## 1. 왜 필요한가요?
+
+노트와 AI 대화는 계속 쌓이지만, 다시 쓰기는 어렵습니다.
+
+- 정확한 파일명이나 키워드가 기억나지 않습니다.
+- 새 AI 대화를 열 때마다 프로젝트 배경을 다시 설명합니다.
+- 이력서, 회고, 의사결정처럼 "내가 예전에 무엇을 했는지"가 필요한 작업을 매번 다시 정리합니다.
+
+Synapse Memory는 이 흐름을 매일 조금씩 정리합니다. 원본을 그대로 외부 AI에 던지는
+대신, 내 Mac 안에서 먼저 모으고 요약하고 민감정보를 가린 뒤, 질문에 필요한 자료만
+보냅니다.
+
+## 2. 처음 실행
+
+Claude Code 또는 Codex에서 아래 순서로 실행합니다.
+
+```text
+/synapse-doctor
+/synapse-daily
+/synapse-ask "내 최근 프로젝트를 요약해줘"
+```
+
+각 명령의 역할은 단순합니다.
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `/synapse-doctor` | Obsidian, Claude Code/Codex, 로컬 AI 도구, 설정 상태를 확인합니다. |
+| `/synapse-daily` | 새 노트와 대화 기록을 모으고 요약 카드와 Profile 후보를 만듭니다. |
+| `/synapse-ask` | 만들어진 카드에서 관련 자료를 찾아 답합니다. |
+
+첫 `daily`는 노트 양에 따라 오래 걸릴 수 있습니다. 빠르게 체험하려면 터미널에서
+quick 모드를 먼저 실행합니다.
+
+```bash
+synapse-memory daily --quick
+```
+
+quick 모드는 최근 변경분만 처리하므로 첫 답변까지 가는 시간이 짧습니다. 이후 주 1회
+정도는 전체 `daily`를 실행해 Profile 후보와 누락된 카드를 정리하는 흐름을 권장합니다.
+
+## 3. 결과는 어디에 남나요?
+
+크게 두 곳을 사용합니다.
+
+| 위치 | 의미 |
+| --- | --- |
+| `~/.synapse/private/` | 원본 mirror, 처리 중간 파일, 로컬 색인. 내 Mac 안에만 둡니다. |
+| Obsidian vault | 사용자가 읽고 검토할 수 있는 요약 카드, 초안, Profile 후보를 둡니다. |
+
+Obsidian vault 안에서는 보통 다음 폴더를 씁니다.
+
+| 폴더 | 역할 |
+| --- | --- |
+| `00_Inbox/` | 아직 정리하지 않은 새 메모 |
+| `10_Active/<회사>/<프로젝트>/` | 진행 중인 프로젝트 노트 |
+| `20_Reference/Projects/` | Synapse가 만든 프로젝트 요약 카드 |
+| `20_Reference/Companies/` | Synapse가 만든 회사 요약 카드 |
+| `30_Creative/Drafts/` | 이력서, 설계 초안 같은 생성물 |
+| `90_System/AI/` | Profile, MemoryInbox, DailyReports 같은 시스템 자료 |
+
+처음에는 모든 폴더를 완벽히 맞출 필요가 없습니다. `10_Active/<회사>/<프로젝트>/`에
+프로젝트 노트를 모아두면 카드가 가장 잘 만들어집니다.
+
+## 4. 매일 하는 일
+
+매일 직접 모든 명령을 기억할 필요는 없습니다.
+
+```text
+/synapse-assistant
+```
+
+이 명령은 현재 상태를 읽고 오늘 필요한 일을 줄여서 보여줍니다. 예를 들면 다음과
+같습니다.
+
+```text
+환경: 정상
+마지막 daily: 14시간 전
+MemoryInbox 검토 대기: 4개
+draft 카드: 3개
+
+오늘 추천 작업:
+1. MemoryInbox 4건 검토
+2. /synapse-daily 실행
+3. draft 카드 3건 확인
+```
+
+사용자는 번호를 고르거나 직접 지시하면 됩니다.
+
+## 5. 자료에 질문하기
+
+가장 자주 쓰는 기능은 `/synapse-ask`입니다.
+
+```text
+/synapse-ask "TCA를 왜 도입했지?"
+/synapse-ask "최근 이력서에 넣을 만한 iOS 성과를 찾아줘"
+/synapse-ask "이 프로젝트의 인증 구조를 요약해줘"
+```
+
+Synapse Memory는 질문과 비슷한 요약 카드를 찾고, 그 카드만 외부 AI에 보내 답을
+받습니다. 원본 노트 전체를 보내지 않습니다.
+
+## 6. 과거 생각을 회상하기
+
+"내가 예전에 이 주제에 대해 뭐라고 했지?"에 가까운 질문은 recall을 씁니다.
+
+```text
+/synapse-recall "AI 코딩 도구"
+/synapse-recall "모듈화 리팩터링"
+```
+
+터미널에서는 다음과 같습니다.
+
+```bash
+synapse-memory persona what-did-i-think "AI 코딩 도구"
+```
+
+자료가 충분하면 시간순 변화와 근거 카드를 함께 보여주고, 자료가 부족하면 부족하다고
+말하도록 설계되어 있습니다.
+
+## 7. 이력서와 의사결정
+
+회사 맞춤 이력서 초안:
+
+```text
+/synapse-resume examplecorp
+```
+
+의사결정 도움:
+
+```text
+/synapse-decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"
+```
+
+이 두 기능은 `90_System/AI/Profile.md`와 `DecisionPatterns.md`가 채워질수록 좋아집니다.
+Profile 후보는 `daily`가 `MemoryInbox`에 만들고, 사용자가 Obsidian에서 검토한 뒤
+맞는 것만 직접 옮깁니다. AI가 추측한 내용을 승인 없이 곧바로 "나"로 확정하지 않는
+것이 핵심입니다.
+
+## 8. 외부 자료를 더하고 싶을 때
+
+회고록, 일기, 자기소개서 초안처럼 vault 밖의 `.md` 또는 `.txt` 파일도 Profile 후보로
+흡수할 수 있습니다.
+
+```bash
+synapse-memory persona ingest --file ~/Documents/retro-2026.md
+```
+
+원본 파일은 private 영역에 mirror되고, vault에는 검토용 후보만 생깁니다. PDF와 docx는
+현재 지원하지 않습니다.
+
+## 9. 문제가 생기면
+
+먼저 진단합니다.
+
+```text
+/synapse-doctor
+```
+
+자동으로 고칠 수 있는 문제는 다음 명령을 씁니다.
+
+```text
+/synapse-fix
+```
+
+직접 확인해야 할 때는 [명령과 문제 해결](reference.md)을 봅니다.

@@ -58,7 +58,7 @@ Synapse Memory가 풀어주는 5가지 답답함이 있습니다.
 2. 사용자 응답을 받아 `/synapse-ask "redact-list에 '<단어>' 추가해줘"` 호출
 3. `synapse-memory redactlist show`로 등록 확인
 4. "이제 모든 외부 AI 호출에서 이 단어는 `[REDACT_*]`로 치환됩니다" 설명
-5. 마스킹 2단계 흐름 짧게 요약 ([for-everyone/how-it-works.md#답답함-3](../docs/for-everyone/how-it-works.md) 참고)
+5. 마스킹 2단계 흐름 짧게 요약 ([개인정보, 비용, 삭제](../docs/privacy-and-cost.md) 참고)
 
 ### 4️⃣ 선택 → 이력서 체험
 

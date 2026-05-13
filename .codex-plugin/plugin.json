@@ -34,12 +34,12 @@
       "PII redaction (F1=0.92)"
     ],
     "websiteURL": "https://github.com/Jimmy-Jung/synapse-memory",
-    "privacyPolicyURL": "https://github.com/Jimmy-Jung/synapse-memory/blob/main/docs/for-everyone/privacy-and-cost.md",
+    "privacyPolicyURL": "https://github.com/Jimmy-Jung/synapse-memory/blob/main/docs/privacy-and-cost.md",
     "termsOfServiceURL": "https://github.com/Jimmy-Jung/synapse-memory/blob/main/LICENSE",
     "defaultPrompt": [
       "Synapse Memory로 'iOS 클린 아키텍처 어떻게 도입했지?' 회상해줘.",
       "오늘 synapse-memory daily 실행해서 신규 Card 있는지 보고해줘.",
-      "당근마켓 지원할건데 me draft-resume으로 이력서 초안 만들어줘."
+      "당근마켓 지원할건데 persona draft-resume으로 이력서 초안 만들어줘."
     ],
     "brandColor": "#2563EB"
   }

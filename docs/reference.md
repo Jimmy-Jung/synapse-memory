@@ -1,0 +1,201 @@
+# 명령과 문제 해결
+
+작성자: JunyoungJung  
+작성일: 2026-05-13
+
+이 문서는 매일 쓰는 명령과 문제가 생겼을 때의 순서를 모아둔 참고 문서입니다. 모든
+옵션을 외우기보다 "지금 무엇을 하려는가"에서 출발하면 됩니다.
+
+## 먼저 기억할 세 명령
+
+| 상황 | Claude Code / Codex | 터미널 |
+| --- | --- | --- |
+| 환경이 정상인지 확인 | `/synapse-doctor` | `synapse-memory doctor` |
+| 새 자료 정리 | `/synapse-daily` | `synapse-memory daily --quick` |
+| 내 자료에 질문 | `/synapse-ask "질문"` | `synapse-memory ask "질문"` |
+
+처음에는 이 세 개만으로 충분합니다.
+
+## 오늘 할 일을 추천받기
+
+```text
+/synapse-assistant
+```
+
+현재 상태를 읽고 다음 작업을 제안합니다.
+
+- 마지막 daily가 오래됐는지
+- MemoryInbox에 검토할 후보가 있는지
+- draft 카드나 이력서 초안이 쌓였는지
+- 환경 진단이 필요한지
+
+추천을 보고 번호로 고르거나 직접 지시하면 됩니다.
+
+## daily: quick과 full
+
+`daily`는 새 노트와 작업 기록을 정리하는 핵심 흐름입니다.
+
+| 모드 | 언제 쓰나 | 명령 |
+| --- | --- | --- |
+| quick | 처음 체험, 매일 가벼운 갱신 | `synapse-memory daily --quick` |
+| full | 주 1회 정리, Profile 후보 생성, 큰 변경 후 재정리 | `synapse-memory daily` |
+
+quick과 full을 동시에 실행하지 마세요. 둘 다 같은 로컬 색인을 갱신하므로 한 번에 하나만
+실행하는 것이 안전합니다.
+
+진행 상황은 다음 명령으로 봅니다.
+
+```bash
+synapse-memory daily-status
+synapse-memory daily-status --watch
+```
+
+## 질문하기
+
+```text
+/synapse-ask "TCA를 왜 도입했지?"
+/synapse-ask "최근 이력서에 넣을 만한 성과를 찾아줘"
+```
+
+터미널에서는 다음과 같습니다.
+
+```bash
+synapse-memory ask "TCA를 왜 도입했지?"
+```
+
+답이 부실하면 보통 두 가지 중 하나입니다.
+
+1. 아직 카드가 충분히 만들어지지 않았습니다. `daily --quick` 또는 full `daily`를 실행합니다.
+2. 노트가 `10_Active/<회사>/<프로젝트>/` 같은 프로젝트 폴더에 모여 있지 않습니다.
+
+## 과거 생각 회상
+
+```text
+/synapse-recall "AI 코딩 도구"
+```
+
+터미널에서는 다음과 같습니다.
+
+```bash
+synapse-memory persona what-did-i-think "AI 코딩 도구"
+```
+
+시간순 변화가 중요하면 다음 옵션을 씁니다.
+
+```bash
+synapse-memory persona what-did-i-think "AI 코딩 도구" --timeline
+```
+
+## 의사결정 도움
+
+```text
+/synapse-decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"
+```
+
+터미널에서는 다음과 같습니다.
+
+```bash
+synapse-memory persona decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"
+```
+
+Profile과 DecisionPatterns가 비어 있으면 일반 조언에 가까워집니다. `MemoryInbox` 후보를
+검토해 승인된 자료를 늘릴수록 답이 사용자에게 맞춰집니다.
+
+## 이력서 초안
+
+```text
+/synapse-resume examplecorp
+```
+
+터미널에서는 다음과 같습니다.
+
+```bash
+synapse-memory persona draft-resume examplecorp
+```
+
+결과는 Obsidian vault의 `30_Creative/Drafts/`에 생성됩니다. 제출 전에 문장, 수치,
+회사명, 민감정보를 직접 확인하세요.
+
+## MemoryInbox 검토
+
+`daily`나 `persona ingest`는 Profile 후보를 바로 확정하지 않고 `MemoryInbox`에 둡니다.
+
+```text
+90_System/AI/MemoryInbox/
+```
+
+검토 순서는 단순합니다.
+
+1. 후보 문장을 읽습니다.
+2. 맞는 내용만 `90_System/AI/Profile.md` 또는 `DecisionPatterns.md`로 옮깁니다.
+3. 애매하거나 틀린 내용은 옮기지 않습니다.
+
+승인한 자료만 회상, 의사결정, 이력서 초안에 사용됩니다.
+
+## 설정 바꾸기
+
+Claude Code/Codex에서는 자연어로 요청할 수 있습니다.
+
+```text
+/synapse-config cleanup inbox를 60일로 바꿔줘
+/synapse-config ask 결과는 8개로 보여줘
+```
+
+터미널에서는 직접 설정합니다.
+
+```bash
+synapse-memory config show
+synapse-memory config set cleanup.inbox_stale_days 60
+synapse-memory config set top_k.ask 8
+synapse-memory config validate
+```
+
+설정 변경은 자동 백업을 남깁니다. 보안 핵심 키는 설정 명령으로 바꿀 수 없습니다.
+
+## 비용 확인
+
+```bash
+synapse-memory cost summary --days 30 --by command
+synapse-memory cost summary --days 7 --by model
+```
+
+비용이 커졌다면 먼저 full `daily`가 너무 자주 돌고 있지 않은지, 같은 질문을 반복하고
+있지 않은지 확인합니다.
+
+## vault 정리
+
+오래된 초안이나 검토하지 않은 후보가 쌓였을 때 사용합니다.
+
+```text
+/synapse-cleanup
+```
+
+터미널에서는 먼저 scan으로 후보만 확인합니다.
+
+```bash
+synapse-memory cleanup scan
+```
+
+실제 정리는 archive 폴더로 이동하는 방식입니다. 중요한 노트는 삭제하지 않습니다.
+
+## 문제가 생겼을 때
+
+순서는 고정입니다.
+
+1. `/synapse-doctor` 또는 `synapse-memory doctor`
+2. `/synapse-fix` 또는 `synapse-memory doctor --fix`
+3. Obsidian vault 경로 확인
+4. `synapse-memory config validate`
+5. 그래도 안 되면 GitHub Issues에 doctor 출력과 상황을 남깁니다.
+
+vault 경로가 틀렸다면 다음 흐름으로 확인합니다.
+
+```bash
+synapse-memory config show
+synapse-memory doctor --fix-config
+```
+
+## 완전히 지우고 싶을 때
+
+처리 데이터 삭제와 개인정보 경계는 [개인정보, 비용, 삭제](privacy-and-cost.md)를
+따르세요. 문서나 초안을 지우기 전에는 Obsidian에서 필요한 내용이 없는지 먼저 확인합니다.

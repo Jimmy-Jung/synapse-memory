@@ -41,7 +41,42 @@ synapse-memory daily --quick
 
 ## 설치
 
-가장 쉬운 방법은 Release zip을 받은 뒤 installer를 실행하는 것입니다.
+설치는 세 가지 흐름이 있습니다. 처음이라면 **방법 A**를 권장합니다.
+
+### 방법 A - AI에게 자동 설치 준비 맡기기
+
+Claude Code 또는 Codex 채팅창에 아래 프롬프트를 그대로 붙여넣습니다. AI가 설치 zip을
+받고, 압축을 풀고, 실행 전 검증까지 대신합니다. 실제 실행이나 보안 경고 우회처럼
+사용자 승인이 필요한 단계에서는 멈추도록 설계한 프롬프트입니다.
+
+```text
+Synapse Memory를 설치해줘.
+
+설치 파일은 아래 링크에서 받아줘.
+https://github.com/Jimmy-Jung/synapse-memory/releases/download/v0.7.0/SynapseMemory-v0.7.0-macos-installer.zip
+
+다운로드한 zip을 압축 해제한 뒤
+installer/SynapseMemory-Installer.command가 있는지 확인하고,
+zsh -n으로 문법 검사까지 해줘.
+
+그 다음에는 바로 실행하지 말고 멈춘 뒤,
+내가 직접 실행할 수 있는 방법을 안내해줘.
+
+내가 "실행해"라고 명시적으로 말하면 기본 preview 모드로 실행해줘.
+내가 "실제 적용해"라고 명시적으로 말하기 전까지는
+SYNAPSE_INSTALLER_DRY_RUN=0을 붙이지 마.
+
+설치 중 macOS 보안 경고가 뜨면 임의로 보안 설정을 바꾸지 말고,
+내가 직접 열 수 있도록 안내해줘.
+
+GUI 동의, Obsidian 저장소 위치 선택, Gatekeeper 우회, 실제 적용처럼
+내가 직접 승인해야 하는 단계에서는 멈추고 안내해줘.
+
+내가 설치를 실행했다고 알려주면,
+최신 로그 경로와 synapse-memory doctor 결과를 확인해서 요약해줘.
+```
+
+### 방법 B - 직접 다운로드해서 실행하기
 
 1. [SynapseMemory-v0.7.0-macos-installer.zip][installer-zip]을 다운로드합니다.
 2. zip을 열고 `installer/SynapseMemory-Installer.command`를 실행합니다.
@@ -51,6 +86,45 @@ synapse-memory daily --quick
 macOS 보안 경고가 나오면 파일을 우클릭한 뒤 "열기"를 선택합니다. 설치 프로그램은
 기본적으로 preview 모드로 동작하며, 실제 변경이 필요한 단계에서는 사용자 확인을
 받습니다.
+
+### 방법 C - 플러그인만 직접 설치하기
+
+이미 `synapse-memory` CLI와 runtime이 준비되어 있고 Claude Code/Codex 플러그인만
+붙이고 싶을 때 사용합니다.
+
+Claude Code:
+
+```bash
+claude plugin marketplace add --scope user Jimmy-Jung/synapse-memory
+claude plugin install --scope user synapse-memory@synapse-memory-marketplace
+claude plugin enable --scope user synapse-memory@synapse-memory-marketplace
+claude plugin list
+```
+
+`claude plugin list`에서 `synapse-memory@synapse-memory-marketplace`가 enabled로
+보이면 설치된 상태입니다.
+
+Codex:
+
+```bash
+codex plugin marketplace add Jimmy-Jung/synapse-memory
+```
+
+그 다음 `~/.codex/config.toml`에 플러그인이 활성화되어 있어야 합니다.
+
+```toml
+[plugins."synapse-memory@synapse-memory-marketplace"]
+enabled = true
+```
+
+확인은 다음처럼 합니다.
+
+```bash
+codex debug prompt-input "Synapse Memory plugin visibility check" \
+  | grep "synapse-memory:synapse-memory"
+```
+
+출력이 있으면 Codex가 Synapse Memory skill을 볼 수 있는 상태입니다.
 
 ## 매일 쓰는 명령
 

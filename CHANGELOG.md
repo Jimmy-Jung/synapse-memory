@@ -29,8 +29,11 @@ All notable changes to Synapse Memory are documented here.
   LLM 호출 차단 후 거부 응답. Profile 위장 인용으로 generic 답 만드는 위험 차단.
 - `persona.decide()` Profile 로딩의 5000자 silent truncation 제거. 시스템 prompt 32KB
   cap 이 안전망 — 초과 시 `RecipePromptTooLargeError` 명시적 실패.
-- `docs/commands.md` 4-tier 분류 표 + 13개 slash 매핑 (이전 8개 stale 갱신).
+- 13개 slash 명령을 4-tier (entry meta / direct atom / maintenance / power)
+  로 분류, README 가 entry meta 2개만 가르치게 단순화.
 - Codex default 모델 gpt-5.4 → gpt-5.5.
+- README 와 docs 구조 단순화: 짧은 README 1개 + `docs/` 안 사용자 중심 문서
+  4개로 통합. 이전 docs/ 안 개발자 reference 문서 삭제.
 
 ### Infrastructure
 
