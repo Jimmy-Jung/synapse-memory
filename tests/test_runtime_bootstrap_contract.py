@@ -47,3 +47,20 @@ def test_macos_installer_does_not_assign_zsh_status_reserved_variable() -> None:
 
     assert "local status=" not in script
     assert "local step_status=" in script
+
+
+def test_macos_installer_skips_existing_obsidian_app_bundle() -> None:
+    script = Path("installer/SynapseMemory-Installer.command").read_text(encoding="utf-8")
+
+    assert "obsidian_bundle_is_valid()" in script
+    assert 'bundle_id}" = "md.obsidian"' in script
+    assert "source=/Applications/Obsidian.app" in script
+    assert "--adopt obsidian" not in script
+
+
+def test_macos_installer_detects_existing_claude_cli_before_cask_install() -> None:
+    script = Path("installer/SynapseMemory-Installer.command").read_text(encoding="utf-8")
+
+    assert "command -v claude" in script
+    assert "path=$(command -v claude)" in script
+    assert "brew install --cask claude-code" in script

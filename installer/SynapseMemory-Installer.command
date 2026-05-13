@@ -21,6 +21,73 @@ log_step() {
   printf '%s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${step_id}" "${step_status}" "${summary}" | tee -a "${LOG_FILE}"
 }
 
+obsidian_bundle_is_valid() {
+  local app_path="/Applications/Obsidian.app"
+  local bundle_id
+  if [ ! -d "${app_path}" ]; then
+    return 1
+  fi
+  bundle_id="$(/usr/libexec/PlistBuddy -c "Print CFBundleIdentifier" "${app_path}/Contents/Info.plist" 2>/dev/null || true)"
+  [ "${bundle_id}" = "md.obsidian" ]
+}
+
+detect_dependency() {
+  local item="$1"
+  case "${item}" in
+    obsidian)
+      if brew list --cask obsidian >/dev/null 2>&1; then
+        log_step "detect_obsidian" "success" "installed=true source=homebrew"
+        return 0
+      fi
+      if obsidian_bundle_is_valid; then
+        log_step "detect_obsidian" "success" "installed=true source=/Applications/Obsidian.app"
+        return 0
+      fi
+      return 1
+      ;;
+    claude-code)
+      if brew list --cask claude-code >/dev/null 2>&1; then
+        log_step "detect_claude-code" "success" "installed=true source=homebrew"
+        return 0
+      fi
+      if command -v claude >/dev/null 2>&1; then
+        log_step "detect_claude-code" "success" "installed=true path=$(command -v claude)"
+        return 0
+      fi
+      return 1
+      ;;
+    apfel)
+      if brew list --formula apfel >/dev/null 2>&1 || command -v apfel >/dev/null 2>&1; then
+        log_step "detect_apfel" "success" "installed=true"
+        return 0
+      fi
+      return 1
+      ;;
+  esac
+  return 1
+}
+
+install_dependency() {
+  local item="$1"
+  case "${item}" in
+    obsidian)
+      if [ -d "/Applications/Obsidian.app" ]; then
+        log_step "install_obsidian" "failed" "existing app is not a recognized Obsidian bundle"
+        /usr/bin/osascript -e 'display alert "Obsidian.app이 이미 있지만 정식 Obsidian 앱으로 확인되지 않아 설치를 중단합니다. 기존 앱을 직접 확인한 뒤 다시 실행하세요."'
+        exit 1
+      fi
+      brew install --cask obsidian
+      ;;
+    claude-code)
+      brew install --cask claude-code
+      ;;
+    apfel)
+      brew install apfel
+      ;;
+  esac
+  log_step "install_${item}" "success" "installed=true"
+}
+
 ask_consent() {
   /usr/bin/osascript <<'APPLESCRIPT'
 display dialog "Synapse Memory 설치를 시작합니다.
@@ -76,17 +143,13 @@ done
 
 if command -v brew >/dev/null 2>&1; then
   for item in obsidian claude-code apfel; do
-    if brew list --formula "${item}" >/dev/null 2>&1 || brew list --cask "${item}" >/dev/null 2>&1; then
-      log_step "detect_${item}" "success" "installed=true"
+    if detect_dependency "${item}"; then
+      true
     else
       if [ "${DRY_RUN}" = "1" ]; then
         log_step "install_${item}" "preview" "would install ${item}"
       else
-        case "${item}" in
-          obsidian|claude-code) brew install --cask "${item}" ;;
-          apfel) brew install apfel ;;
-        esac
-        log_step "install_${item}" "success" "installed=true"
+        install_dependency "${item}"
       fi
     fi
   done

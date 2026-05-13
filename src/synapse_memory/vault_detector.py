@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 
 class VaultSource(StrEnum):
+    OBSIDIAN_APP_CONFIG = "obsidian_app_config"
     ICLOUD_OBSIDIAN = "icloud_obsidian"
     DOCUMENTS_OBSIDIAN = "documents_obsidian"
     CONVENTIONAL = "conventional"
@@ -38,6 +40,32 @@ def icloud_obsidian_root(*, home: Path | None = None) -> Path:
 def documents_default_vault_path(*, home: Path | None = None) -> Path:
     root = (home or Path.home()).expanduser()
     return (root / "Documents" / "SynapseVault").resolve()
+
+
+def obsidian_app_config_path(*, home: Path | None = None) -> Path:
+    root = (home or Path.home()).expanduser()
+    return root / "Library/Application Support/obsidian/obsidian.json"
+
+
+def obsidian_app_config_vault_paths(*, home: Path | None = None) -> list[Path]:
+    config_path = obsidian_app_config_path(home=home)
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    vaults = payload.get("vaults")
+    if not isinstance(vaults, dict):
+        return []
+
+    paths: list[Path] = []
+    for value in vaults.values():
+        if not isinstance(value, dict):
+            continue
+        raw_path = value.get("path")
+        if isinstance(raw_path, str) and raw_path.strip():
+            paths.append(Path(raw_path).expanduser())
+    return paths
 
 
 def default_vault_path(*, home: Path | None = None) -> VaultCandidate:
@@ -111,6 +139,9 @@ def detect_vault_candidates(
     if existing_config is not None:
         add(existing_config, VaultSource.EXISTING_CONFIG, 100)
 
+    for path in obsidian_app_config_vault_paths(home=root):
+        add(path, VaultSource.OBSIDIAN_APP_CONFIG, 95)
+
     icloud_root = icloud_obsidian_root(home=root)
     if icloud_root.is_dir():
         for path in sorted(icloud_root.iterdir()):
@@ -145,7 +176,13 @@ def installer_vault_choices(
         )
         if not candidate.needs_creation
     ]
-    return [*existing, *creation_vault_candidates(home=home)]
+    seen = {candidate.path for candidate in existing}
+    creation = [
+        candidate
+        for candidate in creation_vault_candidates(home=home)
+        if candidate.path not in seen
+    ]
+    return [*existing, *creation]
 
 
 def select_default_candidate(candidates: list[VaultCandidate]) -> VaultCandidate | None:
