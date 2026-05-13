@@ -15,8 +15,8 @@
 ```python
 @dataclass(frozen=True)
 class CardWithMeta:
-    card_id: str                         # 예: "dansim-ios"
-    display_name: str                    # 예: "Dansim iOS App"
+    card_id: str                         # 예: "sample-ios-app"
+    display_name: str                    # 예: "Sample iOS App"
     source_kind: Literal["card_project", "card_company"]
     sort_ts: datetime                    # 1차 정렬 키
     sort_ts_source: Literal[

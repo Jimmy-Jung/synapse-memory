@@ -1,6 +1,22 @@
 # Getting Started
 
-설치부터 첫 질문까지 15-20분 정도 걸립니다. 이 문서는 “일단 동작하게 만들기”에 집중합니다.
+설치부터 첫 질문까지 15-20분 정도 걸립니다. 이 문서는 "일단 동작하게 만들기"에 집중합니다.
+
+## 어떤 상태에서 어디부터 보면 되나
+
+| 상태 | 가는 곳 |
+|---|---|
+| "터미널 못 켜는 비개발자" | [§0 비개발자라면](#0-비개발자라면) → [installer-walkthrough.md](for-everyone/installer-walkthrough.md) |
+| "Mac이 M1이고 macOS 26인지 확인하고 싶다" | [§1 준비물 확인](#1-준비물-확인) |
+| "apfel·uv·Claude Code가 설치되어 있는지 모름" | [§2 도구 설치](#2-도구-설치) |
+| "synapse-memory 명령을 어디서나 부르고 싶다" | [§3 모드 A — 글로벌 설치](#모드-a--글로벌-cli-설치-권장) |
+| "소스 자주 고치니까 격리 환경이 좋다" | [§3 모드 B — Venv 격리](#모드-b--venv-격리-설치-개발--실험용) |
+| "Claude Code / Codex 안에서 슬래시 명령 활성화" | [§3a plugin 활성화](#3a-claude-code--codex-plugin-활성화) |
+| "지금 환경이 준비됐는지 확인하고 싶다" | [§4 환경 진단](#4-환경-진단) |
+| "Obsidian vault 경로 자동 인식 실패" | [§5 vault 경로 지정](#5-obsidian-vault-경로-지정) |
+| "첫 데이터를 모으고 카드를 만들고 싶다" | [§6~§9 첫 실행](#6-첫-데이터-수집) |
+| "매일 자동 실행하고 싶다" | [§10 매일 실행하기](#10-매일-실행하기) |
+| "뭔가 안 된다" | [문제가 생기면](#문제가-생기면) |
 
 ## 0. 비개발자라면
 
@@ -185,7 +201,7 @@ synapse-memory ask "iOS 클린 아키텍처 어떻게 도입했지?"
 ```bash
 synapse-memory me what-did-i-think "TCA 아키텍처"
 synapse-memory me decide "다음 회사 지원할 때 어떤 프로젝트를 강조할까?"
-synapse-memory me draft-resume danggeun
+synapse-memory me draft-resume examplecorp
 ```
 
 ## 10. 매일 실행하기

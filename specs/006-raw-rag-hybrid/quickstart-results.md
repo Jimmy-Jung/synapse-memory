@@ -49,18 +49,18 @@ $ python3 -m synapse_memory.cli rag index --rebuild
 ```
 
 ```text
-$ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "당근마켓 경험" --top-k 5
-질문: 당근마켓 경험
+$ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "샘플회사B 경험" --top-k 5
+질문: 샘플회사B 경험
 
-자료상 당근마켓 관련 직접 경험은 확인되지 않습니다. 당근마켓 카드는 회사 기본 정보만 있고, 기술 스택·문화·매칭되는 내 프로젝트·메모 본문은 모두 미작성 상태입니다. [danggeun]
+자료상 샘플회사B 관련 직접 경험은 확인되지 않습니다. 샘플회사B 카드는 회사 기본 정보만 있고, 기술 스택·문화·매칭되는 내 프로젝트·메모 본문은 모두 미작성 상태입니다. [examplecorp]
 
-확인 가능한 내용은 당근마켓이 대한민국의 대형 타깃 회사이며, "대한민국 대표 하이퍼로컬 중고거래 플랫폼"으로만 정리돼 있다는 점까지입니다. [danggeun]
+확인 가능한 내용은 샘플회사B이 대한민국의 대형 타깃 회사이며, "대한민국 대표 하이퍼로컬 중고거래 플랫폼"으로만 정리돼 있다는 점까지입니다. [examplecorp]
 
 ============================================================
 출처 (5):
-  [0.395] card_company   danggeun — 당근마켓
-  [0.616] card_project   샘플지원-2026 — 카카오뱅크 AI모바일개발팀 지원 (2026)
-  [0.634] card_project   dansim-ios — 단심 (명상 앱)
+  [0.395] card_company   examplecorp — 샘플회사B
+  [0.616] card_project   샘플지원-2026 — 샘플회사C 모바일개발팀 지원 (2026)
+  [0.634] card_project   sample-ios-app — 샘플 명상앱
   [0.638] card_project   -----2026 — 2026 프로젝트
   [0.651] card_project   Tablet — 태블릿 앱
 ```
@@ -80,19 +80,19 @@ $ python3 -m synapse_memory.cli rag index --rebuild --include-raw
 ### 3. hybrid ask
 
 ```text
-$ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "당근마켓 경험" --hybrid --top-k 5
-질문: 당근마켓 경험
+$ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "샘플회사B 경험" --hybrid --top-k 5
+질문: 샘플회사B 경험
 
-현재 자료상 당근마켓 관련 제 경험은 확인되지 않습니다. 매칭되는 프로젝트, 기술 스택, 문화 관련 내용이 비어 있고, 회사명과 기본 정보만 등록된 상태입니다. [danggeun]
+현재 자료상 샘플회사B 관련 제 경험은 확인되지 않습니다. 매칭되는 프로젝트, 기술 스택, 문화 관련 내용이 비어 있고, 회사명과 기본 정보만 등록된 상태입니다. [examplecorp]
 
-상세히 말하면 당근마켓은 대한민국 대표 하이퍼로컬 중고거래 플랫폼으로만 정리되어 있으며, 관련 메모에도 "노트 본문 미작성. 회사명·기본 정보만 등록된 상태"라고 되어 있습니다. [danggeun]
+상세히 말하면 샘플회사B은 대한민국 대표 하이퍼로컬 중고거래 플랫폼으로만 정리되어 있으며, 관련 메모에도 "노트 본문 미작성. 회사명·기본 정보만 등록된 상태"라고 되어 있습니다. [examplecorp]
 
 ============================================================
 출처 (5):
-  [0.033] card_company   danggeun — 당근마켓
+  [0.033] card_company   examplecorp — 샘플회사B
   [0.031] card_company   샘플회사 — 샘플회사
-  [0.016] card_project   샘플지원-2026 — 카카오뱅크 AI모바일개발팀 지원 (2026)
-  [0.016] card_project   dansim-ios — 단심 (명상 앱)
+  [0.016] card_project   샘플지원-2026 — 샘플회사C 모바일개발팀 지원 (2026)
+  [0.016] card_project   sample-ios-app — 샘플 명상앱
   [0.016] card_project   -----2026 — 2026 프로젝트
 ```
 
@@ -102,7 +102,7 @@ $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "당근마켓 경험" -
 $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli me what-did-i-think "이직 제안" --hybrid --top-k 8
 주제: 이직 제안
 
-이직에 대해 사용자는 일관되게 "지금까지 쌓은 iOS·모듈화·AI 협업 역량을 더 잘 쓰는 다음 자리"를 탐색해왔고, 2026-05에는 카카오뱅크 지원으로 실제 행동까지 옮긴 흔적이 분명합니다. [샘플회사][샘플지원-2026]
+이직에 대해 사용자는 일관되게 "지금까지 쌓은 iOS·모듈화·AI 협업 역량을 더 잘 쓰는 다음 자리"를 탐색해왔고, 2026-05에는 샘플회사C 지원으로 실제 행동까지 옮긴 흔적이 분명합니다. [샘플회사][샘플지원-2026]
 
 ... 중략 ...
 
@@ -111,10 +111,10 @@ $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli me what-did-i-think "이직
   - -----2026
   - 샘플지원-2026
   - 샘플회사
-  - dansim-ios
+  - sample-ios-app
   - projects
   - Tablet
-  - danggeun
+  - examplecorp
   - 이력서-2026
 ```
 

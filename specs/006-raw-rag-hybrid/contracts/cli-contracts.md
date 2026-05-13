@@ -45,7 +45,7 @@ Dense-only keeps current distance format. Hybrid output may include RRF/BM25 det
 
 ```text
 출처 (3):
-  [0.032] card_company   danggeun — 당근마켓
+  [0.032] card_company   examplecorp — 샘플회사B
   [0.029] raw_obsidian   10_Active/학습.md#0 — 학습.md
 ```
 

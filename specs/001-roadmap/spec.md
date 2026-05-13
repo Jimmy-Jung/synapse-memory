@@ -38,10 +38,10 @@ Card 에 아직 반영되지 않은 raw 노트도 검색되고, 고유명사 검
 **Acceptance Scenarios**:
 
 1. **Given** vault `10_Active/<note>.md` 가 Card 화되지 않은 채 존재, **When** `rag index --include-raw` 후 `ask <키워드>`, **Then** raw chunk 가 인용 결과에 표시되고 source_kind 가 `raw_obsidian` 으로 표기된다.
-2. **Given** 검색어가 한국 회사명(예: "당근마켓"), **When** `ask --hybrid`, **Then** dense + BM25 결과가 RRF 로 결합되어 keyword 매칭 카드가 상위에 표시된다.
+2. **Given** 검색어가 한국 회사명(예: "샘플회사B"), **When** `ask --hybrid`, **Then** dense + BM25 결과가 RRF 로 결합되어 keyword 매칭 카드가 상위에 표시된다.
 3. **Given** `me decide` 호출 직전, **When** `--preview-prompt` 옵션, **Then** Claude 로 보낼 최종 텍스트(redacted 후)가 stdout 출력되고 확인 입력 전까지 호출 대기 (단, `SYNAPSE_FROM_AGENT=1` 환경에서는 자동 통과).
 4. **Given** 받은 메시지 "내일 회의 가능?", **When** `me draft-reply "<메시지>"`, **Then** 30_Creative/Drafts/Reply-YYYY-MM-DD.md 가 생성되며 Profile voice 와 관련 Card 기반.
-5. **Given** ProjectCard `dansim-ios` 가 이미 존재하고 사용자 본문이 있음, **When** `card update dansim-ios`, **Then** 사용자 본문은 보존되고 새 raw 에서 발견한 메트릭만 "## Proposed additions" 섹션에 draft 로 추가된다.
+5. **Given** ProjectCard `sample-ios-app` 가 이미 존재하고 사용자 본문이 있음, **When** `card update sample-ios-app`, **Then** 사용자 본문은 보존되고 새 raw 에서 발견한 메트릭만 "## Proposed additions" 섹션에 draft 로 추가된다.
 
 ---
 

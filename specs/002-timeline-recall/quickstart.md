@@ -9,7 +9,7 @@
 
 ```
 20_Reference/Projects/
-  ├── dansim-ios.md          period_end: 2025-02-15  status: archived  created: 2024-12-01
+  ├── sample-ios-app.md          period_end: 2025-02-15  status: archived  created: 2024-12-01
   ├── 이력서-2026.md         period_end: 2024-05-01  status: archived  created: 2024-04-20
   └── mobile-ios-slc.md      period_end: null        status: active    created: 2024-08-30
 20_Reference/Companies/
@@ -37,9 +37,9 @@ synapse-memory me what-did-i-think "클린 아키텍처" --timeline
   > ...
   [card_company:회사A]
 
-- **dansim-ios** (Dansim iOS App) — 2025-02-15
+- **sample-ios-app** (Sample iOS App) — 2025-02-15
   > Domain–Data–Presentation 3계층 분리...
-  [card_project:dansim-ios]
+  [card_project:sample-ios-app]
 
 ## 2024 Q2
 
@@ -51,7 +51,7 @@ synapse-memory me what-did-i-think "클린 아키텍처" --timeline
 ```
 
 검증:
-- SC-001 — 4개 카드의 순서가 `mobile-ios-slc > 회사A > dansim-ios > 이력서-2026` (period_end 기준 desc 순서) Kendall τ = 1.0.
+- SC-001 — 4개 카드의 순서가 `mobile-ios-slc > 회사A > sample-ios-app > 이력서-2026` (period_end 기준 desc 순서) Kendall τ = 1.0.
 - 분기 헤더 `## 2025 Q1` / `## 2024 Q2` 정확히 일치 (RT-3).
 - `mobile-ios-slc` 가 `(오늘 YYYY-MM-DD)` 라벨로 표시 (FR-003).
 - `회사A` 가 `(last reviewed)` 라벨 (FR-005).
