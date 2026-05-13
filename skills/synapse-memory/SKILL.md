@@ -42,6 +42,34 @@ synapse-memory persona ingest \
 
 지원 확장자: `.md`, `.markdown`, `.txt`. PDF · docx 등은 현재 unsupported.
 
+## 새 프로젝트 설계 (`persona design-project`)
+
+사용자가 "이런 아이디어로 새 프로젝트 시작" 이라고 할 때, **본인 기술 스택 ·
+작업 방식 · 말투** 가 반영된 설계 초안을 `20_Projects/Drafts/` 에 생성합니다.
+M1c 의 핵심 wedge 명령어.
+
+```bash
+synapse-memory persona design-project "iOS Todo 앱 새로 시작"
+synapse-memory persona design-project "사내 RAG 검색 도구" --top-k 8
+```
+
+흐름:
+
+1. vault `Profile.md` (`tech` / `work_style` / `voice` fact) + `DecisionPatterns.md` 로드.
+2. ProjectCard RAG (`source_kind=card_project`) 로 유사 과거 프로젝트 검색.
+3. LLM 이 system prompt 의 `[Profile: <category>]` 인용 규칙을 따라 설계 markdown 생성.
+4. `20_Projects/Drafts/design_project - <idea> (YYYY-MM-DD).md` 저장.
+
+권장 선행 작업:
+
+- `persona ingest --file <외부자료>` 또는 `persona update-profile` 로 Profile 충분히 채우기.
+- `Profile.md` 비어있으면 generic 답이 나오므로, `tech` 와 `work_style` 카테고리에 최소 2-3개 fact 가 있을 때 데모 가치가 가장 큼.
+
+LLM 출력 규칙 (system prompt 에 내장):
+- 모든 추천에 `[Profile: tech]` / `[Profile: work_style]` 같은 인용 강제.
+- 사용자가 안 쓰는 프레임워크 (React/Flutter 등) 도입 금지.
+- Profile 비어 있으면 generic 추천만 + 명시 경고.
+
 ## 핵심 보안 원칙 (반드시 준수)
 
 | 원칙 | 의미 |

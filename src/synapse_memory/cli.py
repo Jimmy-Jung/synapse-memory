@@ -1064,6 +1064,77 @@ def cmd_persona_ingest(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_persona_design_project(args: argparse.Namespace) -> int:
+    """새 프로젝트 설계 초안 → vault Drafts. M1c.
+
+    Profile (tech/work_style/voice) + ProjectCard RAG 를 종합해 사용자
+    스타일이 반영된 설계 markdown 을 ``20_Projects/Drafts/`` 에 저장한다.
+    """
+    args.top_k = _arg_or_config(args.top_k, "top_k.resume", 6)
+    args.model = _resolve_model(args.model, "resume")
+    _enforce_cost_cap("persona design-project")
+    _interactive_guard("persona design-project", "decide")
+
+    ai_env = detect_ai_environment(model=args.model)
+    if not ai_env.ready:
+        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
+        for r in ai_env.reasons_unavailable():
+            print(f"  - {r}", file=sys.stderr)
+        return 2
+
+    from synapse_memory.recipes import (
+        InputValidationError,
+        RecipeNotFoundError,
+        RecipeValidationError,
+    )
+    from synapse_memory.recipes import (
+        generate as recipes_generate,
+    )
+
+    store = None
+    try:
+        store = open_vector_store()
+    except (VectorStoreError, EmbeddingUnavailableError):
+        store = None  # ProjectCard 없으면 Profile 만으로 진행
+
+    try:
+        result = recipes_generate(
+            "design_project",
+            inputs={"idea": args.idea},
+            store=store,
+            ai_env=ai_env,
+            model_override=args.model,
+            top_k_override=args.top_k,
+        )
+    except RecipeNotFoundError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 2
+    except InputValidationError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 3
+    except RecipeValidationError as exc:
+        print(f"{FAIL} recipe 검증 실패: {exc}", file=sys.stderr)
+        return 4
+    except (EmbeddingError, AIError) as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+
+    sys.stdout.write(result.answer_markdown.rstrip() + "\n")
+    if result.saved_path:
+        sys.stdout.write(f"\n{OK} 설계 초안 저장: {result.saved_path}\n")
+    if not result.profile_used:
+        sys.stdout.write(
+            "\nNOTE: Profile.md 비어있음 — `persona ingest --file` 또는 "
+            "`persona update-profile` 먼저 실행 시 사용자 스타일 반영 개선\n"
+        )
+    if result.source_ids:
+        sys.stdout.write(f"  참고 ProjectCard ({len(result.source_ids)}):\n")
+        for cid in result.source_ids:
+            sys.stdout.write(f"    - {cid}\n")
+    sys.stdout.flush()
+    return 0
+
+
 def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     """회사 맞춤 이력서 자동 생성 → vault Drafts."""
     args.top_k = _arg_or_config(args.top_k, "top_k.resume", 6)
@@ -2303,6 +2374,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ingest.add_argument("--model", default=None)
     p_ingest.set_defaults(func=cmd_persona_ingest)
+
+    p_dp = me_sub.add_parser(
+        "design-project",
+        help="새 프로젝트 설계 초안 — Profile + ProjectCard 기반 (M1c)",
+    )
+    p_dp.add_argument("idea", help="프로젝트 아이디어 한 줄 (예: 'iOS Todo 앱')")
+    p_dp.add_argument("--top-k", type=int, default=None)
+    p_dp.add_argument("--model", default=None)
+    p_dp.set_defaults(func=cmd_persona_design_project)
 
     p_wdt = me_sub.add_parser(
         "what-did-i-think", help="주제에 대한 과거 사고 회상"
