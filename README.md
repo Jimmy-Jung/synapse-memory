@@ -166,8 +166,9 @@ W5 ✓ me {draft-resume, what-did-i-think, decide, update-profile}
 W6 ✓ daily 통합 + 문서화 + GitHub publish (v0.3.0)
 W7 ✓ Claude Code / Codex plugin layer 부활 (v0.4.0+) — slash 명령 surface
 W8 ✓ me-recipes framework + hybrid retrieval (v0.5.0) — recipe 기반 생성 + dense/BM25 선택
+W9 ✓ 비개발자 온보딩 (v0.6.0) — 더블클릭 installer preview + iCloud vault 추천 + doctor --fix
 
-667 tests passed · v0.5.0
+686 tests passed · v0.6.0
 ```
 
 ## 라이선스
