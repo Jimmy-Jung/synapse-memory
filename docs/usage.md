@@ -2,6 +2,22 @@
 
 이 문서는 설치가 끝난 뒤 실제로 Synapse Memory를 어떻게 쓰는지 설명합니다. 명령 옵션 전체가 필요하면 [CLI 명령 레퍼런스](commands.md)를 보세요.
 
+## 어떤 답답함에 어느 절을 보면 되나
+
+| 답답함 | 어느 절 | 핵심 명령 |
+|---|---|---|
+| "노트가 매일 쌓이는데 정리할 시간이 없다" | [§1 매일 5분 워크플로](#1-매일-5분-워크플로) | `daily` |
+| "Obsidian 검색해도 그 노트가 안 나온다" | [§2 내 자료에 질문하기](#2-내-자료에-질문하기) | `ask` |
+| "작년 결정 이유가 기억 안 난다" | [§3 과거의 내 생각 회상하기](#3-과거의-내-생각-회상하기) | `me what-did-i-think` |
+| "사소한 결정에 매일 피로하다" | [§4 의사결정 도움 받기](#4-의사결정-도움-받기) | `me decide` |
+| "회사마다 이력서를 6시간씩 다시 쓴다" | [§5 회사 맞춤 이력서 만들기](#5-회사-맞춤-이력서-만들기) | `me draft-resume` |
+| "새 프로젝트 카드를 미리 만들고 싶다" | [§6 새 프로젝트나 회사 추가하기](#6-새-프로젝트나-회사-추가하기) | `card new` |
+| "이 회사명은 절대 외부에 보내지 마" | [§7 NDA 키워드 마스킹하기](#7-nda-키워드-마스킹하기) | `redactlist add` |
+| "색인을 처음부터 다시 만들고 싶다" | [§8 다시 만들기와 백필](#8-다시-만들기와-백필) | `rag index --rebuild` |
+| "새 노트를 어디 폴더에 둬야 카드가 생기나" | [vault 폴더 컨벤션](#vault-폴더-컨벤션--노트를-어디에-두면-카드가-생기나) | (폴더 규칙) |
+| "비용이 얼마나 드는지 가늠이 안 된다" | [비용 감각](#비용-감각) | `cost summary` |
+| "환경이 깨졌다 / doctor가 실패한다" | [환경이 깨졌을 때](#환경이-깨졌을-때) | `doctor --fix` |
+
 > 각 시나리오는 **CLI** 와 **Slash** 두 가지 호출 방식을 함께 보여줍니다. 둘은 같은 백엔드를 호출하므로 결과가 동일합니다.
 >
 > | 시나리오 | CLI | Slash |
@@ -47,6 +63,21 @@ synapse-memory daily --profile-facts-only
 4. 새 Card가 있으면 내용과 `status`를 확인합니다.
 
 처음에는 자동 생성 내용을 바로 믿기보다, Obsidian에서 한 번 검토한 것만 “진실원본”으로 올리는 흐름을 권장합니다.
+
+### 진행 상황 확인
+
+첫 실행이거나 새 노트가 많이 쌓인 날에는 `daily`가 30분~1시간씩 걸릴 수 있습니다. 진행 상황은 두 가지 방식으로 확인할 수 있습니다.
+
+1. **터미널 실시간 출력** — 클러스터 단위로 `[i/N] cluster_id ... ok (12.3s)` 형식으로 한 줄씩 출력됩니다.
+2. **status 파일 polling** — 별도 터미널이나 Claude Code 데스크탑 / Codex처럼 stdout이 가려진 환경에서:
+
+   ```bash
+   synapse-memory daily-status            # 한 번 조회
+   synapse-memory daily-status --watch    # 2초 간격으로 추적
+   cat ~/.synapse/run/daily.status.json   # AI agent용 원본
+   ```
+
+자세한 형식과 옵션은 [CLI 레퍼런스의 `daily-status`](commands.md#daily-status)를 참고하세요.
 
 ## 2. 내 자료에 질문하기
 
@@ -111,7 +142,7 @@ synapse-memory me update-profile --facts-only
 회사 Card와 프로젝트 Card를 바탕으로 이력서 초안을 만듭니다.
 
 ```bash
-synapse-memory me draft-resume danggeun --model sonnet
+synapse-memory me draft-resume examplecorp --model sonnet
 ```
 
 출력 파일은 vault 안에 생성됩니다.
@@ -122,7 +153,7 @@ synapse-memory me draft-resume danggeun --model sonnet
 
 품질을 높이는 순서는 이렇습니다.
 
-1. `synapse-memory card show danggeun --type company`로 회사 Card를 확인합니다.
+1. `synapse-memory card show examplecorp --type company`로 회사 Card를 확인합니다.
 2. 회사 키워드, 포지션, 원하는 경험이 비어 있으면 Obsidian에서 보강합니다.
 3. `synapse-memory rag index --rebuild`로 인덱스를 갱신합니다.
 4. `me draft-resume`을 다시 실행합니다.
@@ -138,7 +169,45 @@ synapse-memory card new my-new-project "내 새 프로젝트"
 synapse-memory card new acme "Acme Corp" --type company
 ```
 
-또는 vault에 새 노트를 작성하고 `daily`가 자동으로 cluster를 찾게 둘 수 있습니다. 프로젝트 폴더에 노트가 2개 이상 있으면 cluster로 잡힐 가능성이 높습니다.
+또는 vault에 새 노트를 작성하고 `daily`가 자동으로 cluster를 찾게 둘 수 있습니다. 프로젝트 폴더에 노트가 2개 이상 있으면 cluster로 잡힐 가능성이 높습니다. **어느 폴더에 노트를 두느냐가 cluster 인식에 직접 영향**을 주므로, 다음 절의 vault 폴더 컨벤션을 먼저 참고하세요.
+
+## vault 폴더 컨벤션 — 노트를 어디에 두면 카드가 생기나
+
+Synapse는 [PARA Method](https://fortelabs.com/blog/para/)와 [Johnny.Decimal](https://johnnydecimal.com/)을 섞은 vault 구조(`00_Inbox` / `10_Active` / `20_Reference` / `30_Creative` / `90_System`)를 가정합니다. *왜 이 변형을 골랐고 어디까지 강제되는지*는 [설계 개요의 "왜 이런 폴더 구조를 골랐나요?"](for-everyone/architecture-overview.md#왜-이런-폴더-구조00_inbox-10_active--를-골랐나요)를 보세요.
+
+각 폴더는 **누가 만들고 누가 사용하는지**가 다릅니다.
+
+| 폴더 | 누가 만드나 | Synapse 동작 | 사용자 행동 |
+|---|---|---|---|
+| `00_Inbox/` | **사용자** (Obsidian의 새 노트 기본 위치) | mirror만 — 특별 처리 없음 | 미정리 노트를 일시적으로 둠. 정리할 때 `10_Active/<회사>/<프로젝트>/`로 옮김 |
+| `10_Active/<회사>/<프로젝트>/...` | **사용자** | **cluster 식별의 주된 소스** — 폴더 segment가 cluster_id로 변환됨 | 진행 중 프로젝트 노트를 여기에 둠 |
+| `20_Reference/Projects/*.md` | **Synapse 자동 생성** (`card generate`) | ProjectCard 저장 | `status: draft` → 검토 후 `active`로 승격 |
+| `20_Reference/Companies/*.md` | **Synapse 자동 생성** (`card generate`) | CompanyCard 저장 | 회사 카드 보강 (포지션·키워드) |
+| `30_Creative/Drafts/` | **Synapse 자동 생성** (`me draft-resume`) | 이력서 초안 저장 | 다듬어서 사용 |
+| `90_System/AI/MemoryInbox/Profile-YYYY-MM-DD.md` | **Synapse 자동 생성** (`update_profile`) | ProfileFact/DecisionPattern 후보 | 검토 후 `Profile.md` / `DecisionPatterns.md`로 승격 |
+| `90_System/AI/{Profile,DecisionPatterns}.md` | **사용자가 승격** | `me decide`의 의사결정 컨텍스트 | 진실원본으로 유지 |
+| `90_System/AI/DailyReports/YYYY-MM-DD.md` | **Synapse 자동 생성** (daily `report` 단계) | 그날 단계별 status/elapsed/실패 로그 | 결과 검토 |
+| `90_System/AI/recipes/` | 사용자 정의 (선택) | `me generate <recipe>` | 커스텀 prompt recipe |
+
+### `00_Inbox`의 용도와 한계
+
+`00_Inbox`는 **사용자가 미정리 노트를 일시적으로 던지는 받은편지함**입니다. Obsidian이 새 노트 기본 위치로 자주 쓰는 폴더이고, GTD/PARA 컨벤션에서도 동일한 의미로 통용됩니다.
+
+Synapse 관점에서는 다음과 같이 다룹니다.
+
+- ✅ `collect_obsidian`이 다른 폴더와 동일하게 mirror합니다 (`~/.synapse/private/raw/obsidian/00_Inbox/...`).
+- ⚠️ **cluster로는 잘 안 묶입니다.** cluster 식별은 폴더 segment(주로 `10_Active/<회사>/<프로젝트>`)를 신호로 쓰는데, `00_Inbox`는 평평한 잡탕 구조라 같은 cluster_id로 모이지 않습니다.
+- ❌ 결과적으로 `00_Inbox`에만 쌓인 노트는 **자동으로 Card가 생기지 않습니다.**
+
+### 권장 워크플로 — Inbox → Active
+
+1. 새 생각/회의록은 일단 `00_Inbox/`에 두세요. 부담 없이.
+2. 주 1회 또는 `/synapse-daily` 후 MemoryInbox 검토할 때 같이 정리합니다.
+3. **카드화하고 싶은 노트**는 `10_Active/<회사>/<프로젝트>/` 경로로 옮깁니다.
+4. 같은 폴더에 노트가 2개 이상 쌓이면 다음 `daily`에서 cluster로 잡혀 ProjectCard/CompanyCard가 자동 생성됩니다.
+5. 더 이상 진행 중이 아닌 프로젝트는 별도 `40_Archive/` 같은 곳으로 옮겨두면 `10_Active` cluster에서 빠집니다 (단, mirror는 계속됨).
+
+> 🚫 **`90_System/AI/`는 Synapse 전용입니다.** 사용자는 이 폴더 안의 내용을 읽고 승격(이동)할 수는 있지만, 직접 작성한 노트를 두지는 마세요. `daily`가 덮어쓸 수 있습니다. 기본 제외 정책상 mirror 대상에서도 빠집니다 (`commands.md:123`).
 
 ## 7. NDA 키워드 마스킹하기
 
