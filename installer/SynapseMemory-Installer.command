@@ -8,7 +8,9 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
 LOG_DIR="${HOME}/Library/Logs/SynapseMemory"
-LOG_FILE="${LOG_DIR}/installer-$(date +%Y%m%d-%H%M%S).log"
+RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
+LOG_FILE="${LOG_DIR}/installer-${RUN_STAMP}.log"
+STATE_FILE="${LOG_DIR}/installer-${RUN_STAMP}.state.json"
 DRY_RUN="${SYNAPSE_INSTALLER_DRY_RUN:-1}"
 ACTIVATE_PLUGINS="${SYNAPSE_ACTIVATE_PLUGINS:-1}"
 PLUGIN_SOURCE="${SYNAPSE_PLUGIN_SOURCE:-${REPO_ROOT}}"
@@ -17,15 +19,50 @@ CLAUDE_PLUGIN_SCOPE="${SYNAPSE_CLAUDE_PLUGIN_SCOPE:-user}"
 CODEX_PLUGIN_SOURCE="${SYNAPSE_CODEX_PLUGIN_SOURCE:-${PLUGIN_SOURCE}}"
 CODEX_PLUGIN_REF="${SYNAPSE_CODEX_PLUGIN_REF:-synapse-memory@synapse-memory-marketplace}"
 CODEX_MARKETPLACE_NAME="${SYNAPSE_CODEX_MARKETPLACE_NAME:-synapse-memory-marketplace}"
+TEST_MODE="${SYNAPSE_INSTALLER_TEST_MODE:-0}"
+TEST_ARCH="${SYNAPSE_INSTALLER_TEST_ARCH:-}"
 
 mkdir -p "${LOG_DIR}"
 touch "${LOG_FILE}"
+
+record_state_step() {
+  local step_id="$1"
+  local step_status="$2"
+  local summary="$3"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  PYTHONPATH="${REPO_ROOT}/src" python3 - \
+    "${STATE_FILE}" \
+    "${LOG_FILE}" \
+    "${DRY_RUN}" \
+    "${step_id}" \
+    "${step_status}" \
+    "${summary}" <<'PY' >/dev/null 2>&1 || true
+from pathlib import Path
+import sys
+
+from synapse_memory.installer.state import append_manifest_step
+
+append_manifest_step(
+    Path(sys.argv[1]),
+    log_path=Path(sys.argv[2]),
+    dry_run=sys.argv[3] == "1",
+    step_id=sys.argv[4],
+    status=sys.argv[5],
+    summary=sys.argv[6],
+)
+PY
+}
 
 log_step() {
   local step_id="$1"
   local step_status="$2"
   local summary="$3"
   printf '%s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${step_id}" "${step_status}" "${summary}" | tee -a "${LOG_FILE}"
+  record_state_step "${step_id}" "${step_status}" "${summary}"
 }
 
 obsidian_bundle_is_valid() {
@@ -96,6 +133,10 @@ install_dependency() {
 }
 
 ask_consent() {
+  if [ "${TEST_MODE}" = "1" ]; then
+    return 0
+  fi
+
   /usr/bin/osascript <<'APPLESCRIPT'
 display dialog "Synapse Memory 설치를 시작합니다.
 
@@ -107,6 +148,11 @@ APPLESCRIPT
 
 choose_vault_line() {
   local choices_file="$1"
+  if [ "${TEST_MODE}" = "1" ]; then
+    head -n 1 "${choices_file}"
+    return 0
+  fi
+
   /usr/bin/osascript <<APPLESCRIPT
 set choicesPath to POSIX file "${choices_file}"
 set rawText to read choicesPath as «class utf8»
@@ -118,6 +164,11 @@ APPLESCRIPT
 }
 
 choose_custom_vault_path() {
+  if [ "${TEST_MODE}" = "1" ]; then
+    printf '%s\n' "${HOME}/SynapseVault"
+    return 0
+  fi
+
   /usr/bin/osascript <<'APPLESCRIPT'
 set pickedFolder to choose folder with prompt "Synapse Memory 저장소로 사용할 폴더를 선택하세요."
 return POSIX path of pickedFolder
@@ -376,18 +427,36 @@ activate_plugins() {
   activate_codex_plugin
 }
 
-log_step "start" "success" "log=${LOG_FILE}"
+notify_user() {
+  local message="$1"
+  if [ "${TEST_MODE}" = "1" ]; then
+    printf '%s notify skipped test_mode=true message=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${message}" | tee -a "${LOG_FILE}"
+    return 0
+  fi
+  /usr/bin/osascript -e "display notification \"${message}\" with title \"Synapse Memory\""
+}
+
+alert_user() {
+  local message="$1"
+  if [ "${TEST_MODE}" = "1" ]; then
+    log_step "alert" "skipped" "test_mode=true message=${message}"
+    return 0
+  fi
+  /usr/bin/osascript -e "display alert \"${message}\""
+}
+
+log_step "start" "success" "log=${LOG_FILE} state=${STATE_FILE}"
 
 if ! ask_consent >/dev/null; then
   log_step "consent" "cancelled" "user_cancelled=true"
-  /usr/bin/osascript -e 'display notification "설치가 취소되었습니다." with title "Synapse Memory"'
+  notify_user "설치가 취소되었습니다."
   exit 130
 fi
 log_step "consent" "success" "scope=setup"
 
-if [ "$(uname -m)" != "arm64" ]; then
+if [ "${TEST_ARCH:-$(uname -m)}" != "arm64" ]; then
   log_step "platform" "failed" "Apple Silicon arm64 required"
-  /usr/bin/osascript -e 'display alert "Synapse Memory는 Apple Silicon Mac이 필요합니다."'
+  alert_user "Synapse Memory는 Apple Silicon Mac이 필요합니다."
   exit 1
 fi
 log_step "platform" "success" "arch=arm64"
@@ -466,5 +535,5 @@ else
   log_step "vault_detection" "skipped" "python3 unavailable before runtime bootstrap"
 fi
 
-log_step "complete" "success" "dry_run=${DRY_RUN}"
-/usr/bin/osascript -e "display notification \"Synapse Memory 설치 점검이 완료되었습니다. 로그: ${LOG_FILE}\" with title \"Synapse Memory\""
+log_step "complete" "success" "dry_run=${DRY_RUN} state=${STATE_FILE}"
+notify_user "Synapse Memory 설치 점검이 완료되었습니다. 로그: ${LOG_FILE} 상태: ${STATE_FILE}"

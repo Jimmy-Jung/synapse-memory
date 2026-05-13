@@ -7,10 +7,17 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+import json
+import os
+import tempfile
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
+
+from synapse_memory.installer.logging import sanitize_log_message
 
 
 class InstallerState(StrEnum):
@@ -154,3 +161,170 @@ class InstallerSession:
         elif self.state in (InstallerState.PLANNED, InstallerState.CONSENTED):
             self.state = InstallerState.RUNNING
         return result
+
+
+@dataclass(frozen=True)
+class InstallerManifestStep:
+    step_id: str
+    status: str
+    phase: str
+    summary: str
+    recorded_at: str
+
+
+@dataclass(frozen=True)
+class InstallerManifest:
+    version: int
+    state: str
+    dry_run: bool
+    started_at: str
+    updated_at: str
+    log_path: str
+    state_path: str
+    steps: list[InstallerManifestStep] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "version": self.version,
+            "state": self.state,
+            "dry_run": self.dry_run,
+            "started_at": self.started_at,
+            "updated_at": self.updated_at,
+            "log_path": self.log_path,
+            "state_path": self.state_path,
+            "steps": [asdict(step) for step in self.steps],
+        }
+
+
+def load_manifest(path: Path) -> InstallerManifest | None:
+    """Read an installer state manifest. Invalid or missing files return None."""
+    try:
+        raw = json.loads(path.expanduser().read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    steps_raw = raw.get("steps", [])
+    if not isinstance(steps_raw, list):
+        steps_raw = []
+    steps: list[InstallerManifestStep] = []
+    for item in steps_raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            steps.append(
+                InstallerManifestStep(
+                    step_id=str(item["step_id"]),
+                    status=str(item["status"]),
+                    phase=str(item["phase"]),
+                    summary=str(item.get("summary", "")),
+                    recorded_at=str(item["recorded_at"]),
+                )
+            )
+        except KeyError:
+            continue
+    try:
+        return InstallerManifest(
+            version=int(raw.get("version", 1)),
+            state=str(raw.get("state", "running")),
+            dry_run=bool(raw.get("dry_run", True)),
+            started_at=str(raw["started_at"]),
+            updated_at=str(raw["updated_at"]),
+            log_path=str(raw.get("log_path", "")),
+            state_path=str(raw.get("state_path", path.expanduser())),
+            steps=steps,
+        )
+    except KeyError:
+        return None
+
+
+def append_manifest_step(
+    path: Path,
+    *,
+    log_path: Path,
+    dry_run: bool,
+    step_id: str,
+    status: str,
+    summary: str,
+    phase: str | None = None,
+    clock: Callable[[], str] | None = None,
+) -> InstallerManifest:
+    """Append one installer step to a JSON state manifest using atomic write."""
+    resolved = path.expanduser()
+    now = (clock or _utc_now_iso)()
+    previous = load_manifest(resolved)
+    steps = list(previous.steps) if previous is not None else []
+    steps.append(
+        InstallerManifestStep(
+            step_id=step_id,
+            status=status,
+            phase=phase or infer_manifest_phase(step_id=step_id, status=status),
+            summary=sanitize_log_message(summary),
+            recorded_at=now,
+        )
+    )
+    manifest = InstallerManifest(
+        version=1,
+        state=_manifest_state_for_step(
+            step_id=step_id,
+            status=status,
+            previous_state=previous.state if previous is not None else None,
+        ),
+        dry_run=dry_run,
+        started_at=previous.started_at if previous is not None else now,
+        updated_at=now,
+        log_path=str(log_path.expanduser()),
+        state_path=str(resolved),
+        steps=steps,
+    )
+    _write_manifest_atomic(resolved, manifest)
+    return manifest
+
+
+def infer_manifest_phase(*, step_id: str, status: str) -> str:
+    if status == "preview":
+        return "preview"
+    if step_id.startswith(("verify_", "validate_")):
+        return "verify"
+    if step_id.startswith("detect_") or step_id in {"platform"}:
+        return "detect"
+    if step_id in {"start", "consent", "complete"}:
+        return "lifecycle"
+    return "apply"
+
+
+def _manifest_state_for_step(
+    *,
+    step_id: str,
+    status: str,
+    previous_state: str | None = None,
+) -> str:
+    if previous_state in {"failed", "cancelled"} and status != "success":
+        return previous_state
+    if status == "failed":
+        return "failed"
+    if status == "cancelled":
+        return "cancelled"
+    if previous_state in {"failed", "cancelled"}:
+        return previous_state
+    if step_id == "complete" and status == "success":
+        return "succeeded"
+    return "running"
+
+
+def _utc_now_iso() -> str:
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
+
+
+def _write_manifest_atomic(path: Path, manifest: InstallerManifest) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.write("\n")
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)

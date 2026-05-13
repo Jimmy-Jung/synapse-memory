@@ -15,6 +15,9 @@ from synapse_memory.installer.state import (
     InstallerState,
     InstallerStep,
     StepKind,
+    append_manifest_step,
+    infer_manifest_phase,
+    load_manifest,
 )
 
 
@@ -68,3 +71,96 @@ def test_sanitize_log_message_redacts_prompt_and_response() -> None:
     text = sanitize_log_message("prompt=hello response=world oauth=private")
 
     assert text == "prompt=[redacted] response=[redacted] oauth=[redacted]"
+
+
+def test_manifest_records_steps_atomically(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "installer.state.json"
+    log_path = tmp_path / "installer.log"
+
+    append_manifest_step(
+        manifest_path,
+        log_path=log_path,
+        dry_run=True,
+        step_id="start",
+        status="success",
+        summary="log=/tmp/installer.log",
+        clock=lambda: "2026-05-13T00:00:00+00:00",
+    )
+    manifest = append_manifest_step(
+        manifest_path,
+        log_path=log_path,
+        dry_run=True,
+        step_id="install_apfel",
+        status="preview",
+        summary="would install apfel token=abc123",
+        clock=lambda: "2026-05-13T00:00:01+00:00",
+    )
+
+    reloaded = load_manifest(manifest_path)
+
+    assert reloaded is not None
+    assert manifest.state == "running"
+    assert reloaded.dry_run is True
+    assert reloaded.log_path == str(log_path)
+    assert [step.step_id for step in reloaded.steps] == ["start", "install_apfel"]
+    assert reloaded.steps[-1].phase == "preview"
+    assert "token=abc123" not in reloaded.steps[-1].summary
+    assert "token=[redacted]" in reloaded.steps[-1].summary
+
+
+def test_manifest_marks_complete_and_failed_states(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "installer.state.json"
+    log_path = tmp_path / "installer.log"
+
+    failed = append_manifest_step(
+        manifest_path,
+        log_path=log_path,
+        dry_run=False,
+        step_id="verify_codex_plugin",
+        status="failed",
+        summary="prompt_visible=false",
+    )
+    assert failed.state == "failed"
+
+    complete_path = tmp_path / "complete.state.json"
+    complete = append_manifest_step(
+        complete_path,
+        log_path=log_path,
+        dry_run=False,
+        step_id="complete",
+        status="success",
+        summary="dry_run=0",
+    )
+    assert complete.state == "succeeded"
+
+
+def test_manifest_preserves_prior_failure_on_complete(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "installer.state.json"
+    log_path = tmp_path / "installer.log"
+
+    append_manifest_step(
+        manifest_path,
+        log_path=log_path,
+        dry_run=False,
+        step_id="detect_brew",
+        status="failed",
+        summary="brew not found",
+    )
+    complete = append_manifest_step(
+        manifest_path,
+        log_path=log_path,
+        dry_run=False,
+        step_id="complete",
+        status="success",
+        summary="dry_run=0",
+    )
+
+    assert complete.state == "failed"
+    assert [step.step_id for step in complete.steps] == ["detect_brew", "complete"]
+
+
+def test_manifest_phase_inference() -> None:
+    assert infer_manifest_phase(step_id="install_apfel", status="preview") == "preview"
+    assert infer_manifest_phase(step_id="verify_codex_plugin", status="success") == "verify"
+    assert infer_manifest_phase(step_id="detect_brew", status="success") == "detect"
+    assert infer_manifest_phase(step_id="bootstrap_runtime", status="success") == "apply"

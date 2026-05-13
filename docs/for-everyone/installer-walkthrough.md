@@ -161,7 +161,7 @@ Claude Code 앱을 열고 다음 명령을 차례로 실행합니다.
 | `~/.synapse/private/redacted/` | 마스킹된 사본 |
 | `~/.synapse/private/rag/` | 검색 색인 |
 | 선택한 vault 폴더 | 요약 카드, Profile, 이력서 초안 |
-| `~/Library/Logs/SynapseMemory/` | 설치 로그 |
+| `~/Library/Logs/SynapseMemory/` | 설치 로그와 상태 manifest |
 
 `/opt/homebrew/` 아래에 Homebrew 도구들(apfel 등)이 설치될 수 있습니다.
 
@@ -177,8 +177,9 @@ Claude Code 앱을 열고 다음 명령을 차례로 실행합니다.
 
 ### 그래도 안 될 때
 
-1. 설치 로그 확인: `~/Library/Logs/SynapseMemory/install-*.log`
-2. GitHub Issues에 위 로그와 함께 보고
+1. 설치 로그 확인: `~/Library/Logs/SynapseMemory/installer-*.log`
+2. 단계별 상태 확인: `~/Library/Logs/SynapseMemory/installer-*.state.json`
+3. GitHub Issues에 위 로그와 함께 보고
 
 ## 완전히 삭제하고 싶으면
 

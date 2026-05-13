@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 from synapse_memory.installer.runtime import (
@@ -14,6 +16,7 @@ from synapse_memory.installer.runtime import (
     managed_bin_dir,
     render_bootstrap_script,
 )
+from synapse_memory.installer.state import load_manifest
 
 
 def test_managed_bin_dir_uses_synapse_home(tmp_path: Path) -> None:
@@ -80,3 +83,69 @@ def test_macos_installer_activates_claude_and_codex_plugins() -> None:
     assert "codex debug prompt-input" in script
     assert "synapse-memory:synapse-memory" in script
     assert "SYNAPSE_ACTIVATE_PLUGINS" in script
+
+
+def test_macos_installer_records_structured_state_manifest() -> None:
+    script = Path("installer/SynapseMemory-Installer.command").read_text(encoding="utf-8")
+
+    assert 'STATE_FILE="${LOG_DIR}/installer-${RUN_STAMP}.state.json"' in script
+    assert "record_state_step()" in script
+    assert "append_manifest_step" in script
+    assert 'log_step "start" "success" "log=${LOG_FILE} state=${STATE_FILE}"' in script
+    assert 'log_step "complete" "success" "dry_run=${DRY_RUN} state=${STATE_FILE}"' in script
+
+
+def test_macos_installer_dry_run_smoke_writes_log_and_state_manifest(
+    tmp_path: Path,
+) -> None:
+    repo_root = Path.cwd()
+    home = tmp_path / "home"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_brew = fake_bin / "brew"
+    fake_brew.write_text("#!/usr/bin/env sh\nexit 1\n", encoding="utf-8")
+    fake_brew.chmod(0o755)
+
+    env = {
+        **os.environ,
+        "HOME": str(home),
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "SYNAPSE_INSTALLER_DRY_RUN": "1",
+        "SYNAPSE_INSTALLER_TEST_ARCH": "arm64",
+        "SYNAPSE_INSTALLER_TEST_MODE": "1",
+    }
+
+    result = subprocess.run(
+        ["zsh", "installer/SynapseMemory-Installer.command"],
+        cwd=repo_root,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=15,
+        check=False,
+    )
+
+    log_dir = home / "Library" / "Logs" / "SynapseMemory"
+    log_files = sorted(log_dir.glob("installer-*.log"))
+    state_files = sorted(log_dir.glob("installer-*.state.json"))
+
+    assert result.returncode == 0, result.stderr
+    assert len(log_files) == 1
+    assert len(state_files) == 1
+    assert "bootstrap_runtime preview" in log_files[0].read_text(encoding="utf-8")
+
+    manifest = load_manifest(state_files[0])
+    assert manifest is not None
+    assert manifest.state == "succeeded"
+    assert manifest.dry_run is True
+    assert manifest.log_path == str(log_files[0])
+    assert manifest.state_path == str(state_files[0])
+
+    steps = {step.step_id: step for step in manifest.steps}
+    assert steps["start"].phase == "lifecycle"
+    assert steps["consent"].status == "success"
+    assert steps["platform"].status == "success"
+    assert steps["bootstrap_runtime"].status == "preview"
+    assert steps["activate_claude_plugin"].status == "preview"
+    assert steps["activate_codex_plugin"].status == "preview"
+    assert steps["complete"].status == "success"

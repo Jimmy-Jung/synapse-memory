@@ -20,7 +20,7 @@
 
 ## 0. 비개발자라면
 
-릴리스 zip을 받은 뒤 `installer/SynapseMemory-Installer.command`를 더블클릭합니다. 설치 프로그램은 GUI 동의 후 필요한 도구와 Obsidian vault 후보를 확인하고, 저장소 위치 선택창을 보여준 뒤 `~/Library/Logs/SynapseMemory/` 아래에 로그를 남깁니다. iCloud Obsidian 폴더가 있으면 `iCloud/SynapseVault`가 추천 위치로 표시됩니다.
+릴리스 zip을 받은 뒤 `installer/SynapseMemory-Installer.command`를 더블클릭합니다. 설치 프로그램은 GUI 동의 후 필요한 도구와 Obsidian vault 후보를 확인하고, 저장소 위치 선택창을 보여준 뒤 `~/Library/Logs/SynapseMemory/` 아래에 로그와 상태 manifest를 남깁니다. iCloud Obsidian 폴더가 있으면 `iCloud/SynapseVault`가 추천 위치로 표시됩니다.
 
 현재 installer MVP는 기본값이 dry-run/preview입니다. 실제 적용 모드는 설치 단계 단일 동의 정책이 constitution에 반영된 뒤 활성화됩니다.
 
