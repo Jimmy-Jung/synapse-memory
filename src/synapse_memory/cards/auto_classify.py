@@ -14,7 +14,7 @@
     life    — 개인 생활/취미 — Card 안 만듦
     skip    — 메타·아카이브 (Card 부적절)
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -44,7 +44,7 @@ CLASSIFY_SYSTEM = (
     "- project: 구체적 deliverable이 있는 작업/프로젝트\n"
     "  예: 단심 앱 개발, 이력서-2026, 카뱅 지원 준비\n"
     "- company: 회사·조직 (지원/근무 중)\n"
-    "  예: 메가스터디, 당근마켓\n"
+    "  예: 샘플회사, 당근마켓\n"
     "- domain: 학습 주제/기술 도메인 (작업이 아닌 카테고리)\n"
     "  예: iOS, Swift, Algorithm, CS 노트 모음\n"
     "- life: 개인 생활·취미\n"

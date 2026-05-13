@@ -7,7 +7,7 @@
 
 ## User Scenarios & Testing *(mandatory)*
 
-본 meta-feature 의 "사용자"는 도구 소유자(JunyoungJung) 본인이며, 시스템이 매일·매주·매월 단위로 더 똑똑해지는 경험이 핵심 가치다. 각 User Story 는 **하나의 마일스톤(v0.5~v0.8)** 에 대응하고, 독립 출시 가능하도록 슬라이스되어 있다. P1 단독 출시만으로도 사용자에게 의미 있는 가치 (`me what-did-i-think` 가 시간순으로 동작 + 비용 가시화) 가 도달한다.
+본 meta-feature 의 "사용자"는 도구 소유자(Synapse Memory Maintainers) 본인이며, 시스템이 매일·매주·매월 단위로 더 똑똑해지는 경험이 핵심 가치다. 각 User Story 는 **하나의 마일스톤(v0.5~v0.8)** 에 대응하고, 독립 출시 가능하도록 슬라이스되어 있다. P1 단독 출시만으로도 사용자에게 의미 있는 가치 (`me what-did-i-think` 가 시간순으로 동작 + 비용 가시화) 가 도달한다.
 
 ### User Story 1 — v0.5 "쓰면 더 똑똑해지는 도구" (Priority: P1)
 

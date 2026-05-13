@@ -1,6 +1,6 @@
 # Redaction Golden Eval Results
 
-Author: JunyoungJung
+Author: Synapse Memory Maintainers
 Date: 2026-05-12
 Branch: `002-timeline-recall`
 Commit: `2e8d431`

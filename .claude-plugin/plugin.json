@@ -3,11 +3,11 @@
   "description": "개인용 AI 비서 / 세컨드 브레인 / 클론 — vault 위 RAG + 자동 메모리. Claude Code/Codex slash 명령으로 ask/recall/decide/resume/daily/doctor 호출.",
   "version": "0.5.0",
   "author": {
-    "name": "JunyoungJung",
-    "url": "https://github.com/Jimmy-Jung"
+    "name": "Synapse Memory Maintainers",
+    "url": "https://github.com/example-org"
   },
-  "homepage": "https://github.com/Jimmy-Jung/synapse-memory",
-  "repository": "https://github.com/Jimmy-Jung/synapse-memory",
+  "homepage": "https://github.com/example-org/synapse-memory",
+  "repository": "https://github.com/example-org/synapse-memory",
   "license": "MIT",
   "keywords": [
     "synapse",

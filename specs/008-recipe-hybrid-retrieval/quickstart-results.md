@@ -1,7 +1,7 @@
 # Quickstart Smoke Results: Recipe Hybrid Retrieval
 
 **Feature**: 008-recipe-hybrid-retrieval
-**Author**: JunyoungJung <joony300@gmail.com>
+**Author**: Synapse Memory Maintainers
 **Date**: 2026-05-12
 **Machine**: local workstation, isolated fixture vault copied from `tests/fixtures/recipes_vault`
 **Invocation**: `PYTHONPATH=src SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ...`

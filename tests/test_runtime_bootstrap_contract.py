@@ -1,0 +1,42 @@
+"""Runtime bootstrap 계약 테스트.
+
+저자: Synapse Memory Maintainers
+작성일: 2026-05-12
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from synapse_memory.installer.runtime import (
+    BootstrapPlan,
+    build_synapse_shim,
+    managed_bin_dir,
+    render_bootstrap_script,
+)
+
+
+def test_managed_bin_dir_uses_synapse_home(tmp_path: Path) -> None:
+    assert managed_bin_dir(home=tmp_path) == tmp_path / ".synapse" / "bin"
+
+
+def test_synapse_shim_does_not_call_system_python() -> None:
+    content = build_synapse_shim(
+        project_source="/tmp/synapse-memory",
+        executable="synapse-memory",
+    )
+
+    assert "/usr/bin/python3" not in content
+    assert "python3 " not in content
+    assert "uv tool run" in content
+    assert "synapse-memory" in content
+
+
+def test_bootstrap_script_preserves_canonical_command() -> None:
+    script = render_bootstrap_script(
+        BootstrapPlan(project_source="/tmp/synapse-memory", expose_synapse_alias=True)
+    )
+
+    assert "synapse-memory" in script
+    assert "ln -sf" in script
+    assert "/usr/bin/python3" not in script

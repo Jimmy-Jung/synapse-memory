@@ -25,8 +25,8 @@ Synapse Memory 환경 진단
   버전: apfel v1.3.3
 ✓ Apple Silicon (arm64)
 ✓ macOS 26.3.1 (Tahoe+)
-✓ L0 루트: /Users/jimmy/.synapse/private (0700)
-✓ AI provider (codex): /Users/jimmy/.nvm/versions/node/v22.18.0/bin/codex [codex-cli 0.128.0] (model=gpt-5.4)
+✓ L0 루트: /Users/<user>/.synapse/private (0700)
+✓ AI provider (codex): /Users/<user>/.nvm/versions/node/v22.18.0/bin/codex [codex-cli 0.128.0] (model=gpt-5.4)
 ============================================
 ✓ 준비 완료
 ```
@@ -59,7 +59,7 @@ $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "당근마켓 경험" -
 ============================================================
 출처 (5):
   [0.395] card_company   danggeun — 당근마켓
-  [0.616] card_project   카뱅지원-2026 — 카카오뱅크 AI모바일개발팀 지원 (2026)
+  [0.616] card_project   샘플지원-2026 — 카카오뱅크 AI모바일개발팀 지원 (2026)
   [0.634] card_project   dansim-ios — 단심 (명상 앱)
   [0.638] card_project   -----2026 — 2026 프로젝트
   [0.651] card_project   Tablet — 태블릿 앱
@@ -90,8 +90,8 @@ $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "당근마켓 경험" -
 ============================================================
 출처 (5):
   [0.033] card_company   danggeun — 당근마켓
-  [0.031] card_company   메가스터디 — 메가스터디
-  [0.016] card_project   카뱅지원-2026 — 카카오뱅크 AI모바일개발팀 지원 (2026)
+  [0.031] card_company   샘플회사 — 샘플회사
+  [0.016] card_project   샘플지원-2026 — 카카오뱅크 AI모바일개발팀 지원 (2026)
   [0.016] card_project   dansim-ios — 단심 (명상 앱)
   [0.016] card_project   -----2026 — 2026 프로젝트
 ```
@@ -102,15 +102,15 @@ $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli ask "당근마켓 경험" -
 $ SYNAPSE_FROM_AGENT=1 python3 -m synapse_memory.cli me what-did-i-think "이직 제안" --hybrid --top-k 8
 주제: 이직 제안
 
-이직에 대해 사용자는 일관되게 "지금까지 쌓은 iOS·모듈화·AI 협업 역량을 더 잘 쓰는 다음 자리"를 탐색해왔고, 2026-05에는 카카오뱅크 지원으로 실제 행동까지 옮긴 흔적이 분명합니다. [메가스터디][카뱅지원-2026]
+이직에 대해 사용자는 일관되게 "지금까지 쌓은 iOS·모듈화·AI 협업 역량을 더 잘 쓰는 다음 자리"를 탐색해왔고, 2026-05에는 카카오뱅크 지원으로 실제 행동까지 옮긴 흔적이 분명합니다. [샘플회사][샘플지원-2026]
 
 ... 중략 ...
 
 ============================================================
 출처 (8):
   - -----2026
-  - 카뱅지원-2026
-  - 메가스터디
+  - 샘플지원-2026
+  - 샘플회사
   - dansim-ios
   - projects
   - Tablet

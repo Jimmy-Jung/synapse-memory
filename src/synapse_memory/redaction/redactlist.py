@@ -6,7 +6,7 @@ Pass 1 단계에 동적 패턴으로 합류 (priority=200 — 가장 높음).
 위치: ``~/.synapse/private/.redactlist``
 형식: 한 줄 = 한 항목, ``#`` 주석, 빈 줄 무시. case-insensitive 매칭.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

@@ -18,7 +18,7 @@ Pass 1(regex/validator)이 못 잡는 카테고리:
 - value 길이 < 2자는 false positive로 간주
 - 카테고리 화이트리스트 — 모델이 만든 카테고리 무시
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -128,7 +128,7 @@ KOREAN_LOCATION_TERMS = frozenset(
 
 KOREAN_ORG_WATCHLIST = frozenset(
     {
-        "메가스터디", "당근마켓", "토스", "카카오뱅크", "무신사", "야놀자",
+        "샘플회사", "당근마켓", "토스", "카카오뱅크", "무신사", "야놀자",
         "컬리", "마켓컬리", "우아한형제들", "라인", "쿠팡", "토스뱅크",
         "비바리퍼블리카", "직방",
     }
@@ -207,9 +207,9 @@ def _looks_like_path_or_identifier(val: str) -> bool:
     """경로/URL/CLI 옵션/identifier 패턴 — PII 카테고리에서 제외.
 
     Apple 모델이 자주 만드는 false positive 패턴:
-        - ``/Users/jimmy/...``의 ``jimmy``를 person_name
+        - ``/Users/sampleuser/...``의 ``sampleuser``를 person_name
         - ``ai-symbiote@ai-symbiote``를 org_name
-        - ``Jimmy-Jung``(GitHub handle)을 person_name
+        - ``sample-handle``(GitHub handle)을 person_name
         - ``jarrodwatts``/``garrytan``(소문자 핸들)을 person_name
         - ``SessionStart:startup``(hook 이벤트)을 org_name
     """
@@ -227,12 +227,12 @@ def _looks_like_path_or_identifier(val: str) -> bool:
     # kebab-case 소문자 (예: "ai-symbiote")
     if val.islower() and "-" in val:
         return True
-    # dash + ASCII만 — GitHub handle 패턴 (예: "Jimmy-Jung", "Foo-Bar").
+    # dash + ASCII만 — GitHub handle 패턴 (예: "sample-handle", "Foo-Bar").
     # 진짜 hyphenated 영어 이름(Anne-Marie)도 cut되지만 한국어 위주 데이터에서
     # GitHub handle 흔도가 훨씬 높아 트레이드오프 수용.
     if "-" in val and val.isascii() and any(c.isalpha() for c in val):
         return True
-    # 소문자 ASCII 단일 영어 단어 (예: "jimmy", "jarrodwatts", "garrytan").
+    # 소문자 ASCII 단일 영어 단어 (예: "sampleuser", "jarrodwatts", "garrytan").
     return _is_lowercase_ascii_handle(val)
 
 
@@ -245,7 +245,7 @@ def load_allowlist(path: Path | None = None) -> set[str]:
     """allowlist 파일 로드. 한 줄 = 한 항목, ``#`` 주석 / 빈 줄 무시.
 
     **case-insensitive 비교를 위해 모두 lowercase로 정규화한다.**
-    매칭 시 후보값도 ``.lower()``로 비교 (``Jimmy``/``jimmy``/``JIMMY`` 동일 처리).
+    매칭 시 후보값도 ``.lower()``로 비교 (``SampleUser``/``sampleuser``/``SAMPLEUSER`` 동일 처리).
 
     파일 없으면 빈 set 반환 (예외 안 던짐).
     """

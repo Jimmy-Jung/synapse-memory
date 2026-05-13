@@ -25,7 +25,7 @@ apfel JSON envelope
 ---------
 apfel v1.3.3 (2026-05-10) 기준. 옵션 변경 시 본 파일과 ``tests/test_apfel.py`` 동기화.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

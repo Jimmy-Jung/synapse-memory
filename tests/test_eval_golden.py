@@ -2,7 +2,7 @@
 
 apfel 호출은 mock — 평가 로직(metric 계산, multi-set 매칭)만 검증.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

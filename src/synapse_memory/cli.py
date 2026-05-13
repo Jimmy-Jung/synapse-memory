@@ -12,7 +12,7 @@
     synapse-memory cluster scan                 raw → 프로젝트 클러스터
     synapse-memory cluster classify             cluster → kind (Claude Code CLI)
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -68,6 +68,12 @@ from synapse_memory.cost.summary import (
     render_summary_table,
 )
 from synapse_memory.daily import STEPS, StageStatus, run_daily
+from synapse_memory.doctor import (
+    apply_fix_actions,
+    diagnose_private_permissions,
+    diagnose_runtime_shim,
+    planned_fix_actions,
+)
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.endpoints.me import (
     decide,
@@ -153,8 +159,42 @@ def _interactive_guard(command: str, slash: str) -> None:
     time.sleep(_INTERACTIVE_GUARD_DELAY_SECONDS)
 
 
-def cmd_doctor(_args: argparse.Namespace) -> int:
+def run_doctor_fix(*, assume_yes: bool = False) -> int:
+    """Whitelisted repair flow for non-developer onboarding drift."""
+    private_root = l0_root()
+    shim_path = Path.home() / ".synapse" / "bin" / "synapse-memory"
+    diagnostics = [
+        diagnose_private_permissions(private_root),
+        diagnose_runtime_shim(shim_path),
+    ]
+    actions = planned_fix_actions(diagnostics)
+
+    if not actions:
+        print("자동 복구할 항목 없음")
+        return 0 if all(result.status == "ok" for result in diagnostics) else 1
+
+    print("Planned fixes:")
+    for index, action in enumerate(actions, start=1):
+        print(f"{index}. {action.id} - {action.description} (risk={action.risk})")
+
+    if not assume_yes:
+        print("Applying in 0.5s. Press Ctrl+C to cancel.")
+        time.sleep(0.5)
+
+    applied = apply_fix_actions(actions)
+    failed = 0
+    for result in applied:
+        print(f"{result.action_id}: {result.status} - {result.summary}")
+        if result.status != "success":
+            failed += 1
+    return 1 if failed else 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
     """환경 진단 — apfel/macOS/Apple Silicon."""
+    if getattr(args, "fix", False):
+        return run_doctor_fix(assume_yes=bool(getattr(args, "yes", False)))
+
     env = detect_environment()
 
     print("Synapse Memory 환경 진단")
@@ -1473,6 +1513,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
 
     p_doctor = sub.add_parser("doctor", help="환경 진단 (apfel/macOS/Apple Silicon)")
+    p_doctor.add_argument("--fix", action="store_true", help="whitelist 기반 자동 복구")
+    p_doctor.add_argument(
+        "--yes",
+        action="store_true",
+        help="doctor --fix preview 후 짧은 대기 생략",
+    )
     p_doctor.set_defaults(func=cmd_doctor)
 
     p_collect = sub.add_parser("collect", help="외부 데이터 수집")
@@ -1724,7 +1770,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_resume.add_argument(
         "company_id",
-        help="CompanyCard 파일명 슬러그 (예: danggeun, 메가스터디)",
+        help="CompanyCard 파일명 슬러그 (예: danggeun, 샘플회사)",
     )
     p_resume.add_argument("--top-k", type=int, default=6)
     p_resume.add_argument("--model", default=None)

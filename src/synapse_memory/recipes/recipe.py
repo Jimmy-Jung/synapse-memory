@@ -5,7 +5,7 @@ Spec: ``specs/007-me-recipes/data-model.md`` §1-§4.
 본 모듈은 transient (in-memory) 데이터 모델만 정의한다. 영속 상태는
 loader / registry / pipeline 이 다룬다.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-12
 """
 

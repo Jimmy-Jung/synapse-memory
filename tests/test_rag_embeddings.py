@@ -1,6 +1,6 @@
 """embeddings.py 테스트 — sentence-transformers 미설치 환경에서도 통과하도록 mock.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

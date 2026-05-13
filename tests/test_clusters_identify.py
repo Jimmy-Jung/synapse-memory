@@ -1,6 +1,6 @@
 """클러스터 식별 테스트.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -62,13 +62,13 @@ class TestExtractTags:
 
 class TestExtractGithubRepos:
     def test_basic(self) -> None:
-        text = "경로: /Users/jimmy/Documents/GitHub/dansim-ios/Sources"
+        text = "경로: /Users/sampleuser/Documents/GitHub/dansim-ios/Sources"
         assert extract_github_repos(text) == {"dansim-ios"}
 
     def test_multiple(self) -> None:
         text = (
-            "/Users/jimmy/Documents/GitHub/foo "
-            "/Users/jimmy/Documents/GitHub/bar"
+            "/Users/sampleuser/Documents/GitHub/foo "
+            "/Users/sampleuser/Documents/GitHub/bar"
         )
         assert extract_github_repos(text) == {"foo", "bar"}
 
@@ -92,7 +92,7 @@ def _write_jsonl(path: Path, *events: dict) -> None:
 def cc_raw(tmp_path: Path) -> Path:
     """가짜 Claude Code mirror."""
     root = tmp_path / "cc"
-    (root / "projects" / "-Users-jimmy-Documents-GitHub-dansim-ios").mkdir(
+    (root / "projects" / "-Users-sampleuser-Documents-GitHub-dansim-ios").mkdir(
         parents=True
     )
     return root
@@ -113,9 +113,9 @@ class TestIdentifyClusters:
         _write_jsonl(
             cc_raw
             / "projects"
-            / "-Users-jimmy-Documents-GitHub-dansim-ios"
+            / "-Users-sampleuser-Documents-GitHub-dansim-ios"
             / "abc.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/dansim-ios", "type": "user"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/dansim-ios", "type": "user"},
         )
         clusters = identify_clusters(
             obsidian_raw=obs_raw, claude_code_raw=cc_raw
@@ -123,7 +123,7 @@ class TestIdentifyClusters:
         assert len(clusters) == 1
         c = clusters[0]
         assert c.cluster_id == "dansim-ios"
-        assert c.cwd_paths == {"/Users/jimmy/Documents/GitHub/dansim-ios"}
+        assert c.cwd_paths == {"/Users/sampleuser/Documents/GitHub/dansim-ios"}
         assert len(c.claude_jsonl) == 1
         assert c.confidence == 0.5  # cwd만
 
@@ -133,12 +133,12 @@ class TestIdentifyClusters:
         _write_jsonl(
             cc_raw
             / "projects"
-            / "-Users-jimmy-Documents-GitHub-dansim-ios"
+            / "-Users-sampleuser-Documents-GitHub-dansim-ios"
             / "abc.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/dansim-ios"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/dansim-ios"},
         )
         (obs_raw / "10_Active" / "단심.md").write_text(
-            "프로젝트 노트\n경로: /Users/jimmy/Documents/GitHub/dansim-ios\n"
+            "프로젝트 노트\n경로: /Users/sampleuser/Documents/GitHub/dansim-ios\n"
             "#dom/ios",
             encoding="utf-8",
         )
@@ -154,15 +154,15 @@ class TestIdentifyClusters:
         self, cc_raw: Path, obs_raw: Path
     ) -> None:
         slug_dir = (
-            cc_raw / "projects" / "-Users-jimmy-Documents-GitHub-dansim-ios"
+            cc_raw / "projects" / "-Users-sampleuser-Documents-GitHub-dansim-ios"
         )
         _write_jsonl(
             slug_dir / "session1.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/dansim-ios"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/dansim-ios"},
         )
         _write_jsonl(
             slug_dir / "session2.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/dansim-ios"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/dansim-ios"},
         )
         clusters = identify_clusters(
             obsidian_raw=obs_raw, claude_code_raw=cc_raw
@@ -188,7 +188,7 @@ class TestIdentifyClusters:
         _write_jsonl(
             cc_raw
             / "projects"
-            / "-Users-jimmy-Documents-GitHub-dansim-ios"
+            / "-Users-sampleuser-Documents-GitHub-dansim-ios"
             / "no-cwd.jsonl",
             {"type": "queue-operation"},  # cwd 필드 없음
         )
@@ -204,20 +204,20 @@ class TestIdentifyClusters:
         _write_jsonl(
             cc_raw
             / "projects"
-            / "-Users-jimmy-Documents-GitHub-A"
+            / "-Users-sampleuser-Documents-GitHub-A"
             / "a.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/A"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/A"},
         )
         # cluster B: cwd + obsidian
         _write_jsonl(
             cc_raw
             / "projects"
-            / "-Users-jimmy-Documents-GitHub-B"
+            / "-Users-sampleuser-Documents-GitHub-B"
             / "b.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/B"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/B"},
         )
         (obs_raw / "10_Active" / "B.md").write_text(
-            "/Users/jimmy/Documents/GitHub/B 참고", encoding="utf-8"
+            "/Users/sampleuser/Documents/GitHub/B 참고", encoding="utf-8"
         )
         clusters = identify_clusters(
             obsidian_raw=obs_raw, claude_code_raw=cc_raw
@@ -240,12 +240,12 @@ class TestVaultFolderClusters:
     def test_active_subfolder_becomes_cluster(
         self, cc_raw: Path, obs_raw: Path
     ) -> None:
-        # 10_Active/메가스터디/ 안 노트 2개 → cluster "메가스터디"
-        (obs_raw / "10_Active" / "메가스터디").mkdir(parents=True)
-        (obs_raw / "10_Active" / "메가스터디" / "note1.md").write_text(
+        # 10_Active/샘플회사/ 안 노트 2개 → cluster "샘플회사"
+        (obs_raw / "10_Active" / "샘플회사").mkdir(parents=True)
+        (obs_raw / "10_Active" / "샘플회사" / "note1.md").write_text(
             "본문 1", encoding="utf-8"
         )
-        (obs_raw / "10_Active" / "메가스터디" / "note2.md").write_text(
+        (obs_raw / "10_Active" / "샘플회사" / "note2.md").write_text(
             "본문 2", encoding="utf-8"
         )
 
@@ -253,11 +253,11 @@ class TestVaultFolderClusters:
             obsidian_raw=obs_raw, claude_code_raw=cc_raw
         )
         ids = {c.cluster_id for c in clusters}
-        assert "메가스터디" in ids
-        c = next(c for c in clusters if c.cluster_id == "메가스터디")
+        assert "샘플회사" in ids
+        c = next(c for c in clusters if c.cluster_id == "샘플회사")
         assert c.seed_kind == "vault"
         assert len(c.obsidian_files) == 2
-        assert "10_Active/메가스터디" in c.vault_folders
+        assert "10_Active/샘플회사" in c.vault_folders
 
     def test_min_files_enforced(self, cc_raw: Path, obs_raw: Path) -> None:
         # 1개 노트만 있는 폴더는 cluster 안 됨
@@ -308,9 +308,9 @@ class TestVaultFolderClusters:
         _write_jsonl(
             cc_raw
             / "projects"
-            / "-Users-jimmy-Documents-GitHub-dansim-ios"
+            / "-Users-sampleuser-Documents-GitHub-dansim-ios"
             / "abc.jsonl",
-            {"cwd": "/Users/jimmy/Documents/GitHub/dansim-ios"},
+            {"cwd": "/Users/sampleuser/Documents/GitHub/dansim-ios"},
         )
         # Obsidian: 10_Active/dansim-ios/ 안 노트 2개
         (obs_raw / "10_Active" / "dansim-ios").mkdir(parents=True)
@@ -326,6 +326,6 @@ class TestVaultFolderClusters:
         )
         c = next(c for c in clusters if c.cluster_id == "dansim-ios")
         assert c.seed_kind == "merged"
-        assert c.cwd_paths == {"/Users/jimmy/Documents/GitHub/dansim-ios"}
+        assert c.cwd_paths == {"/Users/sampleuser/Documents/GitHub/dansim-ios"}
         assert len(c.obsidian_files) == 2
         assert c.confidence >= 0.8  # cwd + vault → 0.8

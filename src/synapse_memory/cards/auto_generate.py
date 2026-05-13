@@ -9,7 +9,7 @@
     5. parse → ProjectCard/CompanyCard
     6. status="draft", confidence=0.7로 vault에 저장 (검토 후 promote)
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

@@ -9,7 +9,7 @@
 - validator(Luhn, RRN 체크섬, IPv4 옥텟)로 false-positive 컷.
 - 우선순위 높은 패턴이 짧은 패턴을 덮음 (JWT 안에 IP 패턴이 있어도 JWT로 묶임).
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

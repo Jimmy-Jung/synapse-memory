@@ -1,6 +1,6 @@
 """Redact-list 테스트.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -29,17 +29,17 @@ class TestLoadWrite:
 
     def test_write_and_load(self, tmp_path: Path) -> None:
         path = tmp_path / "rl"
-        write_redactlist(["메가스터디", "ProjectX"], path)
+        write_redactlist(["샘플회사", "ProjectX"], path)
         items = load_redactlist(path)
-        assert items == ["메가스터디", "ProjectX"]
+        assert items == ["샘플회사", "ProjectX"]
 
     def test_load_skips_comments_and_blanks(self, tmp_path: Path) -> None:
         path = tmp_path / "rl"
         path.write_text(
-            "# 주석\n\nMegastudy\n\n# 또 주석\nProjectY\n",
+            "# 주석\n\nSampleCorp\n\n# 또 주석\nProjectY\n",
             encoding="utf-8",
         )
-        assert load_redactlist(path) == ["Megastudy", "ProjectY"]
+        assert load_redactlist(path) == ["SampleCorp", "ProjectY"]
 
     def test_load_dedupes(self, tmp_path: Path) -> None:
         path = tmp_path / "rl"
@@ -77,7 +77,7 @@ class TestPatternBuild:
         assert build_redactlist_patterns([]) == []
 
     def test_priority_above_defaults(self) -> None:
-        patterns = build_redactlist_patterns(["메가스터디"])
+        patterns = build_redactlist_patterns(["샘플회사"])
         assert all(p.priority == REDACTLIST_PRIORITY for p in patterns)
         max_default = max(p.priority for p in DEFAULT_PATTERNS)
         assert REDACTLIST_PRIORITY > max_default
@@ -107,8 +107,8 @@ class TestPatternBuild:
 class TestPass1Integration:
     def test_redactlist_masks_in_pass1(self) -> None:
         """Pass 1 패턴에 redact-list 합치면 우선 매치."""
-        patterns = list(DEFAULT_PATTERNS) + build_redactlist_patterns(["메가스터디"])
-        text = "메가스터디 본사 방문"
+        patterns = list(DEFAULT_PATTERNS) + build_redactlist_patterns(["샘플회사"])
+        text = "샘플회사 본사 방문"
         result = redact(text, patterns=patterns)
         assert "[REDACT_1]" in result.redacted
         assert any(d.category == "redactlist" for d in result.detections)

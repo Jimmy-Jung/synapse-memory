@@ -7,7 +7,7 @@
 
 핵심 보안 원칙: raw 텍스트는 임베드 안 함. **redacted 또는 검증된 Card만 인덱싱.**
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """
 
 from synapse_memory.rag.bm25 import (

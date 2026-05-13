@@ -12,6 +12,7 @@
 > | 의사결정 | `synapse-memory me decide "..."` | `/synapse-decide ...` |
 > | 이력서 | `synapse-memory me draft-resume <slug>` | `/synapse-resume <slug>` |
 > | 환경 진단 | `synapse-memory doctor` | `/synapse-doctor` |
+> | 환경 복구 | `synapse-memory doctor --fix` | `/synapse-fix` |
 
 ## 1. 매일 5분 워크플로
 
@@ -80,7 +81,7 @@ synapse-memory me what-did-i-think "TCA 아키텍처"
 좋은 질문 예시는 다음과 같습니다.
 
 ```bash
-synapse-memory me what-did-i-think "메가스터디에서 한 일"
+synapse-memory me what-did-i-think "샘플회사에서 한 일"
 synapse-memory me what-did-i-think "AI 코딩 도구 사용 경험"
 synapse-memory me what-did-i-think "은퇴 자금 계획"
 ```
@@ -192,3 +193,19 @@ synapse-memory redact backfill claude-code --limit 3 --max-bytes-per-file 50000
 - [CLI 명령 레퍼런스](commands.md): 옵션 전체
 - [아키텍처](architecture.md): raw가 어떻게 보호되는지
 - [개발자 가이드](development.md): 새 기능을 추가하는 법
+
+## 환경이 깨졌을 때
+
+설치 후 LaunchAgent, runtime shim, `~/.synapse/private` 권한 같은 환경 문제가 생기면 먼저 진단합니다.
+
+```bash
+synapse-memory doctor
+```
+
+자동 복구 가능한 항목만 고치려면 다음 명령을 사용합니다.
+
+```bash
+synapse-memory doctor --fix
+```
+
+이 명령은 whitelisted repair만 실행하며, 운영 단계의 메모리 쓰기는 수행하지 않습니다.

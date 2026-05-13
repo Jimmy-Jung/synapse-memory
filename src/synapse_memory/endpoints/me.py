@@ -4,7 +4,7 @@
 - what_did_i_think  : 주제 회상 (세컨드 브레인, 시간순)
 - decide            : 의사결정 코파일럿 (Profile + DecisionPatterns + RAG)
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

@@ -2,7 +2,7 @@
 
 apfel 호출은 mock — 모델 응답 schema와 머지/allowlist/환각 처리만 검증.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -64,38 +64,38 @@ class TestLoadAllowlist:
         f = tmp_path / "allowlist"
         f.write_text(
             "# 주석\n"
-            "JunyoungJung\n"
-            "정준영\n"
+            "SampleUser\n"
+            "김민수\n"
             "\n"
-            "  Megastudy  \n"  # 양쪽 공백
+            "  SampleCorp  \n"  # 양쪽 공백
             "# 또 다른 주석\n",
             encoding="utf-8",
         )
         result = load_allowlist(f)
         # case-insensitive 정규화: 모두 lowercase
-        assert result == {"junyoungjung", "정준영", "megastudy"}
+        assert result == {"sampleuser", "김민수", "samplecorp"}
 
     def test_handles_korean_unicode(self, tmp_path: Path) -> None:
         f = tmp_path / "allowlist"
-        f.write_text("메가스터디\n홍길동\n", encoding="utf-8")
+        f.write_text("샘플회사\n홍길동\n", encoding="utf-8")
         result = load_allowlist(f)
-        assert "메가스터디" in result
+        assert "샘플회사" in result
         assert "홍길동" in result
 
     def test_normalizes_to_lowercase(self, tmp_path: Path) -> None:
-        """Jimmy → jimmy로 정규화 (case-insensitive 매칭용)."""
+        """SampleUser → sampleuser로 정규화 (case-insensitive 매칭용)."""
         f = tmp_path / "allowlist"
-        f.write_text("Jimmy\nJunyoungJung\nMegastudy\n", encoding="utf-8")
+        f.write_text("SampleUser\nSAMPLEUSER\nSampleCorp\n", encoding="utf-8")
         result = load_allowlist(f)
-        assert result == {"jimmy", "junyoungjung", "megastudy"}
+        assert result == {"sampleuser", "samplecorp"}
 
 
 class TestLooksLikePathOrIdentifier:
     @pytest.mark.parametrize(
         "val",
         [
-            "/Users/jimmy/foo",
-            "C:\\Users\\jimmy",
+            "/Users/sampleuser/foo",
+            "C:\\Users\\sampleuser",
             "https://example.com",
             "user@host",
             "ai-symbiote@ai-symbiote",
@@ -104,7 +104,7 @@ class TestLooksLikePathOrIdentifier:
             "snake_case_var",
             "ai-symbiote",
             # 새로 추가된 패턴
-            "Jimmy-Jung",                     # GitHub handle 대문자+dash
+            "sample-handle",                     # GitHub handle 대문자+dash
             "Foo-Bar",                        # PascalCase + dash
             "jarrodwatts",                    # 소문자 6자+
             "garrytan",                       # 소문자 8자
@@ -124,7 +124,7 @@ class TestLooksLikePathOrIdentifier:
         [
             "홍길동",
             "John Smith",
-            "메가스터디",
+            "샘플회사",
             "Acme Corp",
             "Anne",   # 짧은 이름 (5자 미만 — 6자 임계 통과)
         ],
@@ -155,7 +155,7 @@ class TestLooksLikeFilename:
 
     @pytest.mark.parametrize(
         "val",
-        ["홍길동", "John Smith", "메가스터디", "no_extension", "trailing.", ".hidden"],
+        ["홍길동", "John Smith", "샘플회사", "no_extension", "trailing.", ".hidden"],
     )
     def test_non_filename(self, val: str) -> None:
         assert _looks_like_filename(val) is False
@@ -277,10 +277,10 @@ class TestFindSpans:
 
 class TestBuildPass2Detections:
     def test_basic(self) -> None:
-        text = "홍길동에게 메가스터디 견학"
+        text = "홍길동에게 샘플회사 견학"
         findings = [
             ("person_name", "홍길동"),
-            ("org_name", "메가스터디"),
+            ("org_name", "샘플회사"),
         ]
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=set()
@@ -290,14 +290,14 @@ class TestBuildPass2Detections:
         assert "org_name" in cats
 
     def test_allowlist_skips(self) -> None:
-        text = "JunyoungJung 정준영 메가스터디"
+        text = "SampleUser 김민수 샘플회사"
         findings = [
-            ("person_name", "JunyoungJung"),
-            ("person_name", "정준영"),
-            ("org_name", "메가스터디"),
+            ("person_name", "SampleUser"),
+            ("person_name", "김민수"),
+            ("org_name", "샘플회사"),
         ]
         # allowlist는 lowercase로 정규화되어 있다는 가정
-        allowlist = {"junyoungjung", "정준영"}
+        allowlist = {"sampleuser", "김민수"}
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=allowlist
         )
@@ -306,14 +306,14 @@ class TestBuildPass2Detections:
         assert detections[0].category == "org_name"
 
     def test_allowlist_case_insensitive(self) -> None:
-        """jimmy/Jimmy/JIMMY 모두 차단."""
-        text = "jimmy Jimmy JIMMY"
+        """sampleuser/SampleUser/SAMPLEUSER 모두 차단."""
+        text = "sampleuser SampleUser SAMPLEUSER"
         findings = [
-            ("person_name", "jimmy"),
-            ("person_name", "Jimmy"),
-            ("person_name", "JIMMY"),
+            ("person_name", "sampleuser"),
+            ("person_name", "SampleUser"),
+            ("person_name", "SAMPLEUSER"),
         ]
-        allowlist = {"jimmy"}  # 소문자 하나만
+        allowlist = {"sampleuser"}  # 소문자 하나만
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=allowlist
         )
@@ -341,9 +341,9 @@ class TestBuildPass2Detections:
         assert detections == []
 
     def test_path_username_rejected(self) -> None:
-        """/Users/jimmy/... 의 jimmy는 person_name으로 잡으면 reject."""
-        text = "경로: /Users/jimmy/Documents"
-        findings = [("person_name", "/Users/jimmy/Documents")]
+        """/Users/sampleuser/... 의 sampleuser는 person_name으로 잡으면 reject."""
+        text = "경로: /Users/sampleuser/Documents"
+        findings = [("person_name", "/Users/sampleuser/Documents")]
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=set()
         )
@@ -382,8 +382,8 @@ class TestBuildPass2Detections:
 
     def test_lowercase_ascii_handle_short_rejected(self) -> None:
         """짧은 lowercase ASCII handle도 person_name으로 보지 않음."""
-        text = "사용자 jimmy가 GitHub에 commit"
-        findings = [("person_name", "jimmy")]
+        text = "사용자 sampleuser가 GitHub에 commit"
+        findings = [("person_name", "sampleuser")]
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=set()
         )
@@ -465,8 +465,8 @@ class TestBuildPass2Detections:
 
     def test_path_as_address_rejected(self) -> None:
         """모델이 path를 address로 잘못 분류하면 reject."""
-        text = "경로: /Users/jimmy/Documents 어쩌고"
-        findings = [("address", "/Users/jimmy/Documents")]
+        text = "경로: /Users/sampleuser/Documents 어쩌고"
+        findings = [("address", "/Users/sampleuser/Documents")]
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=set()
         )
@@ -483,8 +483,8 @@ class TestBuildPass2Detections:
         assert detections[0].matched == "부산광역시 해운대구 해운대로 456"
 
     def test_github_handle_rejected(self) -> None:
-        text = "사용자 Jimmy-Jung 등록"
-        findings = [("person_name", "Jimmy-Jung")]
+        text = "사용자 sample-handle 등록"
+        findings = [("person_name", "sample-handle")]
         detections = _build_pass2_detections(
             text, findings, occupied_spans=[], allowlist=set()
         )
@@ -638,12 +638,12 @@ class TestDetectInChunk:
             mock_cs.return_value = _mock_apfel_response(
                 [
                     {"category": "person_name", "value": "홍길동"},
-                    {"category": "org_name", "value": "메가스터디"},
+                    {"category": "org_name", "value": "샘플회사"},
                 ]
             )
-            result = _detect_in_chunk("홍길동 메가스터디", env=_ready_env())
+            result = _detect_in_chunk("홍길동 샘플회사", env=_ready_env())
             assert ("person_name", "홍길동") in result
-            assert ("org_name", "메가스터디") in result
+            assert ("org_name", "샘플회사") in result
 
     def test_filters_unknown_category(self) -> None:
         with patch(
@@ -753,25 +753,25 @@ class TestRedactFull:
         assert "홍길동" not in result.redacted
 
     def test_allowlist_protects_owner(self) -> None:
-        text = "JunyoungJung이 메가스터디에서 일한다"
+        text = "SampleUser이 샘플회사에서 일한다"
         with patch(
             "synapse_memory.redaction.pass2.complete_structured"
         ) as mock_cs:
             mock_cs.return_value = _mock_apfel_response(
                 [
-                    {"category": "person_name", "value": "JunyoungJung"},
-                    {"category": "org_name", "value": "메가스터디"},
+                    {"category": "person_name", "value": "SampleUser"},
+                    {"category": "org_name", "value": "샘플회사"},
                 ]
             )
             # allowlist는 lowercase로 정규화된 상태
             result = redact_full(
                 text,
                 env=_ready_env(),
-                allowlist={"junyoungjung"},
+                allowlist={"sampleuser"},
             )
-        # JunyoungJung은 allowlist라 그대로
-        assert "JunyoungJung" in result.redacted
-        # 메가스터디는 마스킹
+        # SampleUser는 allowlist라 그대로
+        assert "SampleUser" in result.redacted
+        # 샘플회사는 마스킹
         assert "[ORG_1]" in result.redacted
 
     def test_pass1_priority_over_pass2(self) -> None:

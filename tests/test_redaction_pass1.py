@@ -1,6 +1,6 @@
 """Pass 1 (regex/validator) redaction 테스트.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -132,12 +132,12 @@ class TestEmail:
         assert any(d.category == "email" for d in result.detections)
 
     def test_korean_surrounding(self) -> None:
-        result = redact("이메일은jimmy@megastudy.net이고")
+        result = redact("이메일은sampleuser@samplecorp.net이고")
         assert "[EMAIL_1]" in result.redacted
 
     def test_sentence_ending_period(self) -> None:
         # 문장 끝에 마침표 — lookahead가 . 포함하면 매치 깨짐
-        result = redact("이메일 hong@megastudy.net.")
+        result = redact("이메일 hong@samplecorp.net.")
         assert "[EMAIL_1]" in result.redacted
         assert any(d.category == "email" for d in result.detections)
 

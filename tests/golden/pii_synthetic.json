@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "description": "PII redaction 정확도 측정용 합성 골든셋. 한국어 위주 + 영어 혼합.",
-  "author": "JunyoungJung <joony300@gmail.com>",
+  "author": "Synapse Memory Maintainers",
   "created": "2026-05-10",
   "notes": [
     "expected: 정답 라벨. 카테고리 + 정확한 텍스트.",
@@ -10,8 +10,8 @@
   ],
   "samples": [
     {"id": "email-001", "text": "연락처: foo@bar.com", "expected": [{"category": "email", "value": "foo@bar.com"}]},
-    {"id": "email-002", "text": "이메일은jimmy@megastudy.net이고", "expected": [{"category": "email", "value": "jimmy@megastudy.net"}]},
-    {"id": "email-003", "text": "이메일 hong@megastudy.net.", "expected": [{"category": "email", "value": "hong@megastudy.net"}]},
+    {"id": "email-002", "text": "이메일은sampleuser@samplecorp.net이고", "expected": [{"category": "email", "value": "sampleuser@samplecorp.net"}]},
+    {"id": "email-003", "text": "이메일 hong@samplecorp.net.", "expected": [{"category": "email", "value": "hong@samplecorp.net"}]},
     {"id": "email-004", "text": "user+tag@domain.com 으로 보내주세요", "expected": [{"category": "email", "value": "user+tag@domain.com"}]},
     {"id": "email-005", "text": "두 번: a@x.com 그리고 a@x.com 또 b@y.com", "expected": [{"category": "email", "value": "a@x.com"}, {"category": "email", "value": "a@x.com"}, {"category": "email", "value": "b@y.com"}]},
 
@@ -51,13 +51,13 @@
     {"id": "person-004", "text": "이순신과 강감찬 둘 다", "expected": [{"category": "person_name", "value": "이순신"}, {"category": "person_name", "value": "강감찬"}]},
     {"id": "person-005", "text": "Mike와 박민수 협업", "expected": [{"category": "person_name", "value": "Mike"}, {"category": "person_name", "value": "박민수"}]},
     {"id": "person-006", "text": "남궁선재가 발표함", "expected": [{"category": "person_name", "value": "남궁선재"}]},
-    {"id": "person-neg-001", "text": "사용자 jimmy가 GitHub에 commit", "expected": []},
+    {"id": "person-neg-001", "text": "사용자 sampleuser가 GitHub에 commit", "expected": []},
     {"id": "person-neg-002", "text": "User Assistant System role", "expected": []},
     {"id": "person-neg-003", "text": "session: xoAP7Qtf 처리", "expected": []},
-    {"id": "person-neg-004", "text": "/Users/jimmy/Documents 경로", "expected": []},
-    {"id": "person-neg-005", "text": "Jimmy-Jung GitHub handle", "expected": []},
+    {"id": "person-neg-004", "text": "/Users/sampleuser/Documents 경로", "expected": []},
+    {"id": "person-neg-005", "text": "sample-handle GitHub handle", "expected": []},
 
-    {"id": "org-001", "text": "메가스터디 본사 방문", "expected": [{"category": "org_name", "value": "메가스터디"}]},
+    {"id": "org-001", "text": "샘플회사 본사 방문", "expected": [{"category": "org_name", "value": "샘플회사"}]},
     {"id": "org-002", "text": "당근마켓에 지원할 예정", "expected": [{"category": "org_name", "value": "당근마켓"}]},
     {"id": "org-neg-001", "text": "GitHub repo 생성", "expected": []},
     {"id": "org-neg-002", "text": "Apple 신제품 출시", "expected": []},
@@ -67,12 +67,12 @@
     {"id": "address-001", "text": "주소: 서울시 강남구 테헤란로 123", "expected": [{"category": "address", "value": "서울시 강남구 테헤란로 123"}]},
     {"id": "address-002", "text": "부산광역시 해운대구 해운대로 456 빌딩", "expected": [{"category": "address", "value": "부산광역시 해운대구 해운대로 456"}]},
     {"id": "address-neg-001", "text": "단순 도시: 서울에서 만나요", "expected": []},
-    {"id": "address-neg-002", "text": "/Users/jimmy/Documents 경로", "expected": []},
+    {"id": "address-neg-002", "text": "/Users/sampleuser/Documents 경로", "expected": []},
 
     {"id": "secret-001", "text": "내 비밀번호는 dansim2024 야", "expected": [{"category": "secret", "value": "dansim2024"}]},
     {"id": "secret-002", "text": "토큰: abc123def456 사용", "expected": [{"category": "secret", "value": "abc123def456"}]},
 
-    {"id": "mixed-001", "text": "홍길동(010-1234-5678, hong@megastudy.net)", "expected": [{"category": "person_name", "value": "홍길동"}, {"category": "phone_kr", "value": "010-1234-5678"}, {"category": "email", "value": "hong@megastudy.net"}]},
+    {"id": "mixed-001", "text": "홍길동(010-1234-5678, hong@samplecorp.net)", "expected": [{"category": "person_name", "value": "홍길동"}, {"category": "phone_kr", "value": "010-1234-5678"}, {"category": "email", "value": "hong@samplecorp.net"}]},
     {"id": "mixed-002", "text": "김철수 010-1111-2222 카드 4242-4242-4242-4242", "expected": [{"category": "person_name", "value": "김철수"}, {"category": "phone_kr", "value": "010-1111-2222"}, {"category": "card", "value": "4242-4242-4242-4242"}]},
     {"id": "mixed-003", "text": "당근마켓 채용 — John Smith 추천. 서버 192.168.1.1.", "expected": [{"category": "org_name", "value": "당근마켓"}, {"category": "person_name", "value": "John Smith"}, {"category": "ipv4", "value": "192.168.1.1"}]},
 

@@ -10,7 +10,7 @@ claude-code/projects/<slug>/<sessionId>.jsonl``로 복제. 매 호출마다 새 
 - **Rotation safe**: src 크기가 마지막 offset보다 작아지면 처음부터 다시 mirror.
 - **Atomic offset 갱신**: write → fsync → rename. 중간에 죽어도 일관성 유지.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

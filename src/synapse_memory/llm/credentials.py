@@ -2,7 +2,7 @@
 
 위치: ``~/.synapse/private/credentials/<service>.json`` (0600).
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

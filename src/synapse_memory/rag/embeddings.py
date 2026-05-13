@@ -6,7 +6,7 @@
 
 **v2 보안**: 입력은 redacted 텍스트만. raw 임베드 금지 (caller 책임).
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

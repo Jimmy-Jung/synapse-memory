@@ -69,17 +69,31 @@ Intel Mac · macOS 25 이하는 지원하지 않습니다 (apfel 의존).
 
 ## 빠른 시작
 
-### 1. 의존성
+### 비개발자 모드 — 더블클릭 설치
+
+릴리스 zip을 받은 뒤 `installer/SynapseMemory-Installer.command`를 더블클릭합니다. 설치 프로그램은 GUI 동의 후 Homebrew, Obsidian, Claude Code, apfel, Synapse runtime, Obsidian vault 후보를 순서대로 확인합니다. 저장소 위치는 GUI에서 선택하며, iCloud Obsidian 폴더가 있으면 `iCloud/SynapseVault`를 추천 위치로 보여줍니다.
+
+현재 MVP installer는 안전을 위해 기본값이 dry-run/preview입니다. 실제 적용 모드는 constitution의 Installation Consent Scoping 정책이 반영된 뒤 활성화합니다. 로그는 `~/Library/Logs/SynapseMemory/` 아래에 남습니다.
+
+문제가 생기면 자동 복구 가능한 항목만 고칩니다.
 
 ```bash
-brew install Arthur-Ficial/tap/apfel
+synapse-memory doctor --fix
+```
+
+### 개발자 모드 — 수동 설치
+
+#### 1. 의존성
+
+```bash
+brew install apfel
 brew install uv
 ```
 
-### 2. 설치 — 선택 (둘 중 하나)
+#### 2. 설치 — 선택 (둘 중 하나)
 
 ```bash
-git clone https://github.com/Jimmy-Jung/synapse-memory.git
+git clone <repository-url>
 cd synapse-memory
 ```
 
@@ -97,15 +111,16 @@ source .venv/bin/activate
 uv pip install -e '.[rag]'
 ```
 
-### 3. 첫 실행
+#### 3. 첫 실행
 
 ```bash
 synapse-memory doctor              # 환경 진단
+synapse-memory doctor --fix        # 자동 복구 가능한 항목만 복구
 synapse-memory daily               # 한 번에 collect → cluster → card → index → profile
 synapse-memory ask "<질의>"         # 사용 시작
 ```
 
-### 4. Claude Code / Codex slash 명령 활성화
+#### 4. Claude Code / Codex slash 명령 활성화
 
 설치 후 Claude Code / Codex 가 이 repo를 plugin 으로 로드하면 슬래시 명령이 자동 등록됩니다.
 
@@ -117,6 +132,7 @@ synapse-memory ask "<질의>"         # 사용 시작
 | `/synapse-resume <회사>` | 회사 맞춤 이력서 |
 | `/synapse-daily` | 일일 통합 파이프라인 |
 | `/synapse-doctor` | 환경 진단 |
+| `/synapse-fix` | 환경 자동 복구 |
 
 > slash 명령은 내부적으로 위 CLI 를 호출하므로, **(A) 글로벌 설치 모드를 권장**합니다.
 
@@ -148,7 +164,7 @@ W3 ✓ Card schema + cluster + auto-classify/generate
 W4 ✓ RAG (bge-m3 + ChromaDB) + ask endpoint
 W5 ✓ me {draft-resume, what-did-i-think, decide, update-profile}
 W6 ✓ daily 통합 + 문서화 + GitHub publish (v0.3.0)
-W7 ✓ Claude Code / Codex plugin layer 부활 (v0.4.0) — 6개 slash 명령
+W7 ✓ Claude Code / Codex plugin layer 부활 (v0.4.0+) — slash 명령 surface
 W8 ✓ me-recipes framework + hybrid retrieval (v0.5.0) — recipe 기반 생성 + dense/BM25 선택
 
 667 tests passed · v0.5.0
@@ -160,4 +176,4 @@ MIT — [LICENSE](LICENSE).
 
 ## 저자
 
-JunyoungJung <joony300@gmail.com>
+Synapse Memory Maintainers

@@ -12,7 +12,7 @@ ID 형식:
 
 Metadata: source_kind, card_id, display_name, status, domains, stack, keywords, ...
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

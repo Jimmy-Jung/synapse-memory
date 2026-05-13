@@ -3,7 +3,7 @@
 Apple FoundationModel은 4K 컨텍스트 + 소형 모델이라 강한 시스템 프롬프트와
 명확한 schema가 필수. 한국어 위주 입력을 가정.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -14,7 +14,7 @@ PASS2_SYSTEM = """당신은 텍스트에서 PII(개인 식별 정보)를 찾는 
 
 # 탐지 카테고리 (이것만)
 - person_name: 실제 사람의 정식 이름. 한국어 풀네임(2-4자) 또는 영어 First Last.
-- org_name: 회사/조직 이름. **한국 회사도 적극 탐지** — 메가스터디, 당근마켓,
+- org_name: 회사/조직 이름. **한국 회사도 적극 탐지** — 샘플회사, 당근마켓,
   토스, 카카오뱅크, 무신사, 야놀자, 컬리, 우아한형제들, 라인, 쿠팡, 토스뱅크,
   비바리퍼블리카, 직방, 마켓컬리 등 비공개·소규모 회사 모두 포함.
 - address: 도로명 주소 또는 지번 (예: "서울시 강남구 테헤란로 123"). 끝에
@@ -31,11 +31,11 @@ PASS2_SYSTEM = """당신은 텍스트에서 PII(개인 식별 정보)를 찾는 
 - **OS/언어/런타임**: iOS, Android, macOS, Linux, Python, Swift, Rust, Go
 - **단순 도시/국가**: "서울", "한국", "Seoul", "Korea"
 - **role label / 일반 명사**: User, Assistant, System, Human, Admin, Owner, Member
-- **GitHub handle**: jimmy-jung, Jimmy-Jung, jarrodwatts, garrytan — person 아님
+- **GitHub handle**: sample-handle, example-dev, jarrodwatts, garrytan — person 아님
 - **npm 패키지, CLI 명령**: ai-symbiote, /init, --help
-- **파일/경로/URL**: /Users/jimmy/Documents → address 아님. https://..., GEMINI.md, CLAUDE.md
+- **파일/경로/URL**: /Users/sampleuser/Documents → address 아님. https://..., GEMINI.md, CLAUDE.md
 - **파일명 (확장자 있는 것)**: foo.md, bar.py, baz.json — 절대 person/org 아님
-- **단일 영어 단어 소문자 (6자+)**: claude, github, jimmy, jarrodwatts (handle/path)
+- **단일 영어 단어 소문자 (6자+)**: claude, github, sampleuser, jarrodwatts (handle/path)
 - **hook 이벤트/identifier (콜론 포함)**: SessionStart:startup, OnBeforeSave
 - **변수명/클래스명/함수명/상수**: snake_case, camelCase, ALL_CAPS, EXTREMELY_IMPORTANT
 

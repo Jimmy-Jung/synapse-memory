@@ -1,6 +1,6 @@
 """평가/측정 — 골든셋 기반 정확도 측정.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """
 
 from synapse_memory.eval.golden import (

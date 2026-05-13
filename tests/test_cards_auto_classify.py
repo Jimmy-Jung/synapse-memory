@@ -2,7 +2,7 @@
 
 AI provider API는 mock — 분류 흐름과 schema 정합성만 검증.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

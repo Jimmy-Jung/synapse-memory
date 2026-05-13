@@ -9,7 +9,7 @@
 - vault CLAUDE.md 원칙: "raw conversations, transcripts, API keys, tokens, redaction
   reports를 90_System/AI 또는 iCloud-synced Vault 노트에 쓰지 않습니다"
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

@@ -6,7 +6,7 @@
 
 저장 위치: vault ``20_Reference/Projects/<id>.md``, ``20_Reference/Companies/<id>.md``
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """
 
 from synapse_memory.cards.company import (

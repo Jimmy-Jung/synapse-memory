@@ -12,7 +12,7 @@ Synapse Memory 환경 진단
 ✓ Apple Silicon (arm64)
 ✓ macOS 26.3.1 (Tahoe+)
 ✓ L0 루트: /private/tmp/synapse-cost-smoke.BaqNG0/private (0700)
-✓ Claude Code CLI: /Users/jimmy/.local/bin/claude [2.1.139 (Claude Code)] (model=sonnet)
+✓ Claude Code CLI: /Users/<user>/.local/bin/claude [2.1.139 (Claude Code)] (model=sonnet)
 ============================================
 ✓ 준비 완료
 ```

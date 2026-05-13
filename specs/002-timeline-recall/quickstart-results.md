@@ -1,6 +1,6 @@
 # Quickstart Smoke Results — Timeline Recall
 
-Author: JunyoungJung
+Author: Synapse Memory Maintainers
 Date: 2026-05-12
 Branch: `002-timeline-recall`
 Commit: `e1263d4`
@@ -41,15 +41,15 @@ Synapse Memory 환경 진단
   버전: apfel v1.3.3
 ✓ Apple Silicon (arm64)
 ✓ macOS 26.3.1 (Tahoe+)
-✓ L0 루트: /Users/jimmy/.synapse/private (0700)
-✓ Claude Code CLI: /Users/jimmy/.local/bin/claude [2.1.139 (Claude Code)] (model=sonnet)
+✓ L0 루트: /Users/<user>/.synapse/private (0700)
+✓ Claude Code CLI: /Users/<user>/.local/bin/claude [2.1.139 (Claude Code)] (model=sonnet)
 ============================================
 ✓ 준비 완료
 [exit 0]
 
 $ synapse-memory card list
 
-[Project Cards]   /Users/jimmy/Library/Mobile Documents/iCloud~md~obsidian/Documents/20_Reference/Projects
+[Project Cards]   /Users/<user>/Library/Mobile Documents/iCloud~md~obsidian/Documents/20_Reference/Projects
 ID                        STATUS       ROLE                      PERIOD
 -------------------------------------------------------------------------------------
 -----2026                 draft
@@ -62,13 +62,13 @@ mobile-ios-slc-tablet     draft        iOS 개발자
 projects                  draft                                   ~ 2026-05
 v2                        draft
 이력서-2026                  draft        iOS 개발자                   2023-11
-카뱅지원-2026                 draft        iOS 엔지니어 (지원자)            2026-05 ~ 2026-05
+샘플지원-2026                 draft        iOS 엔지니어 (지원자)            2026-05 ~ 2026-05
 
-[Company Cards]   /Users/jimmy/Library/Mobile Documents/iCloud~md~obsidian/Documents/20_Reference/Companies
+[Company Cards]   /Users/<user>/Library/Mobile Documents/iCloud~md~obsidian/Documents/20_Reference/Companies
 ID                        STATUS         COUNTRY  POSITIONS
 -------------------------------------------------------------------------------------
 danggeun                  target         KR       0
-메가스터디                     hired          KR       2
+샘플회사                     hired          KR       2
 
 총 13개
 [exit 0]
@@ -91,9 +91,9 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --timeline
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **카뱅지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
+- **샘플지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
   > # 카카오뱅크 AI모바일개발팀 지원 (2026)
-  [card_project:카뱅지원-2026]
+  [card_project:샘플지원-2026]
 
 - **danggeun** (당근마켓) — 2026-05-11 (last reviewed)
   > # 당근마켓
@@ -107,9 +107,9 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --timeline
   > # 수학에심장을달다 iOS 개발
   [card_project:이력서-2026]
 
-- **메가스터디** (메가스터디) — 2026-05-10 (last reviewed)
-  > # 메가스터디
-  [card_company:메가스터디]
+- **샘플회사** (샘플회사) — 2026-05-10 (last reviewed)
+  > # 샘플회사
+  [card_company:샘플회사]
 
 - **-----2026** (2026 프로젝트) — 2026-05-10 (created)
   > # 2026 프로젝트
@@ -124,11 +124,11 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --timeline
 ============================================================
 출처 (8):
   - projects
-  - 카뱅지원-2026
+  - 샘플지원-2026
   - danggeun
   - v2
   - 이력서-2026
-  - 메가스터디
+  - 샘플회사
   - -----2026
   - CareLog
 [exit 0]
@@ -142,9 +142,9 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --by time
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **카뱅지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
+- **샘플지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
   > # 카카오뱅크 AI모바일개발팀 지원 (2026)
-  [card_project:카뱅지원-2026]
+  [card_project:샘플지원-2026]
 
 - **danggeun** (당근마켓) — 2026-05-11 (last reviewed)
   > # 당근마켓
@@ -158,9 +158,9 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --by time
   > # 수학에심장을달다 iOS 개발
   [card_project:이력서-2026]
 
-- **메가스터디** (메가스터디) — 2026-05-10 (last reviewed)
-  > # 메가스터디
-  [card_company:메가스터디]
+- **샘플회사** (샘플회사) — 2026-05-10 (last reviewed)
+  > # 샘플회사
+  [card_company:샘플회사]
 
 - **-----2026** (2026 프로젝트) — 2026-05-10 (created)
   > # 2026 프로젝트
@@ -175,11 +175,11 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --by time
 ============================================================
 출처 (8):
   - projects
-  - 카뱅지원-2026
+  - 샘플지원-2026
   - danggeun
   - v2
   - 이력서-2026
-  - 메가스터디
+  - 샘플회사
   - -----2026
   - CareLog
 [exit 0]
@@ -226,9 +226,9 @@ $ synapse-memory me what-did-i-think 전혀 매칭 안 되는 주제 zzz --timel
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **카뱅지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
+- **샘플지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
   > # 카카오뱅크 AI모바일개발팀 지원 (2026)
-  [card_project:카뱅지원-2026]
+  [card_project:샘플지원-2026]
 
 - **v2** (Synapse Memory v2) — 2026-05-11 (created)
   > # Synapse Memory v2
@@ -259,7 +259,7 @@ $ synapse-memory me what-did-i-think 전혀 매칭 안 되는 주제 zzz --timel
 ============================================================
 출처 (8):
   - projects
-  - 카뱅지원-2026
+  - 샘플지원-2026
   - v2
   - danggeun
   - ai-symbiote

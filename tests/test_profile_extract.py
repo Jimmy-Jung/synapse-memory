@@ -1,6 +1,6 @@
 """Profile 추출 테스트.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

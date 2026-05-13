@@ -2,7 +2,7 @@
 
 > **작성일**: 2026-05-12  
 > **버전 기준**: v0.4.0 (459 tests · ~5,500 LOC)  
-> **평가자**: JunyoungJung (`/synapse-memory` repo 자체 분석)  
+> **평가자**: Synapse Memory Maintainers (`/synapse-memory` repo 자체 분석)
 > **범위**: README · architecture · backlog 등 공식 문서가 "약속한 것" vs `src/`·`tests/`에 실제로 구현된 것의 gap 진단
 
 ---
@@ -161,7 +161,7 @@ Synapse Memory v0.4.0 는 **AI 비서·세컨드 브레인 프로토타입으로
 **증상**: `_run_step()` 이 예외 catch 후 `result.errors += 1` 만 증가시키고 다음 stage 로 진행. 단계 간 데이터 의존성(예: classify 가 실패했는데 generate 진행)이 있을 때 silent corruption 가능.
 
 ### W10. 🟡 한국 회사명 redaction 정확도
-**증상**: `메가스터디`, `당근마켓` 등 한국 회사명을 Pass 2 가 자주 놓침. 사용자가 `redactlist add` 로 보충해야 함.
+**증상**: `샘플회사`, `당근마켓` 등 한국 회사명을 Pass 2 가 자주 놓침. 사용자가 `redactlist add` 로 보충해야 함.
 
 **현재 회피**: backlog.md 에서 인지. P0 항목.
 

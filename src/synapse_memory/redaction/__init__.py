@@ -7,7 +7,7 @@
 
 cloud LLM(Claude 등)에 전달하기 전에 반드시 Pass 1+2를 통과시킨다.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """
 
 from synapse_memory.redaction.pass1 import (

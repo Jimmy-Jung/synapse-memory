@@ -21,6 +21,7 @@ synapse-memory <command> --help
 | `/synapse-resume` | `synapse-memory me draft-resume <slug>` | `<회사 slug>` |
 | `/synapse-daily` | `synapse-memory daily [flags]` | (선택) `--profile-facts-only` 등 |
 | `/synapse-doctor` | `synapse-memory doctor` | 없음 |
+| `/synapse-fix` | `synapse-memory doctor --fix` | 없음 |
 
 > slash 명령이 CLI를 호출하므로, **`synapse-memory` 바이너리가 PATH에 있어야 합니다**. `uv tool install --editable '.[rag]'` 로 글로벌 설치 권장.
 
@@ -78,6 +79,14 @@ synapse-memory doctor
 ```
 
 apfel, Apple Silicon, macOS 버전, L0 디렉터리 권한, Claude Code CLI 상태를 확인합니다. 준비가 끝나면 종료 코드 `0`, 문제가 있으면 `1`을 반환합니다.
+
+### `doctor --fix`
+
+```bash
+synapse-memory doctor --fix
+```
+
+자동 복구 가능한 항목만 preview 후 적용합니다. 현재 범위는 `~/.synapse/private` 권한 복구와 installer-managed command shim 안내로 제한합니다. 운영 단계의 메모리 쓰기 작업은 실행하지 않습니다.
 
 ## 데이터 수집
 

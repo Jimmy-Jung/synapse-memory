@@ -11,7 +11,7 @@
 - 각 주장에 출처 인용 ``[card_id]``
 - 사용자 vault Card만 근거 — 외부 지식 사용 금지
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

@@ -1,4 +1,4 @@
 <!-- SPECKIT START -->
-For the current feature context, implementation structure, shell commands,
-and constitution gates, read `specs/008-recipe-hybrid-retrieval/plan.md`.
+현재 기능 맥락, 구현 구조, 셸 명령, 헌법 검토 기준은
+`specs/009-non-developer-onboarding/plan.md`를 읽는다.
 <!-- SPECKIT END -->

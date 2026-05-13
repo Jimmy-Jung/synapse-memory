@@ -3,7 +3,7 @@
 소스: ``~/Library/Mobile Documents/iCloud~md~obsidian/Documents``
 대상: ``~/.synapse/private/raw/obsidian/``
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """
 
 from synapse_memory.collectors.obsidian.mirror import (

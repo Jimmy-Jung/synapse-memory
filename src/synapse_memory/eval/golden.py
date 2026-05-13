@@ -11,7 +11,7 @@
     - overall: 전체 합산
     - failures: FP/FN이 발생한 sample 목록 (튜닝 단서)
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

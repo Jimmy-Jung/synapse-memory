@@ -8,7 +8,7 @@ Construction order:
     inputs validate → profile → locale → RAG → domain → render system & user prompt
     → invoke LLM (or dry-run) → save markdown → record last_answer → return result.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-12
 """
 

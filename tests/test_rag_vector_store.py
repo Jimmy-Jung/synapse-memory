@@ -1,6 +1,7 @@
 """vector_store.py 테스트 — chromadb 미설치 환경에서도 mock으로.
 
-저자: JunyoungJung <joony300</tt>"""
+저자: Synapse Memory Maintainers
+"""
 
 from __future__ import annotations
 

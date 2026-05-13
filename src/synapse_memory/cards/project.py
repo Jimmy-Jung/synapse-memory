@@ -4,7 +4,7 @@ Vault에 저장되며 사람이 직접 편집 가능. Python에서도 parse/seri
 
 저장 위치: ``<vault>/20_Reference/Projects/<project_id>.md``
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

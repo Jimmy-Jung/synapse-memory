@@ -12,7 +12,7 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

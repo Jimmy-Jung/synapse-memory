@@ -8,7 +8,7 @@ precedence:
   3. Profile.md frontmatter `preferred_lang`
   4. default "한국어"
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-12
 """
 

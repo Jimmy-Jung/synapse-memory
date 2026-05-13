@@ -9,7 +9,7 @@ Public API:
 Spec: ``specs/007-me-recipes/spec.md``
 Plan: ``specs/007-me-recipes/plan.md``
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-12
 """
 

@@ -11,7 +11,7 @@ OAuth 인증 그대로 사용.
 NOTE: ``--bare`` 모드는 OAuth/keychain 인증을 무시하고 ANTHROPIC_API_KEY만 받음.
 사용자가 Pro/Max 구독으로 OAuth 인증한 경우 사용 불가 → bare 안 씀.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

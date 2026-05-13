@@ -8,7 +8,7 @@ IP)보다 우선시켜 겹침 시 긴 쪽이 살아남음.
 validator: 정규식 매치 후 추가 검증 (Luhn 체크섬, RRN 체크섬, IPv4 옥텟 범위 등).
 False positive 줄이는 핵심 안전장치.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

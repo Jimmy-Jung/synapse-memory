@@ -3,7 +3,7 @@
 apfel 미설치 환경(예: CI/Linux)에서도 통과하도록 설계.
 실제 apfel 호출 테스트는 별도 통합 테스트로 분리 (TODO: tests/integration/).
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

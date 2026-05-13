@@ -7,5 +7,5 @@
 
 __init__에서 re-export 안 함 — module name(ask)과 function name(ask) 충돌 회피.
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """

@@ -13,7 +13,7 @@
        + obsidian 노트      → +0.3 (= 0.8)
        + #dom/* 등 태그     → +0.1 (= 0.9)
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -179,8 +179,8 @@ def _enumerate_vault_folder_clusters(
     규칙:
         - top-level이 VAULT_CLUSTER_TOP_LEVELS 안에 있어야
         - depth 2 segment를 cluster_id 후보로
-            예: 10_Active/메가스터디/X.md → cluster "메가스터디"
-            예: 10_Active/메가스터디/iOS 파트.../1주차/X.md → cluster "메가스터디"
+            예: 10_Active/샘플회사/X.md → cluster "샘플회사"
+            예: 10_Active/샘플회사/iOS 파트.../1주차/X.md → cluster "샘플회사"
         - VAULT_GENERIC_SEGMENTS는 더 깊은 단계 사용 (Drafts/AI/X.md → cluster "AI")
         - cluster당 최소 VAULT_CLUSTER_MIN_FILES 노트
 

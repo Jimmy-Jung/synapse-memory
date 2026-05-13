@@ -2,7 +2,7 @@
 
 Project Card 자동 생성의 input. 휴리스틱 기반 (LLM 안 씀).
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 """
 
 from synapse_memory.clusters.identify import (

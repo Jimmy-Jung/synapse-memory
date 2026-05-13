@@ -7,7 +7,7 @@
 
 저장 위치: ``<vault>/20_Reference/Companies/<company_id>.md``
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 

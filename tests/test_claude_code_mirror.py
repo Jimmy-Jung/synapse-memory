@@ -10,7 +10,7 @@
 - history.jsonl 포함
 - sessions/ 제외
 
-저자: JunyoungJung <joony300@gmail.com>
+저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
 
@@ -40,8 +40,8 @@ from synapse_memory.storage.l0 import L0_DIR_MODE
 def claude_home(tmp_path: Path) -> Path:
     """가짜 ~/.claude 트리 구성."""
     home = tmp_path / "claude"
-    (home / "projects" / "-Users-jimmy-foo").mkdir(parents=True)
-    (home / "projects" / "-Users-jimmy-bar").mkdir(parents=True)
+    (home / "projects" / "-Users-sampleuser-foo").mkdir(parents=True)
+    (home / "projects" / "-Users-sampleuser-bar").mkdir(parents=True)
     (home / "sessions").mkdir()
     return home
 
@@ -181,7 +181,7 @@ class TestCollectClaudeCode:
         )
         # projects/.../<id>.jsonl
         _write_jsonl(
-            claude_home / "projects" / "-Users-jimmy-foo" / "abc.jsonl",
+            claude_home / "projects" / "-Users-sampleuser-foo" / "abc.jsonl",
             {"type": "user", "content": "안녕"},
             {"type": "assistant", "content": "안녕하세요"},
         )
@@ -196,7 +196,7 @@ class TestCollectClaudeCode:
         # mirror 위치 검증
         assert (dst_root / "history.jsonl").is_file()
         assert (
-            dst_root / "projects" / "-Users-jimmy-foo" / "abc.jsonl"
+            dst_root / "projects" / "-Users-sampleuser-foo" / "abc.jsonl"
         ).is_file()
 
     def test_skips_sessions_dir(
