@@ -82,7 +82,12 @@ Intel Mac · macOS 25 이하는 지원하지 않습니다 (apfel 의존).
 
 ### 비개발자 모드 — 더블클릭 설치
 
-[v0.6.0 릴리스 zip][release-zip]을 받은 뒤
+[설치 zip 바로 다운로드][installer-zip]
+
+SHA256:
+`2237238dd22af1ebbcd89609822f94eefb236fada4a1d8694719d752c839a93d`
+
+다운로드한 zip을 압축 해제한 뒤
 `installer/SynapseMemory-Installer.command`를 더블클릭합니다.
 
 설치 프로그램은 GUI 동의 후 Homebrew, Obsidian, Claude Code, apfel,
@@ -94,6 +99,26 @@ Synapse runtime, Obsidian vault 후보를 순서대로 확인합니다.
 실제 적용 모드는 constitution의 Installation Consent Scoping 정책이
 반영된 뒤 활성화합니다.
 로그는 `~/Library/Logs/SynapseMemory/` 아래에 남습니다.
+
+#### macOS 보안 경고가 뜨는 경우
+
+현재 installer는 코드사인/공증 전 MVP `.command` 파일입니다.
+처음 실행할 때 macOS Gatekeeper가 다음 경고를 표시할 수 있습니다.
+
+```text
+Apple은 'SynapseMemory-Installer.command'에 악성 코드가 없음을 확인할 수 없습니다.
+```
+
+이 경우 다음 순서로 열면 됩니다.
+
+1. 경고창에서 **완료**를 누릅니다.
+2. Finder에서 `SynapseMemory-Installer.command`를 Control-클릭 또는 우클릭합니다.
+3. **열기**를 선택합니다.
+4. 다시 경고가 나오면 **열기**를 선택합니다.
+
+그래도 **열기** 버튼이 보이지 않으면
+**시스템 설정 → 개인정보 보호 및 보안 → 보안**에서
+`SynapseMemory-Installer.command`의 **그래도 열기**를 선택합니다.
 
 문제가 생기면 자동 복구 가능한 항목만 고칩니다.
 
@@ -201,4 +226,4 @@ MIT — [LICENSE](LICENSE).
 
 Synapse Memory Maintainers
 
-[release-zip]: https://github.com/Jimmy-Jung/synapse-memory/archive/refs/tags/v0.6.0.zip
+[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v0.6.0/SynapseMemory-v0.6.0-macos-installer.zip
