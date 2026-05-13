@@ -38,7 +38,7 @@ def test_tty_human_triggers_warning_and_sleep(
         _interactive_guard("persona decide", "decide")
     captured = capsys.readouterr()
     assert "LLM 대화 컨텍스트" in captured.err
-    assert "/synapse-decide" in captured.err
+    assert "/sm:decide" in captured.err
     assert mock_sleep.call_count == 1
     mock_sleep.assert_called_with(3)
 
@@ -54,4 +54,4 @@ def test_guard_message_includes_command_label(
         _interactive_guard("persona draft-resume", "resume")
     captured = capsys.readouterr()
     assert "persona draft-resume" in captured.err
-    assert "/synapse-resume" in captured.err
+    assert "/sm:resume" in captured.err

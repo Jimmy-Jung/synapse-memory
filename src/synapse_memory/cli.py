@@ -148,7 +148,7 @@ FAIL = "✗"
 _INTERACTIVE_GUARD_DELAY_SECONDS = 3
 _INTERACTIVE_GUARD_MESSAGE = (
     "⚠  {command} 는 LLM 대화 컨텍스트에서 호출할 때 가장 자연스럽게 동작합니다.\n"
-    "   Claude Code / Codex 안에서 `/synapse-{slash}` 슬래시 명령으로 호출하면\n"
+    "   Claude Code / Codex 안에서 `/sm:{slash}` 슬래시 명령으로 호출하면\n"
     "   결과가 대화에 인라인되고 후속 질문에 컨텍스트가 유지됩니다.\n"
     "   계속 진행하려면 {delay}초 기다리세요. 즉시 우회: SYNAPSE_FROM_AGENT=1\n"
 )

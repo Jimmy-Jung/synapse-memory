@@ -1,6 +1,6 @@
 """Assistant 모드용 read-only 진단 묶음.
 
-`/synapse-assistant` 슬래시 명령이 vault 상태를 한 번에 읽어
+`/sm:assistant` 슬래시 명령이 vault 상태를 한 번에 읽어
 "오늘 추천 작업"을 제안할 수 있도록 가벼운 read-only API를 제공한다.
 
 수집 항목:
@@ -153,18 +153,18 @@ def recommend_actions(status: AssistantStatus) -> list[str]:
     """status 기반 우선순위 추천 작업 목록.
 
     규칙(상위 우선):
-    1. doctor 문제 → /synapse-fix
+    1. doctor 문제 → /sm:fix
     2. vault 미설정 → SYNAPSE_OBSIDIAN_VAULT 안내 (이후 추천 중단)
     3. MemoryInbox 검토 대기 ≥ 1 → 검토 권유
     4. status=draft 카드 ≥ 1 → 카드 검토 + active 승격 권유
     5. positions 비어 있는 회사 카드 ≥ 1 → 키워드 보강 권유
-    6. 마지막 daily 기록 없거나 마지막 state != "done" → /synapse-daily 권유
+    6. 마지막 daily 기록 없거나 마지막 state != "done" → /sm:daily 권유
     7. 그 외 → 자유 질문 안내
     """
     recs: list[str] = []
 
     if not status.doctor_ok:
-        recs.append("환경 문제 자동 복구 — `/synapse-fix` (안전한 항목만)")
+        recs.append("환경 문제 자동 복구 — `/sm:fix` (안전한 항목만)")
 
     if not status.vault_path:
         recs.append(
@@ -190,24 +190,24 @@ def recommend_actions(status: AssistantStatus) -> list[str]:
     if status.empty_company_count > 0:
         recs.append(
             f"키워드 비어 있는 회사 카드 보강 ({status.empty_company_count}장) — "
-            f"`/synapse-resume` 매칭 정확도가 올라감"
+            f"`/sm:resume` 매칭 정확도가 올라감"
         )
 
     if status.last_daily_at is None or status.last_daily_state != "done":
-        recs.append("일일 정리 실행 — `/synapse-daily` (1~3분)")
+        recs.append("일일 정리 실행 — `/sm:daily` (1~3분)")
 
     if status.cleanup_candidate_count > 0:
         kinds = ", ".join(
             f"{k}({n})" for k, n in sorted(status.cleanup_by_kind.items())
         )
         recs.append(
-            f"vault 청소 후보 {status.cleanup_candidate_count}건 — `/synapse-cleanup` "
+            f"vault 청소 후보 {status.cleanup_candidate_count}건 — `/sm:cleanup` "
             f"({kinds})"
         )
 
     if not recs:
         recs.append(
-            "오늘 자유롭게 질문 — `/synapse-ask \"...\"` 또는 `/synapse-recall <주제>`"
+            "오늘 자유롭게 질문 — `/sm:ask \"...\"` 또는 `/sm:recall <주제>`"
         )
 
     return recs

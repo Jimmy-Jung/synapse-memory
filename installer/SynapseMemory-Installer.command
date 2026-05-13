@@ -14,10 +14,10 @@ STATE_FILE="${LOG_DIR}/installer-${RUN_STAMP}.state.json"
 DRY_RUN="${SYNAPSE_INSTALLER_DRY_RUN:-1}"
 ACTIVATE_PLUGINS="${SYNAPSE_ACTIVATE_PLUGINS:-1}"
 PLUGIN_SOURCE="${SYNAPSE_PLUGIN_SOURCE:-${REPO_ROOT}}"
-CLAUDE_PLUGIN_REF="${SYNAPSE_CLAUDE_PLUGIN_REF:-synapse-memory@synapse-memory-marketplace}"
+CLAUDE_PLUGIN_REF="${SYNAPSE_CLAUDE_PLUGIN_REF:-sm@synapse-memory-marketplace}"
 CLAUDE_PLUGIN_SCOPE="${SYNAPSE_CLAUDE_PLUGIN_SCOPE:-user}"
 CODEX_PLUGIN_SOURCE="${SYNAPSE_CODEX_PLUGIN_SOURCE:-${PLUGIN_SOURCE}}"
-CODEX_PLUGIN_REF="${SYNAPSE_CODEX_PLUGIN_REF:-synapse-memory@synapse-memory-marketplace}"
+CODEX_PLUGIN_REF="${SYNAPSE_CODEX_PLUGIN_REF:-sm@synapse-memory-marketplace}"
 CODEX_MARKETPLACE_NAME="${SYNAPSE_CODEX_MARKETPLACE_NAME:-synapse-memory-marketplace}"
 TEST_MODE="${SYNAPSE_INSTALLER_TEST_MODE:-0}"
 TEST_ARCH="${SYNAPSE_INSTALLER_TEST_ARCH:-}"
@@ -268,7 +268,7 @@ activate_codex_plugin() {
 
   prompt_input_file="$(mktemp)"
   if codex debug prompt-input "Synapse Memory plugin visibility check" >"${prompt_input_file}" 2>>"${LOG_FILE}"; then
-    if grep -q "synapse-memory:synapse-memory" "${prompt_input_file}"; then
+    if grep -q "sm:sm" "${prompt_input_file}"; then
       log_step "verify_codex_plugin" "success" "prompt_visible=true"
       rm -f "${prompt_input_file}"
       return 0

@@ -70,14 +70,14 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 
 | 키 그룹 | 영향 |
 |---|---|
-| `cleanup.*_days` | 다음 `/synapse-cleanup` 부터 새 임계값 적용. 기존 archive에는 영향 없음. |
+| `cleanup.*_days` | 다음 `/sm:cleanup` 부터 새 임계값 적용. 기존 archive에는 영향 없음. |
 | `models.*` | 다음 호출부터 새 모델 사용. opus는 sonnet 대비 비용이 약 5배. |
 | `top_k.*` | 다음 호출부터 새 매칭 개수. 늘리면 답변 컨텍스트 풍부 + 비용 증가. |
 | `ai_provider` | `claude`/`codex`/`auto` 중 하나. 변경 시 비용·모델 이름 체계도 달라짐. |
 | `vault` | 변경 즉시 새 vault 사용. **기존 vault의 카드·Profile은 옮겨지지 않습니다.** |
 | `interactive_guard.enabled` | false 시 사람 직접 호출에서 안내가 사라짐 (자동화에 유용). |
 | `automation.codex_poller.enabled` | launchd 데몬 동작 토글. 적용은 `synapse-memory install-agent` 재실행 필요 (미구현). |
-| `cost.summary_days` | `/synapse-cost` 기본 윈도우. |
+| `cost.summary_days` | `/sm:cost` 기본 윈도우. |
 | `cost.monthly_cap_usd` | 월 한도 USD. **초과 시 ask/me/card_generate/cluster_classify 호출 차단** (SystemExit 7). 우회: `SYNAPSE_FORCE_COST=1`. 80% 도달 시 경고. `null`이면 무제한. |
 
 ## advanced 키를 묻는 경우
