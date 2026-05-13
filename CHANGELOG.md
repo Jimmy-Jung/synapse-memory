@@ -2,6 +2,35 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.8.1] — 2026-05-13
+
+### Added — Codex 플러그인 surface 보강
+
+- Codex 플러그인 포맷은 `commands` 키를 인식하지 않으므로, 기존 `/sm:*`
+  슬래시 명령들을 Codex 의 skill picker 에도 그대로 노출하기 위해 13 개
+  의 개별 skill 폴더를 추가: `skills/{ask,recall,decide,doctor,fix,daily,
+  resume,cost,feedback,assistant,cleanup,config,onboard}/SKILL.md`.
+- 각 skill 의 `description` 은 "Use when the user ..." trigger 패턴으로
+  작성해 router 가 의미가 비슷한 ask / recall / decide 사이에서 올바른
+  skill 을 고를 수 있게 함. 본문은 실행할 `synapse-memory <subcommand>`
+  명령과 인자 한 화면 요약.
+- Claude Code 측 `commands/` slash surface 와 umbrella `skills/sm/`
+  skill 은 그대로 유지 — 이번 릴리즈는 surface 추가만, 기존 동작
+  변경 없음.
+
+### Fixed — `/sm:assistant` 가 `config.yaml` vault 무시하던 문제 (#8)
+
+- `assistant_status.resolve_vault_path()` 가 `SYNAPSE_OBSIDIAN_VAULT`
+  환경변수만 읽어, env 미설정 시 `vault_path: null` → 카드 /
+  MemoryInbox / cleanup 카운트가 모두 0 으로 떨어지던 버그 수정.
+- 이제 fallback 체인: ① env var → ② `~/.synapse/config.yaml` 의
+  `vault` 키 → ③ iCloud Obsidian 기본 경로
+  (`~/Library/Mobile Documents/iCloud~md~obsidian/Documents`,
+  실재 시). daily / config 파이프라인과 동일 소스를 참조해
+  entrypoint 간 불일치 제거.
+- 빈 vault 안내 메시지에 `synapse-memory config set vault ...` 도
+  함께 노출.
+
 ## [0.8.0] — 2026-05-13
 
 ### Breaking — Slash 명령 prefix `synapse-memory` → `sm`
