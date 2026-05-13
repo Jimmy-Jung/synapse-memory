@@ -1,4 +1,4 @@
-"""me what-did-i-think / decide 테스트.
+"""persona what-did-i-think / decide 테스트.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10

@@ -1,4 +1,4 @@
-"""T018 — `synapse-memory me generate` CLI RED test.
+"""T018 — `synapse-memory persona generate` CLI RED test.
 
 Covers spec User Story 1 (CLI 진입점) + Principle V (observability log line).
 """
@@ -35,7 +35,7 @@ def fixture_vault(tmp_path: Path) -> Path:
 def test_parser_registers_me_generate_subcommand() -> None:
     parser = cli_mod.build_parser()
     args = parser.parse_args(
-        ["me", "generate", "weekly_report", "--input", "period=2026-W19"]
+        ["persona", "generate", "weekly_report", "--input", "period=2026-W19"]
     )
     assert args.action == "generate"
     assert args.recipe == "weekly_report"
@@ -46,7 +46,7 @@ def test_parser_registers_me_generate_rag_mode_override() -> None:
     parser = cli_mod.build_parser()
     args = parser.parse_args(
         [
-            "me",
+            "persona",
             "generate",
             "weekly_report",
             "--input",
@@ -64,7 +64,7 @@ def test_parser_rejects_invalid_me_generate_rag_mode() -> None:
     with pytest.raises(SystemExit):
         parser.parse_args(
             [
-                "me",
+                "persona",
                 "generate",
                 "weekly_report",
                 "--input",
@@ -114,7 +114,7 @@ def test_me_generate_weekly_report_invocation(
     ):
         rc = cli_mod.main(
             [
-                "me",
+                "persona",
                 "generate",
                 "weekly_report",
                 "--input",
@@ -159,7 +159,7 @@ def test_me_generate_passes_rag_mode_override(
     ) as mocked_generate:
         rc = cli_mod.main(
             [
-                "me",
+                "persona",
                 "generate",
                 "weekly_report",
                 "--input",
@@ -195,7 +195,7 @@ def test_me_generate_hybrid_unavailable_exits_with_reindex_hint(
     ):
         rc = cli_mod.main(
             [
-                "me",
+                "persona",
                 "generate",
                 "weekly_report",
                 "--input",
@@ -223,7 +223,7 @@ def test_me_generate_hybrid_override_without_store_exits_with_reindex_hint(
     with mock.patch("synapse_memory.cli.open_vector_store", return_value=None):
         rc = cli_mod.main(
             [
-                "me",
+                "persona",
                 "generate",
                 "weekly_report",
                 "--input",
@@ -261,7 +261,7 @@ def test_me_generate_missing_required_input_exits_with_code(
     ):
         rc = cli_mod.main(
             [
-                "me",
+                "persona",
                 "generate",
                 "weekly_report",
                 "--vault",
@@ -274,7 +274,7 @@ def test_me_generate_missing_required_input_exits_with_code(
     assert "period" in err
 
 
-# ----- US4: me recipes list/show CLI (T040-T043) ------------------------------
+# ----- US4: persona recipes list/show CLI (T040-T043) -------------------------
 
 
 def test_me_recipes_list_default(
@@ -285,7 +285,7 @@ def test_me_recipes_list_default(
     with mock.patch(
         "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
     ):
-        rc = cli_mod.main(["me", "recipes", "list", "--vault", str(fixture_vault)])
+        rc = cli_mod.main(["persona", "recipes", "list", "--vault", str(fixture_vault)])
 
     out = capsys.readouterr().out
     assert rc == 0
@@ -313,7 +313,7 @@ def test_me_recipes_list_json_envelope(
         "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
     ):
         rc = cli_mod.main(
-            ["me", "recipes", "list", "--vault", str(fixture_vault), "--json"]
+            ["persona", "recipes", "list", "--vault", str(fixture_vault), "--json"]
         )
 
     out = capsys.readouterr().out
@@ -333,13 +333,13 @@ def test_me_recipes_show_builtin(
     fixture_vault: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """T042 — me recipes show weekly_report 출력 키 검증."""
+    """T042 — persona recipes show weekly_report 출력 키 검증."""
     with mock.patch(
         "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
     ):
         rc = cli_mod.main(
             [
-                "me",
+                "persona",
                 "recipes",
                 "show",
                 "weekly_report",
@@ -369,7 +369,7 @@ def test_me_recipes_show_unknown_suggests(
         "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
     ):
         rc = cli_mod.main(
-            ["me", "recipes", "show", "weekly", "--vault", str(fixture_vault)]
+            ["persona", "recipes", "show", "weekly", "--vault", str(fixture_vault)]
         )
 
     err = capsys.readouterr().err

@@ -33,10 +33,10 @@ def test_parser_has_ask_hybrid() -> None:
     assert args.model is None
 
 
-def test_parser_has_me_what_did_i_think_hybrid() -> None:
+def test_parser_has_persona_what_did_i_think_hybrid() -> None:
     parser = cli_mod.build_parser()
 
-    args = parser.parse_args(["me", "what-did-i-think", "당근마켓", "--hybrid"])
+    args = parser.parse_args(["persona", "what-did-i-think", "당근마켓", "--hybrid"])
 
     assert args.hybrid is True
     assert args.model is None

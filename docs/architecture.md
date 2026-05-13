@@ -35,10 +35,10 @@ Synapse Memory의 핵심 목표는 개인 자료를 안전하게 모아 "내 맥
 | 목표 | 대표 명령 | 설명 |
 | --- | --- | --- |
 | AI 비서 | `ask` | 내 Card를 검색해서 질문에 답합니다. |
-| 세컨드 브레인 | `me what-did-i-think` | 특정 주제에 대한 과거 생각을 회상합니다. |
-| 내 클론 | `me decide` | Profile과 DecisionPatterns를 근거로 결정을 돕습니다. |
+| 세컨드 브레인 | `persona what-did-i-think` | 특정 주제에 대한 과거 생각을 회상합니다. |
+| 내 클론 | `persona decide` | Profile과 DecisionPatterns를 근거로 결정을 돕습니다. |
 
-`me draft-resume`은 이 세 흐름을 조합한 대표 use case입니다.
+`persona draft-resume`은 이 세 흐름을 조합한 대표 use case입니다.
 
 ## 설계 원칙
 
@@ -87,7 +87,7 @@ graph TD
     L0 --> PROF[update-profile]
     PROF --> MI[MemoryInbox]
     MI --> PROFILE[Profile.md / DecisionPatterns.md]
-    PROFILE --> DECIDE[me decide]
+    PROFILE --> DECIDE[persona decide]
     L3 --> DECIDE
 ```
 
@@ -95,7 +95,7 @@ graph TD
 
 ## Recipe Retrieval Mode
 
-`me generate <recipe>` 는 recipe markdown 을 실행 단위로 삼습니다. 각 recipe 는
+`persona generate <recipe>` 는 recipe markdown 을 실행 단위로 삼습니다. 각 recipe 는
 frontmatter 에 `rag_mode: dense | hybrid` 를 선언할 수 있고, 생략 시 기존 dense
 vector 검색이 유지됩니다.
 

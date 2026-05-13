@@ -100,7 +100,7 @@ Synapse Memory가 풀어주는 5가지 답답함이 있습니다.
 ## 절대 하지 말 것
 
 - ❌ 답답함 5개를 한 세션에 다 보여주기
-- ❌ `me update-profile`을 사용자 동의 없이 실행 (비용 발생 + 후보 누적)
+- ❌ `persona update-profile`을 사용자 동의 없이 실행 (비용 발생 + 후보 누적)
 - ❌ vault 안 사용자 파일을 임의로 편집 (카드 status 변경, Profile 추가 등은 사용자가 Obsidian에서 직접)
 - ❌ `--auto-promote` 같은 자동 승격 모드 사용 (현재 미구현, 의도적 수동)
 - ❌ Gatekeeper 우회·보안 설정 변경

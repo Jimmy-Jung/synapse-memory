@@ -383,7 +383,7 @@ def _record_last_answer(
 # Timeline recall (FR-A1, specs/002-timeline-recall) — module-private types
 # ---------------------------------------------------------------------------
 #
-# 본 섹션은 ``me what-did-i-think --timeline`` 의 시간축 정렬·분기 그룹화
+# 본 섹션은 ``persona what-did-i-think --timeline`` 의 시간축 정렬·분기 그룹화
 # 출력에 사용되는 transient 객체와 헬퍼 stub 을 정의한다.
 #
 # - data-model: specs/002-timeline-recall/data-model.md

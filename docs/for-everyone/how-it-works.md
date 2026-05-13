@@ -139,7 +139,7 @@ Claude Code 또는 Codex 안에서 `/synapse-ask "..."` 한 번 부르면
 
 | 단계 | 명령/위치 | 역할 |
 |---|---|---|
-| 후보 추출 | `me update-profile` | raw 패턴 → ProfileFact 후보 |
+| 후보 추출 | `persona update-profile` | raw 패턴 → ProfileFact 후보 |
 | 후보 보관 | `MemoryInbox/` | "검토 대기" 받은편지함 |
 | 승인 (수동) | Obsidian 편집 | `Profile.md` / `DecisionPatterns.md`로 이동 |
 | 결정 도움 | `/synapse-decide` | 승인된 패턴 기반 권장 |

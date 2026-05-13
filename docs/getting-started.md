@@ -199,9 +199,9 @@ synapse-memory ask "iOS 클린 아키텍처 어떻게 도입했지?"
 이제 다음 기능도 사용할 수 있습니다.
 
 ```bash
-synapse-memory me what-did-i-think "TCA 아키텍처"
-synapse-memory me decide "다음 회사 지원할 때 어떤 프로젝트를 강조할까?"
-synapse-memory me draft-resume examplecorp
+synapse-memory persona what-did-i-think "TCA 아키텍처"
+synapse-memory persona decide "다음 회사 지원할 때 어떤 프로젝트를 강조할까?"
+synapse-memory persona draft-resume examplecorp
 ```
 
 ## 10. 매일 실행하기

@@ -19,6 +19,7 @@ PROFILE_CATEGORIES: tuple[str, ...] = (
     "interest",     # 관심사/도메인
     "workflow",     # 워크플로 패턴
     "value",        # 가치관 (예: "성능보다 가독성 우선")
+    "voice",        # 말투/문장 길이/표현 선호·금지 (예: "짧은 문장, 직설적, 한국어 우선")
 )
 
 

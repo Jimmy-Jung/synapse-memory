@@ -7,7 +7,7 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
     3. cluster classify --resume     (새 cluster만)
     4. card generate (--force=False) (새 cluster만 Card 생성)
     5. rag index                     (Card upsert)
-    6. me update-profile             (오늘 활동 분석 → MemoryInbox PR)
+    6. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
     7. report                        (DailyReport 작성)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.

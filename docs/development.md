@@ -10,7 +10,7 @@
 | "코드가 어떻게 나뉘어 있나" | [§ 코드 구조](#코드-구조) |
 | "지켜야 할 규칙" | [§ 중요한 설계 규칙](#중요한-설계-규칙) |
 | "테스트 돌리기 / 커버리지" | [§ 테스트](#테스트) |
-| "stage별 관측 라인 / `me generate` snapshot" | [§ Observability Snapshots](#observability-snapshots) |
+| "stage별 관측 라인 / `persona generate` snapshot" | [§ Observability Snapshots](#observability-snapshots) |
 | "lint / format / type 검사" | [§ Lint와 format](#lint와-format) |
 | "새 endpoint 추가하기" | [§ 새 endpoint 추가](#새-endpoint-추가) |
 | "새 collector (Gmail·iMessage 등) 추가" | [§ 새 collector 추가](#새-collector-추가) |
@@ -95,7 +95,7 @@ pytest --cov=synapse_memory --cov-report=term-missing
 ## Observability Snapshots
 
 Constitution [Principle V](../.specify/memory/constitution.md#principle-v-reproducible-daily-pipeline--observability) 에 따라 stage별로 사람이 읽을 수 있는 관측 라인을 유지합니다.
-`me generate <recipe>` 는 stdout 에 생성 결과를 쓰고, stderr 에 한 줄 snapshot 을 남깁니다.
+`persona generate <recipe>` 는 stdout 에 생성 결과를 쓰고, stderr 에 한 줄 snapshot 을 남깁니다.
 
 ```text
 [me.generate.weekly_report] source=builtin rag_mode=hybrid locale=profile:한국어 domain=tags:software profile_used=True matched=4 duration=2841ms

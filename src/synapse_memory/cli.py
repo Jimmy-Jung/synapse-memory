@@ -493,8 +493,8 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
 def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
     args.top_k = _arg_or_config(args.top_k, "top_k.recall", 8)
     args.model = _resolve_model(args.model, "recall")
-    _enforce_cost_cap("me what-did-i-think")
-    _interactive_guard("me what-did-i-think", "recall")
+    _enforce_cost_cap("persona what-did-i-think")
+    _interactive_guard("persona what-did-i-think", "recall")
 
     # FR-009 — --timeline + --by distance 충돌 검증
     timeline_flag = bool(getattr(args, "timeline", False))
@@ -564,8 +564,8 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
 def cmd_me_decide(args: argparse.Namespace) -> int:
     args.top_k = _arg_or_config(args.top_k, "top_k.decide", 6)
     args.model = _resolve_model(args.model, "decide")
-    _enforce_cost_cap("me decide")
-    _interactive_guard("me decide", "decide")
+    _enforce_cost_cap("persona decide")
+    _interactive_guard("persona decide", "decide")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가", file=sys.stderr)
@@ -955,8 +955,8 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
     """raw → Profile/DecisionPattern 후보 → MemoryInbox PR."""
     args.sample_lines = _arg_or_config(args.sample_lines, "profile.sample_lines", 200)
     args.model = _resolve_model(args.model, "update_profile")
-    _enforce_cost_cap("me update-profile")
-    _interactive_guard("me update-profile", "update-profile")
+    _enforce_cost_cap("persona update-profile")
+    _interactive_guard("persona update-profile", "update-profile")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
@@ -999,8 +999,8 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     """회사 맞춤 이력서 자동 생성 → vault Drafts."""
     args.top_k = _arg_or_config(args.top_k, "top_k.resume", 6)
     args.model = _resolve_model(args.model, "resume")
-    _enforce_cost_cap("me draft-resume")
-    _interactive_guard("me draft-resume", "resume")
+    _enforce_cost_cap("persona draft-resume")
+    _interactive_guard("persona draft-resume", "resume")
     ai_env = detect_ai_environment(model=args.model)
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
@@ -1047,8 +1047,8 @@ def _parse_input_kv(items: list[str]) -> dict[str, str]:
 
 
 def cmd_me_generate(args: argparse.Namespace) -> int:
-    """Recipe-based generator (007-me-recipes) — me generate <recipe>."""
-    _enforce_cost_cap(f"me generate {args.recipe}")
+    """Recipe-based generator (007-me-recipes) — persona generate <recipe>."""
+    _enforce_cost_cap(f"persona generate {args.recipe}")
     from synapse_memory.recipes import (
         InputValidationError,
         RecipeHybridUnavailableError,
@@ -1060,7 +1060,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
         generate as recipes_generate,
     )
 
-    _interactive_guard(f"me generate {args.recipe}", f"generate-{args.recipe}")
+    _interactive_guard(f"persona generate {args.recipe}", f"generate-{args.recipe}")
 
     try:
         inputs = _parse_input_kv(args.input or [])
@@ -1151,7 +1151,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
 
 
 def _recipes_registry_for_vault(vault_arg: str | None) -> Any:
-    """me recipes list/show 의 공통 helper — RecipeRegistry 인스턴스 반환."""
+    """persona recipes list/show 의 공통 helper — RecipeRegistry 인스턴스 반환."""
     from synapse_memory.recipes.registry import RecipeRegistry
 
     vault = (
@@ -1195,7 +1195,7 @@ def _recipes_envelope(
 
 
 def cmd_me_recipes_list(args: argparse.Namespace) -> int:
-    """me recipes list — 모든 recipe 표 출력 (builtin + user)."""
+    """persona recipes list — 모든 recipe 표 출력 (builtin + user)."""
     try:
         reg = _recipes_registry_for_vault(args.vault)
     except Exception as exc:
@@ -1233,7 +1233,7 @@ def cmd_me_recipes_list(args: argparse.Namespace) -> int:
 
 
 def cmd_me_recipes_show(args: argparse.Namespace) -> int:
-    """me recipes show <recipe> — 한 recipe 의 세부 사항 + system_prompt preview."""
+    """persona recipes show <recipe> — 한 recipe 의 세부 사항 + system_prompt preview."""
     from synapse_memory.recipes.registry import RecipeNotFoundError
 
     try:
@@ -2190,7 +2190,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cost_summary.add_argument("--json", action="store_true", help="JSON 출력")
     p_cost_summary.set_defaults(func=cmd_cost_summary)
 
-    p_me = sub.add_parser("me", help="클론 모드 endpoints")
+    p_me = sub.add_parser("persona", help="Persona 통합 endpoints (이전 'me')")
     me_sub = p_me.add_subparsers(dest="action", required=True, metavar="ACTION")
     p_resume = me_sub.add_parser(
         "draft-resume", help="회사 맞춤 이력서 자동 작성"
@@ -2263,7 +2263,7 @@ def build_parser() -> argparse.ArgumentParser:
         "generate",
         help="recipe 기반 결과물 생성 (007-me-recipes: weekly_report / journal / ...)",
     )
-    p_gen.add_argument("recipe", help="recipe 이름 (me recipes list 로 확인 — 추후)")
+    p_gen.add_argument("recipe", help="recipe 이름 (persona recipes list 로 확인 — 추후)")
     p_gen.add_argument(
         "--input",
         action="append",

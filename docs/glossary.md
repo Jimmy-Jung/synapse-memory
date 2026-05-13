@@ -50,7 +50,7 @@
 
 **쉬운 설명**: Synapse가 만든 이력서 초안 저장소.
 
-**기술 정의**: `me draft-resume` 명령의 출력 위치. 파일명 형식 `Resume - <회사> (YYYY-MM).md`.
+**기술 정의**: `persona draft-resume` 명령의 출력 위치. 파일명 형식 `Resume - <회사> (YYYY-MM).md`.
 
 #### `90_System/AI/`
 
@@ -68,7 +68,7 @@
 
 **쉬운 설명**: "이 사람은 ~한 사람이다" 한 줄짜리 메모.
 
-**기술 정의**: `me decide`가 의사결정 컨텍스트로 사용. `90_System/AI/Profile.md`에서 승인됨.
+**기술 정의**: `persona decide`가 의사결정 컨텍스트로 사용. `90_System/AI/Profile.md`에서 승인됨.
 
 ### DecisionPattern (의사결정 패턴)
 
@@ -159,9 +159,9 @@
 | `/synapse-cleanup` | `cleanup scan` / `cleanup apply` | vault 청소 — 오래된·휴면·빈 자료를 archive로 이동 |
 | `/synapse-config` | `config show/get/set/edit/reset/validate` | 사용자 설정 — `~/.synapse/config.yaml` 자연어 변경 |
 | `/synapse-ask` | `ask` | 자연어 질의 |
-| `/synapse-recall` | `me what-did-i-think` | 시간순 회상 |
-| `/synapse-decide` | `me decide` | 의사결정 코파일럿 |
-| `/synapse-resume` | `me draft-resume` | 회사 맞춤 이력서 |
+| `/synapse-recall` | `persona what-did-i-think` | 시간순 회상 |
+| `/synapse-decide` | `persona decide` | 의사결정 코파일럿 |
+| `/synapse-resume` | `persona draft-resume` | 회사 맞춤 이력서 |
 | `/synapse-daily` | `daily` | 일일 통합 파이프라인 |
 | `/synapse-doctor` | `doctor` | 환경 진단 |
 | `/synapse-fix` | `doctor --fix` | 환경 자동 복구 |
@@ -200,7 +200,7 @@
 
 ### Update Profile (프로필 업데이트)
 
-`me update-profile` — raw에서 ProfileFact 후보 추출 → MemoryInbox에 작성.
+`persona update-profile` — raw에서 ProfileFact 후보 추출 → MemoryInbox에 작성.
 
 ---
 
@@ -327,7 +327,7 @@
 
 **쉬운 설명**: "이력서를 어떻게 만들지" 같은 작업 명세를 마크다운으로 적은 것.
 
-**기술 정의**: `src/synapse_memory/recipes/` 또는 사용자 vault의 markdown frontmatter + 본문. `me generate <recipe>`로 실행.
+**기술 정의**: `src/synapse_memory/recipes/` 또는 사용자 vault의 markdown frontmatter + 본문. `persona generate <recipe>`로 실행.
 
 ### Daily 파이프라인
 

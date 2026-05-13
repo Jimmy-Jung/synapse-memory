@@ -35,7 +35,7 @@ def test_tty_human_triggers_warning_and_sleep(
     monkeypatch.delenv("SYNAPSE_FROM_AGENT", raising=False)
     monkeypatch.setattr("synapse_memory.cli._stdout_is_tty", lambda: True)
     with patch("synapse_memory.cli.time.sleep") as mock_sleep:
-        _interactive_guard("me decide", "decide")
+        _interactive_guard("persona decide", "decide")
     captured = capsys.readouterr()
     assert "LLM 대화 컨텍스트" in captured.err
     assert "/synapse-decide" in captured.err
@@ -51,7 +51,7 @@ def test_guard_message_includes_command_label(
     monkeypatch.delenv("SYNAPSE_FROM_AGENT", raising=False)
     monkeypatch.setattr("synapse_memory.cli._stdout_is_tty", lambda: True)
     with patch("synapse_memory.cli.time.sleep"):
-        _interactive_guard("me draft-resume", "resume")
+        _interactive_guard("persona draft-resume", "resume")
     captured = capsys.readouterr()
-    assert "me draft-resume" in captured.err
+    assert "persona draft-resume" in captured.err
     assert "/synapse-resume" in captured.err

@@ -1,5 +1,10 @@
 # 구현 계획: Persona OS
 
+> **Status**: SUPERSEDED
+> **Replaced by**: `~/.claude/plans/1-linked-fox.md`
+> **Date**: 2026-05-13
+> **Reason**: 기존 `profile/` 모듈과의 중복 발견 + wedge 재정의 (외부 자료 ingest + design-project). `me` 와 `persona` namespace 통합. 본 plan 의 5-CLI / 4-file / persona module 구조 거부, `me` → `persona` rename + recipe 확장으로 대체.
+
 **브랜치**: `010-persona-os` | **작성일**: 2026-05-13 | **명세**: [spec.md](./spec.md)  
 **작성자**: JunyoungJung  
 **입력**: `specs/010-persona-os/spec.md` 기능 명세

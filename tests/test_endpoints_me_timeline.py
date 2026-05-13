@@ -1,6 +1,6 @@
 """Timeline recall tests — FR-001~FR-017.
 
-본 모듈은 `synapse-memory me what-did-i-think --timeline` 의 시간축 정렬 ·
+본 모듈은 `synapse-memory persona what-did-i-think --timeline` 의 시간축 정렬 ·
 분기 그룹화 · 폴백 · 모드 별칭 · 회귀 가드를 검증한다.
 
 매핑:

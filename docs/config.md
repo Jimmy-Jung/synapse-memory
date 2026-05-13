@@ -56,7 +56,7 @@ CLI 인자  >  환경변수  >  ~/.synapse/config.yaml  >  코드 default
 | `models.claude.decide` / `models.codex.decide` | `null` | `null` | `/synapse-decide` 권장 생성 |
 | `models.claude.resume` / `models.codex.resume` | `null` | `null` | `/synapse-resume` 이력서 작성. **opus 권장** (글쓰기 품질) |
 | `models.claude.recall` / `models.codex.recall` | `null` | `null` | `/synapse-recall` 시간순 회상 |
-| `models.claude.update_profile` / `models.codex.update_profile` | `null` | `null` | `me update-profile` 후보 추출 |
+| `models.claude.update_profile` / `models.codex.update_profile` | `null` | `null` | `persona update-profile` 후보 추출 |
 
 **비용 감각 (Claude 기준)**:
 - haiku ≪ sonnet (약 3배) ≪ opus (sonnet 대비 약 5배)
@@ -91,7 +91,7 @@ CLI 인자  >  환경변수  >  ~/.synapse/config.yaml  >  코드 default
 
 | 키 | default | 의미 |
 |---|---|---|
-| `profile.sample_lines` | 200 | `me update-profile`이 분석할 raw 줄 수. 늘리면 후보 정확도 ↑, 비용·시간 ↑ |
+| `profile.sample_lines` | 200 | `persona update-profile`이 분석할 raw 줄 수. 늘리면 후보 정확도 ↑, 비용·시간 ↑ |
 | `cost.summary_days` | 30 | `/synapse-cost` 기본 윈도우 (일) |
 | `cost.monthly_cap_usd` | `null` | 월 한도 USD. 초과 시 ask/me 계열 호출 차단 (null = 무제한) |
 | `interactive_guard.enabled` | `true` | 사람 직접 CLI 호출 시 3초 안내 표시 여부. 자동화 환경에서 끄면 편리 |

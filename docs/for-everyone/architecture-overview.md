@@ -133,7 +133,7 @@ flowchart TD
 
 ## 왜 "Recipe" 개념을 만들었나요?
 
-`me draft-resume`, `me decide` 같은 작업은 사실 같은 패턴을 가집니다.
+`persona draft-resume`, `persona decide` 같은 작업은 사실 같은 패턴을 가집니다.
 
 ```
 관련 카드 찾기 → 프롬프트 조립 → 외부 AI 호출 → 결과 저장

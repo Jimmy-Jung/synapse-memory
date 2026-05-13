@@ -123,7 +123,7 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 ## 절대 하지 말 것
 
 - ❌ 한 번 `yes`를 받고 추천 1~3개를 *전부 자동 실행* (각 작업마다 따로 동의 받기)
-- ❌ `me update-profile --auto-promote` 같은 자동 승격 (현재 미구현 + 의도적 수동 원칙)
+- ❌ `persona update-profile --auto-promote` 같은 자동 승격 (현재 미구현 + 의도적 수동 원칙)
 - ❌ MemoryInbox 후보를 *Synapse가 대신* Profile.md로 옮기기 (사용자가 직접 Obsidian에서)
 - ❌ 카드 status를 *Synapse가 대신* draft → active로 바꾸기
 - ❌ `/synapse-resume` 결과 파일을 사용자 확인 없이 *외부로 전송·게시*
