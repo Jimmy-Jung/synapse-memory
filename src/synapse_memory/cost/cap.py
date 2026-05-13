@@ -18,7 +18,6 @@ from dataclasses import dataclass
 
 from synapse_memory.cost.events import load_cost_events
 
-
 CAP_EXCEEDED_EXIT_CODE = 7
 WARN_THRESHOLD_RATIO = 0.8
 FORCE_ENV_VAR = "SYNAPSE_FORCE_COST"
@@ -52,7 +51,7 @@ def _month_window(
     now: datetime.datetime,
 ) -> tuple[datetime.datetime, datetime.datetime]:
     """UTC 기준 이번 달 시작 ~ 다음 달 시작 (exclusive)."""
-    utc = datetime.timezone.utc
+    utc = datetime.UTC
     start = datetime.datetime(now.year, now.month, 1, tzinfo=utc)
     if now.month == 12:
         next_start = datetime.datetime(now.year + 1, 1, 1, tzinfo=utc)
@@ -65,12 +64,12 @@ def compute_month_to_date_usd(
     *, now: datetime.datetime | None = None
 ) -> float:
     """이번 월(UTC) 누적 USD 합산. cost.jsonl 없거나 비어 있으면 0.0."""
-    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now or datetime.datetime.now(datetime.UTC)
     start, end = _month_window(now)
     total = 0.0
     try:
         events = load_cost_events()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return 0.0
     for ev in events:
         try:
@@ -78,7 +77,7 @@ def compute_month_to_date_usd(
         except (ValueError, AttributeError):
             continue
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=datetime.timezone.utc)
+            ts = ts.replace(tzinfo=datetime.UTC)
         if start <= ts < end:
             total += float(ev.usd)
     return total
@@ -91,7 +90,7 @@ def get_cap_status(*, now: datetime.datetime | None = None) -> CapStatus:
         from synapse_memory.config import get_config
 
         cap_usd = get_config().cost.monthly_cap_usd
-    except Exception:  # noqa: BLE001
+    except Exception:
         cap_usd = None
     mtd = compute_month_to_date_usd(now=now)
     return CapStatus(cap_usd=cap_usd, month_to_date_usd=mtd)
@@ -103,7 +102,7 @@ def enforce_cost_cap(command: str) -> None:
     동작:
     - cap=null → 즉시 반환 (제한 없음)
     - 누적 ≥ cap → ``SYNAPSE_FORCE_COST=1`` 없으면 SystemExit(7)
-    - 누적 ≥ 80% × cap → stderr 경고만 (진행은 허용)
+    - 누적 ≥ 80% of cap → stderr 경고만 (진행은 허용)
     """
     status = get_cap_status()
     if status.cap_usd is None:

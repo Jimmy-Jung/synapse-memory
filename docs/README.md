@@ -1,51 +1,35 @@
 # Synapse Memory 문서
 
-> Synapse Memory는 Obsidian vault와 Claude Code 활동 로그를 안전하게 정리해서,
-> 개인 맥락을 검색·이력서 합성·의사결정에 활용하는 **로컬 우선** 메모리 도구입니다.
+작성자: JunyoungJung  
+작성일: 2026-05-13
 
-문서는 독자별로 분리되어 있습니다.
+이 문서는 Synapse Memory를 처음 쓰는 사람이 길을 잃지 않도록 읽는 순서를 정리합니다.
+세부 구현 설명보다 "왜 필요하고, 어떻게 시작하고, 매일 무엇을 하면 되는지"를 먼저
+따라가게 구성했습니다.
 
-## 👤 비개발자라면 — [for-everyone/](for-everyone/)
+## 읽는 순서
 
-처음 써보시는 분, 비유로 원리만 빠르게 이해하고 싶은 분.
+1. [처음부터 끝까지 사용하기](start-here.md)
 
-| 문서 | 무엇 |
-|---|---|
-| [**5가지 답답함을 어떻게 풀었나**](for-everyone/how-it-works.md) | 통증 → 해결 → 담당 기능 매핑 (가장 먼저 읽기) |
-| [**설계 개요**](for-everyone/architecture-overview.md) | 5가지 원칙·4단계 메모리로 *왜 이렇게 설계됐나* |
-| [**무엇을 할 수 있는가**](for-everyone/what-you-can-do.md) | Before/After 5가지 활용 사례 + 슬래시 명령 예시 |
-| [**설치 화면 가이드**](for-everyone/installer-walkthrough.md) | 더블클릭 설치 단계별 |
-| [**Privacy · 비용 · 삭제 FAQ**](for-everyone/privacy-and-cost.md) | 자주 묻는 5가지 우려 |
+   설치 후 첫 질문까지 이어지는 기본 흐름입니다. Synapse Memory가 무엇을 모으고,
+   어디에 저장하고, 어떤 명령으로 다시 꺼내 쓰는지 순서대로 설명합니다.
 
-## 🛠️ 매일 사용하시는 분 / CLI 사용자
+2. [개인정보, 비용, 삭제](privacy-and-cost.md)
 
-| 문서 | 무엇 |
-|---|---|
-| [Getting Started](getting-started.md) | 수동 설치 + 첫 실행 (15~20분) |
-| [사용 시나리오](usage.md) | 일일 워크플로 / 이력서 / 의사결정 / 회상 |
-| [CLI 레퍼런스](commands.md) | 모든 명령 옵션 + 시나리오 예시 |
+   원본 자료가 어디에 남는지, 외부 AI로 무엇이 나가는지, 비용이 드는 작업은 무엇인지,
+   완전히 지우려면 무엇을 지우면 되는지 정리합니다.
 
-## 🧑‍💻 개발자 / 기여자
+3. [명령과 문제 해결](reference.md)
 
-| 문서 | 무엇 |
-|---|---|
-| [아키텍처 (개발자판)](architecture.md) | 모듈 구조 · Redaction Pass 디테일 · Cluster 식별 · RAG 인덱싱 |
-| [개발자 가이드](development.md) | 코드 구조 + 테스트 + 새 기능 추가 |
+   매일 쓰는 slash 명령과 CLI 명령, 설정 변경, 환경 복구 방법만 모았습니다.
 
-## 📖 모르는 단어가 나오면
+## 한 문장으로 이해하기
 
-[**용어집**](glossary.md) — Vault · Card · Profile · L0~L3 · RAG · apfel · slash command 일관 정의.
+Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 정리해 요약 카드를 만들고,
+외부 AI에는 원본 대신 안전한 카드와 승인된 자료만 보내 답을 받는 도구입니다.
 
-[**Config 레퍼런스**](config.md) — `~/.synapse/config.yaml` 키별 의미·default·변경 시 영향.
+## 어디부터 시작해야 하나요?
 
-## 한눈에 보기
-
-| 하고 싶은 일 | 먼저 볼 문서 | 대표 명령 |
-| --- | --- | --- |
-| 처음 설치하기 (비개발자) | [설치 화면 가이드](for-everyone/installer-walkthrough.md) | (zip 다운로드 → 더블클릭) |
-| 처음 설치하기 (개발자) | [Getting Started](getting-started.md) | `synapse-memory doctor` |
-| 매일 vault와 로그 갱신 | [사용 시나리오](usage.md) | `/synapse-daily` |
-| 과거에 한 생각 찾기 | [무엇을 할 수 있는가](for-everyone/what-you-can-do.md) | `/synapse-recall "TCA"` |
-| 내 자료로 질문하기 | [사용 시나리오](usage.md) | `/synapse-ask "..."` |
-| 회사 맞춤 이력서 | [무엇을 할 수 있는가](for-everyone/what-you-can-do.md) | `/synapse-resume <회사>` |
-| 개인정보 처리 확인 | [Privacy FAQ](for-everyone/privacy-and-cost.md) | (문서) |
+처음이라면 바로 [처음부터 끝까지 사용하기](start-here.md)를 읽으면 됩니다. 이미 설치를
+마쳤다면 `/synapse-doctor`, `/synapse-daily`, `/synapse-ask` 세 명령만 먼저 기억하면
+충분합니다.

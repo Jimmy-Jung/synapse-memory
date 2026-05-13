@@ -213,7 +213,7 @@ def _enforce_cost_cap(command: str) -> None:
         enforce_cost_cap(command)
     except SystemExit:
         raise
-    except Exception:  # noqa: BLE001
+    except Exception:
         # cap 시스템 자체가 실패해도 호출은 진행 (best-effort)
         pass
 
