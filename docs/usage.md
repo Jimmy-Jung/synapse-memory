@@ -68,6 +68,39 @@ synapse-memory daily --profile-facts-only
 
 처음에는 자동 생성 내용을 바로 믿기보다, Obsidian에서 한 번 검토한 것만 “진실원본”으로 올리는 흐름을 권장합니다.
 
+### Quick mode — 첫 호출과 매일 routine 용
+
+첫 호출의 30분~1시간이 부담되거나, 매일 가벼운 갱신만 필요할 때 `--quick` 플래그를 씁니다. 최근 7일 modified 노트만 mirror하고 (전체 대비 89% 감소), classify는 최대 10 cluster까지만, `update_profile` 단계는 자동 skip합니다. 첫 호출도 약 **3분 안에** 끝납니다.
+
+```bash
+synapse-memory daily --quick                          # 기본: 7일 cutoff, 10 cluster cap
+synapse-memory daily --quick --quick-days 14          # cutoff 를 2주로 늘림
+synapse-memory daily --quick --quick-max-clusters 20  # cluster cap 을 20개로 늘림
+synapse-memory daily                                  # full — 매주 1회 또는 수동
+```
+
+**언제 quick / 언제 full 인가**
+
+| 상황 | 모드 |
+| --- | --- |
+| 처음 설치 후 첫 답변까지 빨리 가고 싶음 | `daily --quick` |
+| 매일 routine (변경 노트만 반영) | `daily --quick` |
+| 매주 1회 vault 전체 재정리 | `daily` (full) |
+| `Profile.md`·`DecisionPatterns.md` 갱신이 필요 | `daily` (full) |
+| 큰 백필·재인덱싱 후 정합성 회복 | `daily` (full) |
+
+**cron 분리 예** — 매일 quick, 일요일 새벽에만 full:
+
+```cron
+# 매일 09:00 quick (최근 변경분만 반영, ~3분)
+0 9 * * *  /opt/homebrew/bin/synapse-memory daily --quick
+
+# 일요일 03:00 full (Profile/DecisionPatterns 후보 포함, 30분~1시간)
+0 3 * * 0  /opt/homebrew/bin/synapse-memory daily
+```
+
+> ⚠️ **`daily --quick`과 `daily` (full)을 동시에 실행하지 마세요.** 두 프로세스가 같은 ChromaDB 컬렉션에 동시에 쓰면 인덱스가 깨질 수 있습니다. cron 일정을 짤 때도 둘이 겹치지 않도록 시간 간격을 충분히 두세요. 한 번 켜진 daily가 끝났는지는 `synapse-memory daily-status` 로 확인합니다.
+
 ### 진행 상황 확인
 
 첫 실행이거나 새 노트가 많이 쌓인 날에는 `daily`가 30분~1시간씩 걸릴 수 있습니다. 진행 상황은 두 가지 방식으로 확인할 수 있습니다.

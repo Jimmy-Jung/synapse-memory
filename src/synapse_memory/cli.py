@@ -659,6 +659,13 @@ def cmd_daily(args: argparse.Namespace) -> int:
     only = set(args.only.split(",")) if args.only else None
     skip = set(args.skip.split(",")) if args.skip else None
 
+    if args.quick:
+        print(
+            f"⚡ quick mode — 최근 {args.quick_days}일 modified 노트 + "
+            f"최대 {args.quick_max_clusters}개 cluster classify. "
+            "update_profile auto-skip. full pipeline 은 `synapse-memory daily` (no flag)."
+        )
+
     try:
         result = run_daily(
             only=only,
@@ -669,6 +676,9 @@ def cmd_daily(args: argparse.Namespace) -> int:
             profile_model=args.profile_model,
             profile_sample_lines=args.profile_sample_lines,
             profile_facts_only=args.profile_facts_only,
+            quick=args.quick,
+            quick_days=args.quick_days,
+            quick_max_clusters=args.quick_max_clusters,
             dry_run=args.dry_run,
         )
     except ValueError as exc:
@@ -2568,6 +2578,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_daily.add_argument("--profile-model", default="sonnet")
     p_daily.add_argument("--profile-sample-lines", type=int, default=200)
     p_daily.add_argument("--profile-facts-only", action="store_true")
+    p_daily.add_argument(
+        "--quick",
+        action="store_true",
+        help=(
+            "Quick mode — 최근 N일 modified 노트만 처리 + classify cluster 수 제한 "
+            "+ update_profile auto-skip. 첫 답변 ~3분 목표. full pipeline 은 "
+            "별도 cron 또는 수동 `daily` (no flag) 호출 (ChromaDB 동시성 회피)."
+        ),
+    )
+    p_daily.add_argument(
+        "--quick-days",
+        type=int,
+        default=7,
+        help="--quick 모드의 mtime cutoff 일수 (기본 7)",
+    )
+    p_daily.add_argument(
+        "--quick-max-clusters",
+        type=int,
+        default=10,
+        help="--quick 모드의 classify 최대 cluster 수 (기본 10)",
+    )
     p_daily.add_argument("--dry-run", action="store_true", help="실행 안 하고 단계만")
     p_daily.set_defaults(func=cmd_daily)
 

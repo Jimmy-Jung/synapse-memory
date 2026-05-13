@@ -89,6 +89,25 @@ MemoryInbox 검토 대기: 4개 (가장 최근: Profile-2026-05-13.md)
 > 어떤 답답함이 풀리는지 미리 보고 싶다면
 > [5가지 답답함이 어떻게 풀리는가](docs/for-everyone/how-it-works.md).
 
+### ⚡ 첫 호출이 답답할 땐: `daily --quick`
+
+기본 `daily`의 첫 실행은 vault 전체를 mirror·분류해 **30분~1시간** 걸릴
+수 있습니다. 빠르게 첫 답변까지 도달하고 싶다면 quick 모드를 쓰세요.
+
+```bash
+synapse-memory daily --quick           # 최근 7일 노트만, ~3분
+```
+
+- 최근 7일 modified 노트만 mirror (89% 감소)
+- classify는 최대 10 cluster까지만 (AI 호출 수 제한)
+- `update_profile` 단계는 자동 skip — 매일 routine 용도
+
+매주 1회 또는 Profile 갱신이 필요할 땐 옵션 없이 `synapse-memory daily`
+(full) 를 돌립니다. 자세한 분리 운용은 [사용 시나리오 §1](docs/usage.md#1-매일-5분-워크플로).
+
+> ⚠️ **동시 실행 금지** — `daily --quick`과 `daily` (full)를 동시에 띄우면
+> ChromaDB write 충돌로 인덱스가 깨질 수 있습니다. 한 번에 하나만.
+
 ## 무엇을 할 수 있나요?
 
 > 자연어 질의 / 과거 사고 회상 / 회사 맞춤 이력서 / 의사결정 코파일럿 / NDA 차단

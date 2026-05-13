@@ -212,11 +212,24 @@ def _build_stage_actions(
     profile_facts_only: bool,
     on_log: Callable[[str], None],
     status_sink: StatusSink | None = None,
+    quick_since_days: int | None = None,
+    quick_max_new_clusters: int | None = None,
 ) -> dict[str, StageAction]:
+    """stage 별 action 사전. ``quick_*`` 인자는 ``--quick`` 모드 cutoff 를 활성화."""
+    obsidian_action: StageAction = (
+        _build_collect_obsidian_action(since_days=quick_since_days)
+        if quick_since_days is not None
+        else _collect_obsidian_action
+    )
     return {
         "collect_claude_code": _collect_claude_code_action,
-        "collect_obsidian": _collect_obsidian_action,
-        "classify": _build_classify_action(classify_model, on_log, status_sink),
+        "collect_obsidian": obsidian_action,
+        "classify": _build_classify_action(
+            classify_model,
+            on_log,
+            status_sink,
+            max_new_clusters=quick_max_new_clusters,
+        ),
         "generate": _build_generate_action(generate_model, on_log, status_sink),
         "index": _index_action,
         "update_profile": _build_update_profile_action(
@@ -235,6 +248,17 @@ def _collect_claude_code_action() -> str:
     return stats.summary()
 
 
+def _build_collect_obsidian_action(since_days: int | None = None) -> StageAction:
+    def step() -> str:
+        from synapse_memory.collectors.obsidian import collect_obsidian
+
+        stats = collect_obsidian(since_days=since_days)
+        return stats.summary()
+
+    return step
+
+
+# 기존 함수 — 시그니처 보존 (테스트 호환). 새 경로는 _build_collect_obsidian_action.
 def _collect_obsidian_action() -> str:
     from synapse_memory.collectors.obsidian import collect_obsidian
 
@@ -246,6 +270,7 @@ def _build_classify_action(
     classify_model: str,
     on_log: Callable[[str], None],
     status_sink: StatusSink | None = None,
+    max_new_clusters: int | None = None,
 ) -> StageAction:
     def step() -> str:
         from synapse_memory.cards.auto_classify import (
@@ -265,6 +290,11 @@ def _build_classify_action(
         new_clusters = [c for c in clusters if c.cluster_id not in existing]
         if not new_clusters:
             return "신규 cluster 없음"
+        # --quick 모드: AI 호출 수 제한 (cluster 당 1회 호출이라 daily 시간 직접 지배)
+        truncated = 0
+        if max_new_clusters is not None and len(new_clusters) > max_new_clusters:
+            truncated = len(new_clusters) - max_new_clusters
+            new_clusters = new_clusters[:max_new_clusters]
         obs_root = obs_path()
         cls_dict = dict(existing)
         failed = 0
@@ -298,7 +328,10 @@ def _build_classify_action(
                 )
         save_classifications(cls_dict)
         suffix = f", 실패 {failed}개" if failed else ""
-        return f"신규 {len(new_clusters)}개 분류{suffix}"
+        truncate_note = (
+            f" (quick: {truncated}개 다음 호출로 deferred)" if truncated else ""
+        )
+        return f"신규 {len(new_clusters)}개 분류{suffix}{truncate_note}"
 
     return step
 
@@ -563,6 +596,10 @@ def _estimate_usd_today(date: datetime.date) -> float:
         return 0.0
 
 
+_QUICK_DEFAULT_DAYS = 7
+_QUICK_DEFAULT_MAX_CLUSTERS = 10
+
+
 def run_daily(
     *,
     only: set[str] | None = None,
@@ -573,6 +610,9 @@ def run_daily(
     profile_model: str = "sonnet",
     profile_sample_lines: int = 200,
     profile_facts_only: bool = False,
+    quick: bool = False,
+    quick_days: int = _QUICK_DEFAULT_DAYS,
+    quick_max_clusters: int = _QUICK_DEFAULT_MAX_CLUSTERS,
     dry_run: bool = False,
     stage_actions: Mapping[str, StageAction] | None = None,
     on_log: Callable[[str], None] = print,
@@ -586,6 +626,14 @@ def run_daily(
         classify_model / generate_model / profile_model: 단계별 AI 모델.
         profile_sample_lines: update-profile의 history 분석 줄 수.
         profile_facts_only: DecisionPattern 추출 skip.
+        quick: B1 quick mode (eng-review 2026-05-13). True 시:
+            - collect_obsidian: ``since_days=quick_days`` cutoff
+            - classify: ``max_new_clusters=quick_max_clusters`` cap
+            - update_profile: auto-skip (heavy AI 호출 회피)
+            full pipeline 은 별도 cron 또는 수동 ``daily`` (no flag) 호출.
+            ChromaDB write 동시성 회피를 위해 quick + full 동시 실행 금지.
+        quick_days: ``quick=True`` 일 때 mtime cutoff 일수. 기본 7.
+        quick_max_clusters: ``quick=True`` 일 때 classify 최대 cluster 수. 기본 10.
         dry_run: True면 단계 이름만 출력.
         stage_actions: stage body override (테스트용).
         on_log: print 대체 (테스트용).
@@ -596,6 +644,12 @@ def run_daily(
             f"unknown daily stage: {resume_from}\n"
             f"valid stages: {', '.join(STEPS)}"
         )
+    if quick and quick_days < 0:
+        raise ValueError(f"quick_days must be >= 0, got {quick_days}")
+    if quick and quick_max_clusters < 0:
+        raise ValueError(
+            f"quick_max_clusters must be >= 0, got {quick_max_clusters}"
+        )
 
     result = DailyResult(resume_from=resume_from)
     t_start = time.monotonic()
@@ -603,6 +657,10 @@ def run_daily(
     selected = set(only) if only else set(STEPS)
     if skip:
         selected -= set(skip)
+    # quick 모드: update_profile auto-skip (heavy AI 호출).
+    # 명시적 only= 로 update_profile 요청 시에는 사용자 의도 우선.
+    if quick and only is None:
+        selected.discard("update_profile")
     if resume_from is not None:
         resume_index = STEPS.index(resume_from)
         selected -= set(STEPS[:resume_index])
@@ -630,6 +688,8 @@ def run_daily(
         profile_facts_only=profile_facts_only,
         on_log=on_log,
         status_sink=status_sink,
+        quick_since_days=quick_days if quick else None,
+        quick_max_new_clusters=quick_max_clusters if quick else None,
     )
     if stage_actions:
         actions.update(stage_actions)
