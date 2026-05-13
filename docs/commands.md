@@ -40,19 +40,38 @@ synapse-memory <command> --help
 
 ## Slash 명령 (Claude Code / Codex)
 
-이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 8개 slash 명령이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
+이 repo는 Claude Code/Codex plugin layer를 포함합니다. plugin이 로드되면 **13개 slash 명령**이 등록되며, 각각은 내부적으로 위 CLI를 호출합니다.
 
-| Slash | 대응 CLI | 인자 |
+### 4-tier 구조
+
+| Tier | 명령 | 역할 |
 |---|---|---|
-| `/synapse-ask` | `synapse-memory ask "..."` | `<질의>` |
-| `/synapse-recall` | `synapse-memory persona what-did-i-think "..."` | `<주제>` |
-| `/synapse-decide` | `synapse-memory persona decide "..."` | `<상황>` |
-| `/synapse-feedback` | `synapse-memory feedback ...` | `last --reject <이유>` 등 |
-| `/synapse-cost` | `synapse-memory cost summary ...` | `summary --days 30` 등 |
-| `/synapse-resume` | `synapse-memory persona draft-resume <slug>` | `<회사 slug>` |
-| `/synapse-daily` | `synapse-memory daily [flags]` | (선택) `--profile-facts-only` 등 |
-| `/synapse-doctor` | `synapse-memory doctor` | 없음 |
-| `/synapse-fix` | `synapse-memory doctor --fix` | 없음 |
+| **Entry meta (2)** | `/synapse-onboard`, `/synapse-assistant` | 처음 / 매일 사용 — 두 개만 외우면 됨 |
+| **Direct atom (3)** | `/synapse-ask`, `/synapse-daily`, `/synapse-doctor` | power user 단축 — assistant가 추천해도 됨 |
+| **Maintenance atom (3)** | `/synapse-cleanup`, `/synapse-fix`, `/synapse-cost` | doctor 추천 + assistant 우선순위에서 호출 |
+| **Power atom (5)** | `/synapse-recall`, `/synapse-resume`, `/synapse-decide`, `/synapse-feedback`, `/synapse-config` | 직접 호출 가능. README에서는 안 보임 |
+
+> 비개발자는 entry meta 2개만 알면 충분합니다. 나머지 11개는 `/synapse-assistant`가 vault 상태를 보고 자동 추천합니다.
+
+### CLI 매핑 (전체 13개)
+
+| Slash | 대응 CLI | 인자 | Tier |
+|---|---|---|---|
+| `/synapse-onboard` | `synapse-memory assistant-status --json` + 대화 | 없음 | Entry |
+| `/synapse-assistant` | `synapse-memory assistant-status --json` + 대화 | (선택) 자유 지시 | Entry |
+| `/synapse-ask` | `synapse-memory ask "..."` | `<질의>` | Direct |
+| `/synapse-daily` | `synapse-memory daily [flags]` | (선택) `--profile-facts-only` 등 | Direct |
+| `/synapse-doctor` | `synapse-memory doctor` | 없음 | Direct |
+| `/synapse-cleanup` | `synapse-memory cleanup scan` + 대화형 동의 | 없음 (대화 안에서 카테고리 선택) | Maintenance |
+| `/synapse-fix` | `synapse-memory doctor --fix` | 없음 | Maintenance |
+| `/synapse-cost` | `synapse-memory cost summary ...` | `summary --days 30` 등 | Maintenance |
+| `/synapse-recall` | `synapse-memory persona what-did-i-think "..."` | `<주제>` | Power |
+| `/synapse-resume` | `synapse-memory persona draft-resume <slug>` | `<회사 slug>` | Power |
+| `/synapse-decide` | `synapse-memory persona decide "..."` | `<상황>` | Power |
+| `/synapse-feedback` | `synapse-memory feedback ...` | `last --reject <이유>` 등 | Power |
+| `/synapse-config` | `synapse-memory config show/get/set/...` | (자연어 또는 직접 지시) | Power |
+
+> `persona ingest --file` 과 `persona design-project` 는 현재 CLI only — 슬래시 등록 없음.
 
 > slash 명령이 CLI를 호출하므로, **`synapse-memory` 바이너리가 PATH에 있어야 합니다**. `uv tool install --editable '.[rag]'` 로 글로벌 설치 권장.
 

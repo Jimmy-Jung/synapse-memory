@@ -40,75 +40,61 @@ flowchart LR
 **요약 카드**를 만들고, 외부 AI에 질문할 때는 **마스킹된 요약**과
 승인된 자료만 들고 갑니다. 원본 raw 데이터는 Mac 안에 남습니다.
 
-## Synapse가 풀어주는 7가지 답답함
+## 시작하기 — 명령 2개만 기억하면 됩니다
 
-평소 한 번이라도 부딪혔다면 이 도구가 맞습니다.
+### 🌱 처음 설치했다면: `/synapse-onboard`
 
-| # | 답답함 | Synapse가 해주는 일 | 담당 명령 |
-|---|---|---|---|
-| 1 | **"그 노트 어디 있더라?"** — 노트 1,000개 쌓이니 검색해도 안 나옴 | 매일 같은 회사·프로젝트끼리 자동으로 묶어 **한 장짜리 카드**로 압축 | `/synapse-daily` |
-| 2 | **"Claude한테 매번 내 맥락을 처음부터 설명한다"** | 슬래시 한 줄로 **관련 카드 6장 + 출처**를 자동 주입 | `/synapse-ask` |
-| 3 | **"AI에 개인 자료 던지자니 회사 NDA가…"** | 원본은 외부 차단 + **마스킹 2단계**(정규식 + 로컬 AI) + NDA 강제 차단 | (자동) |
-| 4 | **"회사마다 이력서를 6시간씩 다시 쓴다"** | 회사 카드 + 내 프로젝트 매칭 → **30초 초안** | `/synapse-resume` |
-| 5 | **"사소한 결정에 매일 피로하다"** | 내 결정 패턴 후보 → 내가 검토·승인 → **결정 코파일럿** | `/synapse-decide` |
-| 6 | **"회고록·일기·기획서 초안을 비서가 학습했으면"** 🆕 | 외부 markdown / txt 흡수 → 말투·기술 선호·실수까지 ProfileFact 후보로 추출 | `persona ingest --file` |
-| 7 | **"새 프로젝트를 내 기술 스택으로 빠르게 설계하고 싶다"** 🆕 | Profile + ProjectCard 종합 → **내가 직접 쓴 듯한 설계 초안** | `persona design-project` |
+5가지 답답함 중 *가장 와닿는 1개*를 골라 끝까지 체험시켜줍니다.
+3분 안에 첫 답변까지 도달.
 
-> 더 자세히:
-> [5가지 답답함이 어떻게 풀리는가
-> (담당 기능 매핑 포함)](docs/for-everyone/how-it-works.md)
+```text
+$ /synapse-onboard
 
-> 🆕 **처음 설치하셨다면 `/synapse-onboard`** — AI가 답답함 1개를 골라
-> 끝까지 체험시켜 줍니다.
+Synapse Memory가 풀어주는 5가지 답답함이 있습니다.
+오늘은 1개만 골라서 끝까지 체험해보겠습니다. 어떤 것이 가장 와닿으세요?
+
+1️⃣ "그 노트 어디 있더라?"
+2️⃣ "Claude에 매번 내 맥락을 처음부터 설명한다"
+3️⃣ "AI에 개인 자료 던지자니 회사 NDA가 걱정"
+4️⃣ "회사마다 이력서를 6시간씩 다시 쓴다"
+5️⃣ "사소한 결정에 매일 피로하다"
+
+번호로 답해주세요 (1~5).
+```
+
+### 🔁 이후 매일: `/synapse-assistant`
+
+현재 vault 상태를 보고 *오늘 추천 작업 1~3개*를 제안합니다.
+각 작업마다 동의를 받아 대신 실행합니다.
+
+```text
+$ /synapse-assistant
+
+환경: ✓ 정상
+카드: project 28 (draft 3) / company 2
+MemoryInbox 검토 대기: 4개 (가장 최근: Profile-2026-05-13.md)
+마지막 daily: 14시간 전
+
+오늘 추천 작업 (우선순위 순):
+1. MemoryInbox 4건 검토 — 5분, 무료 (Obsidian에서 직접)
+2. /synapse-daily 실행 — 1~3분, ~$0.1
+3. draft 카드 3건 검토 후 active 승격 — 10분, 무료
+
+어떤 걸 같이 할까요? (번호 / "직접 지시" / "skip")
+```
+
+> 나머지 11개 명령은 assistant가 자동으로 추천합니다.
+> 직접 알고 싶다면 [전체 명령 레퍼런스](docs/commands.md) 참고.
 >
-> 🆕 **매일 어떤 작업부터 할지 모르겠다면 `/synapse-assistant`** — 현재
-> vault 상태를 보고 오늘 추천 작업 1~3개를 제안하고, 각 작업마다 동의를
-> 받아 대신 실행합니다.
+> 어떤 답답함이 풀리는지 미리 보고 싶다면
+> [5가지 답답함이 어떻게 풀리는가](docs/for-everyone/how-it-works.md).
+
+## 무엇을 할 수 있나요?
+
+> 자연어 질의 / 과거 사고 회상 / 회사 맞춤 이력서 / 의사결정 코파일럿 / NDA 차단
+> 등 구체적인 슬래시 호출 예시는 별도 가이드에 정리되어 있습니다.
 >
-> 🆕 **vault가 어지러워졌다면 `/synapse-cleanup`** — 오래된·휴면·빈 자료를
-> archive 폴더로 이동합니다. 영구 삭제는 하지 않고,
-> 매니페스트로 롤백할 수 있습니다.
->
-> 🆕 **설정을 바꾸고 싶다면 `/synapse-config`** — 자연어로 cleanup 임계값,
-> 모델, top_k 등을 변경합니다. 보호 키는 차단하고 advanced 키는
-> 추가 경고를 표시합니다.
-
-## 30초 미리보기
-
-```text
-$ /synapse-ask "iOS 클린 아키텍처 어떻게 도입했지?"
-
-Domain–Data–Presentation 3계층 + Repository + DIContainer 조합으로 도입.
-도입 기간 2024.01~05, 결과: 버그 수정 시간 71% 단축, 크래시율 2.1% → 0.8%.
-출처: [이력서-2026], [sample-ios-app]
-```
-
-```text
-$ /synapse-resume 샘플회사B
-✓ 이력서 생성: 30_Creative/Drafts/Resume - 샘플회사B (2026-05).md
-  매칭 카드 6개: sample-ios-app, 이력서-2026, mobile-ios-tablet-app, ...
-```
-
-```text
-$ synapse-memory persona ingest --file ~/Documents/diary-2025.md
-INGESTED: 1 files mirrored to L0 private storage
-ProfileFact 추출 중 (외부 자료 기반)...
-  → 4 fact 추출
-✓ MemoryInbox PR 저장: ...90_System/AI/MemoryInbox/Profile-2026-05-13.md
-```
-
-```text
-$ synapse-memory persona design-project "iOS Todo 앱 새로 시작"
-## 추천 기술 스택
-- Swift + SwiftUI [Profile: tech]
-- CoreData 로컬 저장 [prj-todo-ios-2025]
-
-## 단계별 진행 [Profile: work_style]
-1. 의사코드로 데이터 모델 정리
-...
-
-✓ 설계 초안 저장: 20_Projects/Drafts/design_project - iOS Todo 앱 (2026-05-13).md
-```
+> 📖 **[Synapse로 무엇을 할 수 있나요? — 매일·매주 사용 예시](docs/for-everyone/what-you-can-do.md)**
 
 ## 빠른 시작 — 비개발자
 
