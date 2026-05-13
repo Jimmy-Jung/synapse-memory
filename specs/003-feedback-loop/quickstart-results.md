@@ -27,13 +27,13 @@ $ synapse-memory rag index --rebuild
 $ SYNAPSE_FROM_AGENT=1 synapse-memory ask "클린 아키텍처에서 내가 반복해서 말한 기준은?"
 질문: 클린 아키텍처에서 내가 반복해서 말한 기준은?
 
-**Domain, Data, Presentation 경계 분리 + 외부 SDK 의존성을 안쪽 계층으로 흘리지 않는 것**입니다. [dansim-ios]
+**Domain, Data, Presentation 경계 분리 + 외부 SDK 의존성을 안쪽 계층으로 흘리지 않는 것**입니다. [sample-ios-app]
 
-추가로, ViewModel 책임을 줄이고 유스케이스 단위로 테스트 가능한 구조 유지도 반복 적용한 기준입니다. [dansim-ios]
+추가로, ViewModel 책임을 줄이고 유스케이스 단위로 테스트 가능한 구조 유지도 반복 적용한 기준입니다. [sample-ios-app]
 
 ============================================================
 출처 (1):
-  [0.442] card_project   dansim-ios — 단심 iOS
+  [0.442] card_project   sample-ios-app — 샘플 명상앱 iOS
 
 $ test -f "$SYNAPSE_L0_ROOT/last_response.json" && python3 -m json.tool "$SYNAPSE_L0_ROOT/last_response.json"
 {
@@ -43,7 +43,7 @@ $ test -f "$SYNAPSE_L0_ROOT/last_response.json" && python3 -m json.tool "$SYNAPS
             "display_name": "\ub2e8\uc2ec iOS",
             "source_kind": "card_project",
             "target_kind": "card",
-            "target_ref": "dansim-ios"
+            "target_ref": "sample-ios-app"
         }
     ],
     "command": "ask",
@@ -54,7 +54,7 @@ $ test -f "$SYNAPSE_L0_ROOT/last_response.json" && python3 -m json.tool "$SYNAPS
 
 $ synapse-memory feedback last --reject "관련 없음 - smoke test"
 ✓ Recorded reject for last answer 20260512T040232896225Z-d6faf31e (targets=1, weight=-0.30)
-  → next index will apply updated feedback_score: dansim-ios
+  → next index will apply updated feedback_score: sample-ios-app
 
 $ tail -1 "$SYNAPSE_L0_ROOT/feedback.jsonl" | python3 -m json.tool
 {
@@ -63,14 +63,14 @@ $ tail -1 "$SYNAPSE_L0_ROOT/feedback.jsonl" | python3 -m json.tool
     "event_id": "20260512T040234126223Z-70bb3094",
     "reason": "\uad00\ub828 \uc5c6\uc74c - smoke test",
     "target_kind": "card",
-    "target_ref": "dansim-ios",
+    "target_ref": "sample-ios-app",
     "ts": "2026-05-12T04:02:34.125955Z",
     "weight": -0.3
 }
 
-$ synapse-memory feedback card dansim-ios --accept --vault-path "$SYNAPSE_OBSIDIAN_VAULT"
-✓ Recorded accept for card dansim-ios (targets=1, weight=+0.20)
-  → next index will apply updated feedback_score: dansim-ios
+$ synapse-memory feedback card sample-ios-app --accept --vault-path "$SYNAPSE_OBSIDIAN_VAULT"
+✓ Recorded accept for card sample-ios-app (targets=1, weight=+0.20)
+  → next index will apply updated feedback_score: sample-ios-app
 
 $ synapse-memory rag index
 인덱싱 시작 (rebuild=False)
@@ -82,8 +82,8 @@ $ synapse-memory rag index
 $ synapse-memory rag search "클린 아키텍처" --top-k 5 --show-snippet
 쿼리: '클린 아키텍처'  (top 5, 거리 작을수록 가까움)
 --------------------------------------------------------------------------------
-  [0.497] card_project   card_project:dansim-ios        단심 iOS feedback=0.94
-    # 단심 iOS 역할: iOS Lead 기간: 2024-01 ~ 2024-05 상태: completed 도메인: ios 기술 스택: Swift, Clean Architecture 키워드: 클린 아키텍처, SwiftUI  ## 클린 아키텍처 기준 단심 iOS에서는 Dom
+  [0.497] card_project   card_project:sample-ios-app        샘플 명상앱 iOS feedback=0.94
+    # 샘플 명상앱 iOS 역할: iOS Lead 기간: 2024-01 ~ 2024-05 상태: completed 도메인: ios 기술 스택: Swift, Clean Architecture 키워드: 클린 아키텍처, SwiftUI  ## 클린 아키텍처 기준 샘플 명상앱 iOS에서는 Dom
 
 $ mv "$SYNAPSE_L0_ROOT/last_response.json" "$SYNAPSE_L0_ROOT/last_response.json.bak"
 
@@ -97,7 +97,7 @@ $ tail -1 "$SYNAPSE_L0_ROOT/feedback.jsonl" | python3 -m json.tool
     "event_id": "20260512T040234257127Z-5f1724c4",
     "reason": null,
     "target_kind": "card",
-    "target_ref": "dansim-ios",
+    "target_ref": "sample-ios-app",
     "ts": "2026-05-12T04:02:34.256879Z",
     "weight": 0.2
 }
@@ -107,6 +107,6 @@ $ tail -1 "$SYNAPSE_L0_ROOT/feedback.jsonl" | python3 -m json.tool
 
 - `last_response.json` was created after `ask`.
 - `feedback last --reject` appended one reject event.
-- `feedback card dansim-ios --accept` appended one accept event.
+- `feedback card sample-ios-app --accept` appended one accept event.
 - Re-indexing surfaced `feedback=0.94` in `rag search`, confirming feedback score application.
 - Removing `last_response.json` made `feedback last` no-op with the expected error and did not append a new event.

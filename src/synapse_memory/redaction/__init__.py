@@ -38,9 +38,9 @@ from synapse_memory.redaction.redactlist import (
 
 __all__ = [
     "DEFAULT_PATTERNS",
-    "Detection",
     "PASS2_CATEGORIES",
     "PASS2_PLACEHOLDERS",
+    "Detection",
     "Pattern",
     "RedactionResult",
     "add_redactlist_item",

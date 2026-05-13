@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Pattern as RePattern
+from re import Pattern as RePattern
 
 # ---------------------------------------------------------------------------
 # Validators

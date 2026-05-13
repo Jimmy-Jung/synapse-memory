@@ -8,17 +8,61 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO_ROOT="${SCRIPT_DIR:h}"
 LOG_DIR="${HOME}/Library/Logs/SynapseMemory"
-LOG_FILE="${LOG_DIR}/installer-$(date +%Y%m%d-%H%M%S).log"
+RUN_STAMP="$(date +%Y%m%d-%H%M%S)"
+LOG_FILE="${LOG_DIR}/installer-${RUN_STAMP}.log"
+STATE_FILE="${LOG_DIR}/installer-${RUN_STAMP}.state.json"
 DRY_RUN="${SYNAPSE_INSTALLER_DRY_RUN:-1}"
+ACTIVATE_PLUGINS="${SYNAPSE_ACTIVATE_PLUGINS:-1}"
+PLUGIN_SOURCE="${SYNAPSE_PLUGIN_SOURCE:-${REPO_ROOT}}"
+CLAUDE_PLUGIN_REF="${SYNAPSE_CLAUDE_PLUGIN_REF:-synapse-memory@synapse-memory-marketplace}"
+CLAUDE_PLUGIN_SCOPE="${SYNAPSE_CLAUDE_PLUGIN_SCOPE:-user}"
+CODEX_PLUGIN_SOURCE="${SYNAPSE_CODEX_PLUGIN_SOURCE:-${PLUGIN_SOURCE}}"
+CODEX_PLUGIN_REF="${SYNAPSE_CODEX_PLUGIN_REF:-synapse-memory@synapse-memory-marketplace}"
+CODEX_MARKETPLACE_NAME="${SYNAPSE_CODEX_MARKETPLACE_NAME:-synapse-memory-marketplace}"
+TEST_MODE="${SYNAPSE_INSTALLER_TEST_MODE:-0}"
+TEST_ARCH="${SYNAPSE_INSTALLER_TEST_ARCH:-}"
 
 mkdir -p "${LOG_DIR}"
 touch "${LOG_FILE}"
+
+record_state_step() {
+  local step_id="$1"
+  local step_status="$2"
+  local summary="$3"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    return 0
+  fi
+
+  PYTHONPATH="${REPO_ROOT}/src" python3 - \
+    "${STATE_FILE}" \
+    "${LOG_FILE}" \
+    "${DRY_RUN}" \
+    "${step_id}" \
+    "${step_status}" \
+    "${summary}" <<'PY' >/dev/null 2>&1 || true
+from pathlib import Path
+import sys
+
+from synapse_memory.installer.state import append_manifest_step
+
+append_manifest_step(
+    Path(sys.argv[1]),
+    log_path=Path(sys.argv[2]),
+    dry_run=sys.argv[3] == "1",
+    step_id=sys.argv[4],
+    status=sys.argv[5],
+    summary=sys.argv[6],
+)
+PY
+}
 
 log_step() {
   local step_id="$1"
   local step_status="$2"
   local summary="$3"
   printf '%s %s %s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${step_id}" "${step_status}" "${summary}" | tee -a "${LOG_FILE}"
+  record_state_step "${step_id}" "${step_status}" "${summary}"
 }
 
 obsidian_bundle_is_valid() {
@@ -89,6 +133,10 @@ install_dependency() {
 }
 
 ask_consent() {
+  if [ "${TEST_MODE}" = "1" ]; then
+    return 0
+  fi
+
   /usr/bin/osascript <<'APPLESCRIPT'
 display dialog "Synapse Memory 설치를 시작합니다.
 
@@ -100,6 +148,11 @@ APPLESCRIPT
 
 choose_vault_line() {
   local choices_file="$1"
+  if [ "${TEST_MODE}" = "1" ]; then
+    head -n 1 "${choices_file}"
+    return 0
+  fi
+
   /usr/bin/osascript <<APPLESCRIPT
 set choicesPath to POSIX file "${choices_file}"
 set rawText to read choicesPath as «class utf8»
@@ -111,24 +164,299 @@ APPLESCRIPT
 }
 
 choose_custom_vault_path() {
+  if [ "${TEST_MODE}" = "1" ]; then
+    printf '%s\n' "${HOME}/SynapseVault"
+    return 0
+  fi
+
   /usr/bin/osascript <<'APPLESCRIPT'
 set pickedFolder to choose folder with prompt "Synapse Memory 저장소로 사용할 폴더를 선택하세요."
 return POSIX path of pickedFolder
 APPLESCRIPT
 }
 
-log_step "start" "success" "log=${LOG_FILE}"
+claude_plugin_installed() {
+  claude plugin list 2>/dev/null | grep -q "${CLAUDE_PLUGIN_REF}"
+}
+
+claude_plugin_enabled() {
+  claude plugin list 2>/dev/null | awk -v plugin="${CLAUDE_PLUGIN_REF}" '
+    index($0, plugin) { found = 1; next }
+    found && /Status:/ {
+      if ($0 ~ /enabled/) { enabled = 1 }
+      exit
+    }
+    END { exit enabled ? 0 : 1 }
+  '
+}
+
+activate_claude_plugin() {
+  if ! command -v claude >/dev/null 2>&1; then
+    log_step "activate_claude_plugin" "skipped" "claude CLI not found"
+    return 0
+  fi
+
+  if [ ! -f "${REPO_ROOT}/.claude-plugin/marketplace.json" ]; then
+    log_step "activate_claude_plugin" "failed" "missing .claude-plugin/marketplace.json"
+    return 1
+  fi
+
+  if claude plugin validate "${REPO_ROOT}" >>"${LOG_FILE}" 2>&1; then
+    log_step "validate_claude_plugin" "success" "source=${REPO_ROOT}"
+  else
+    log_step "validate_claude_plugin" "failed" "source=${REPO_ROOT}"
+    return 1
+  fi
+
+  if claude plugin marketplace list 2>/dev/null | grep -q "synapse-memory-marketplace"; then
+    log_step "add_claude_marketplace" "success" "already_configured=true"
+  else
+    if claude plugin marketplace add --scope "${CLAUDE_PLUGIN_SCOPE}" "${PLUGIN_SOURCE}" >>"${LOG_FILE}" 2>&1; then
+      log_step "add_claude_marketplace" "success" "source=${PLUGIN_SOURCE} scope=${CLAUDE_PLUGIN_SCOPE}"
+    else
+      log_step "add_claude_marketplace" "failed" "source=${PLUGIN_SOURCE} scope=${CLAUDE_PLUGIN_SCOPE}"
+      return 1
+    fi
+  fi
+
+  if claude_plugin_installed; then
+    log_step "install_claude_plugin" "success" "already_installed=true plugin=${CLAUDE_PLUGIN_REF}"
+  else
+    if claude plugin install --scope "${CLAUDE_PLUGIN_SCOPE}" "${CLAUDE_PLUGIN_REF}" >>"${LOG_FILE}" 2>&1; then
+      log_step "install_claude_plugin" "success" "plugin=${CLAUDE_PLUGIN_REF} scope=${CLAUDE_PLUGIN_SCOPE}"
+    else
+      log_step "install_claude_plugin" "failed" "plugin=${CLAUDE_PLUGIN_REF} scope=${CLAUDE_PLUGIN_SCOPE}"
+      return 1
+    fi
+  fi
+
+  if claude_plugin_enabled; then
+    log_step "enable_claude_plugin" "success" "already_enabled=true plugin=${CLAUDE_PLUGIN_REF}"
+  else
+    if claude plugin enable --scope "${CLAUDE_PLUGIN_SCOPE}" "${CLAUDE_PLUGIN_REF}" >>"${LOG_FILE}" 2>&1; then
+      log_step "enable_claude_plugin" "success" "plugin=${CLAUDE_PLUGIN_REF} scope=${CLAUDE_PLUGIN_SCOPE}"
+    else
+      log_step "enable_claude_plugin" "failed" "plugin=${CLAUDE_PLUGIN_REF} scope=${CLAUDE_PLUGIN_SCOPE}"
+      return 1
+    fi
+  fi
+}
+
+activate_codex_plugin() {
+  local prompt_input_file
+  local codex_config_path
+
+  if ! command -v codex >/dev/null 2>&1; then
+    log_step "activate_codex_plugin" "skipped" "codex CLI not found"
+    return 0
+  fi
+
+  if [ ! -f "${REPO_ROOT}/.codex-plugin/plugin.json" ]; then
+    log_step "activate_codex_plugin" "failed" "missing .codex-plugin/plugin.json"
+    return 1
+  fi
+
+  if codex plugin marketplace add "${CODEX_PLUGIN_SOURCE}" >>"${LOG_FILE}" 2>&1; then
+    log_step "add_codex_marketplace" "success" "source=${CODEX_PLUGIN_SOURCE}"
+  else
+    log_step "add_codex_marketplace" "warning" "source=${CODEX_PLUGIN_SOURCE}; checking existing plugin visibility"
+  fi
+
+  codex_config_path="${CODEX_CONFIG_PATH:-${HOME}/.codex/config.toml}"
+  install_codex_plugin_cache
+  ensure_codex_plugin_enabled "${codex_config_path}"
+
+  prompt_input_file="$(mktemp)"
+  if codex debug prompt-input "Synapse Memory plugin visibility check" >"${prompt_input_file}" 2>>"${LOG_FILE}"; then
+    if grep -q "synapse-memory:synapse-memory" "${prompt_input_file}"; then
+      log_step "verify_codex_plugin" "success" "prompt_visible=true"
+      rm -f "${prompt_input_file}"
+      return 0
+    fi
+  fi
+  rm -f "${prompt_input_file}"
+  log_step "verify_codex_plugin" "failed" "prompt_visible=false"
+  return 1
+}
+
+codex_plugin_manifest_value() {
+  local key="$1"
+  sed -n "s/^[[:space:]]*\"${key}\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" "${REPO_ROOT}/.codex-plugin/plugin.json" | head -n 1
+}
+
+install_codex_plugin_cache() {
+  local codex_home
+  local plugin_name
+  local plugin_version
+  local cache_dir
+  local cache_parent
+
+  codex_home="${CODEX_HOME:-${HOME}/.codex}"
+  plugin_name="$(codex_plugin_manifest_value "name")"
+  plugin_version="$(codex_plugin_manifest_value "version")"
+
+  if [ -z "${plugin_name}" ] || [ -z "${plugin_version}" ]; then
+    log_step "install_codex_plugin_cache" "failed" "invalid .codex-plugin/plugin.json"
+    return 1
+  fi
+
+  cache_dir="${codex_home}/plugins/cache/${CODEX_MARKETPLACE_NAME}/${plugin_name}/${plugin_version}"
+  cache_parent="$(dirname "${cache_dir}")"
+  mkdir -p "${cache_parent}"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude ".git/" \
+      --exclude ".agents/" \
+      --exclude ".claude/" \
+      --exclude ".codex/" \
+      --exclude ".specify/" \
+      --exclude ".pytest_cache/" \
+      --exclude "__pycache__/" \
+      --exclude ".venv/" \
+      "${REPO_ROOT}/" "${cache_dir}/" >>"${LOG_FILE}" 2>&1
+  else
+    rm -rf "${cache_dir}"
+    mkdir -p "${cache_dir}"
+    cp -R "${REPO_ROOT}/." "${cache_dir}/"
+    rm -rf \
+      "${cache_dir}/.git" \
+      "${cache_dir}/.agents" \
+      "${cache_dir}/.claude" \
+      "${cache_dir}/.codex" \
+      "${cache_dir}/.specify" \
+      "${cache_dir}/.pytest_cache" \
+      "${cache_dir}/.venv"
+    find "${cache_dir}" -name "__pycache__" -type d -prune -exec rm -rf {} + 2>/dev/null || true
+  fi
+
+  cat > "${cache_dir}/.codex-marketplace-install.json" <<JSON
+{
+  "source_type": "local",
+  "source": "${REPO_ROOT}",
+  "ref_name": null,
+  "sparse_paths": [],
+  "revision": null
+}
+JSON
+  log_step "install_codex_plugin_cache" "success" "path=${cache_dir}"
+}
+
+ensure_codex_plugin_enabled() {
+  local config_path="$1"
+  local config_dir
+
+  config_dir="$(dirname "${config_path}")"
+  mkdir -p "${config_dir}"
+  touch "${config_path}"
+
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "${config_path}" "${CODEX_PLUGIN_REF}" >>"${LOG_FILE}" 2>&1 <<'PY'
+from __future__ import annotations
+
+import datetime as dt
+import shutil
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1]).expanduser()
+plugin_ref = sys.argv[2]
+section = f'[plugins."{plugin_ref}"]'
+original = path.read_text(encoding="utf-8") if path.exists() else ""
+lines = original.splitlines()
+changed = False
+
+if section not in lines:
+    new_text = original.rstrip() + f"\n\n{section}\nenabled = true\n"
+    changed = True
+else:
+    output: list[str] = []
+    in_section = False
+    saw_enabled = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            if in_section and not saw_enabled:
+                output.append("enabled = true")
+                changed = True
+            in_section = stripped == section
+            saw_enabled = False
+            output.append(line)
+            continue
+        if in_section and stripped.startswith("enabled"):
+            if stripped != "enabled = true":
+                changed = True
+            output.append("enabled = true")
+            saw_enabled = True
+            continue
+        output.append(line)
+    if in_section and not saw_enabled:
+        output.append("enabled = true")
+        changed = True
+    new_text = "\n".join(output) + "\n"
+    changed = changed or new_text != original
+
+if changed:
+    timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup = path.with_name(f"{path.name}.synapse-backup-{timestamp}")
+    shutil.copy2(path, backup)
+    path.write_text(new_text, encoding="utf-8")
+    print(f"codex_plugin_config changed=true backup={backup}")
+else:
+    print("codex_plugin_config changed=false")
+PY
+    log_step "enable_codex_plugin" "success" "config=${config_path} plugin=${CODEX_PLUGIN_REF}"
+    return 0
+  fi
+
+  if grep -q "^\[plugins.\"${CODEX_PLUGIN_REF}\"\]" "${config_path}"; then
+    log_step "enable_codex_plugin" "success" "config=${config_path} already_configured=true"
+    return 0
+  fi
+
+  cp "${config_path}" "${config_path}.synapse-backup-$(date +%Y%m%d-%H%M%S)"
+  {
+    printf '\n[plugins."%s"]\n' "${CODEX_PLUGIN_REF}"
+    printf 'enabled = true\n'
+  } >>"${config_path}"
+  log_step "enable_codex_plugin" "success" "config=${config_path} plugin=${CODEX_PLUGIN_REF}"
+}
+
+activate_plugins() {
+  activate_claude_plugin
+  activate_codex_plugin
+}
+
+notify_user() {
+  local message="$1"
+  if [ "${TEST_MODE}" = "1" ]; then
+    printf '%s notify skipped test_mode=true message=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${message}" | tee -a "${LOG_FILE}"
+    return 0
+  fi
+  /usr/bin/osascript -e "display notification \"${message}\" with title \"Synapse Memory\""
+}
+
+alert_user() {
+  local message="$1"
+  if [ "${TEST_MODE}" = "1" ]; then
+    log_step "alert" "skipped" "test_mode=true message=${message}"
+    return 0
+  fi
+  /usr/bin/osascript -e "display alert \"${message}\""
+}
+
+log_step "start" "success" "log=${LOG_FILE} state=${STATE_FILE}"
 
 if ! ask_consent >/dev/null; then
   log_step "consent" "cancelled" "user_cancelled=true"
-  /usr/bin/osascript -e 'display notification "설치가 취소되었습니다." with title "Synapse Memory"'
+  notify_user "설치가 취소되었습니다."
   exit 130
 fi
 log_step "consent" "success" "scope=setup"
 
-if [ "$(uname -m)" != "arm64" ]; then
+if [ "${TEST_ARCH:-$(uname -m)}" != "arm64" ]; then
   log_step "platform" "failed" "Apple Silicon arm64 required"
-  /usr/bin/osascript -e 'display alert "Synapse Memory는 Apple Silicon Mac이 필요합니다."'
+  alert_user "Synapse Memory는 Apple Silicon Mac이 필요합니다."
   exit 1
 fi
 log_step "platform" "success" "arch=arm64"
@@ -160,6 +488,17 @@ if [ "${DRY_RUN}" = "1" ]; then
 else
   "${REPO_ROOT}/scripts/bootstrap_runtime.sh" 2>&1 | tee -a "${LOG_FILE}"
   log_step "bootstrap_runtime" "success" "runtime_ready=true"
+fi
+
+if [ "${ACTIVATE_PLUGINS}" = "1" ]; then
+  if [ "${DRY_RUN}" = "1" ]; then
+    log_step "activate_claude_plugin" "preview" "would add marketplace and enable ${CLAUDE_PLUGIN_REF}"
+    log_step "activate_codex_plugin" "preview" "would add Codex marketplace from ${CODEX_PLUGIN_SOURCE} and enable ${CODEX_PLUGIN_REF}"
+  else
+    activate_plugins
+  fi
+else
+  log_step "activate_plugins" "skipped" "SYNAPSE_ACTIVATE_PLUGINS=${ACTIVATE_PLUGINS}"
 fi
 
 if command -v python3 >/dev/null 2>&1; then
@@ -196,5 +535,5 @@ else
   log_step "vault_detection" "skipped" "python3 unavailable before runtime bootstrap"
 fi
 
-log_step "complete" "success" "dry_run=${DRY_RUN}"
-/usr/bin/osascript -e "display notification \"Synapse Memory 설치 점검이 완료되었습니다. 로그: ${LOG_FILE}\" with title \"Synapse Memory\""
+log_step "complete" "success" "dry_run=${DRY_RUN} state=${STATE_FILE}"
+notify_user "Synapse Memory 설치 점검이 완료되었습니다. 로그: ${LOG_FILE} 상태: ${STATE_FILE}"

@@ -1,6 +1,6 @@
 """Locale precedence resolver.
 
-Spec: ``specs/007-me-recipes/spec.md`` FR-005 + clarify Q1.
+Spec: ``specs/007-persona-recipes/spec.md`` FR-005 + clarify Q1.
 
 precedence:
   1. CLI --language arg

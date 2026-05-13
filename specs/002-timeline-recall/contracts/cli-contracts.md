@@ -47,17 +47,17 @@ synapse-memory me what-did-i-think <topic> [options]
 ```
 ## 2025 Q1
 
-- **dansim-ios** (Dansim iOS App) — 2025-02-15
+- **sample-ios-app** (Sample iOS App) — 2025-02-15
   > <Card body excerpt, redacted, ≤ 200 chars>
-  [card_project:dansim-ios]
+  [card_project:sample-ios-app]
 
 ## 2024 Q4
 
 ### 2024-09
 
-- **mobile-ios-slc-tablet** (...) — 2024-09-10 (last reviewed)
+- **mobile-ios-tablet-app** (...) — 2024-09-10 (last reviewed)
   > ...
-  [card_company:mobile-ios-slc-tablet]
+  [card_company:mobile-ios-tablet-app]
 
 (... 추가 그룹)
 

@@ -80,7 +80,7 @@ class TestPatternBuild:
         patterns = build_redactlist_patterns(["샘플회사"])
         assert all(p.priority == REDACTLIST_PRIORITY for p in patterns)
         max_default = max(p.priority for p in DEFAULT_PATTERNS)
-        assert REDACTLIST_PRIORITY > max_default
+        assert max_default < REDACTLIST_PRIORITY
 
     def test_case_insensitive(self) -> None:
         patterns = build_redactlist_patterns(["Acme"])

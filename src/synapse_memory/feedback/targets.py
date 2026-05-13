@@ -7,13 +7,14 @@ from pathlib import Path
 
 from synapse_memory.cards.company import load_company_card
 from synapse_memory.cards.project import load_project_card
+from synapse_memory.feedback.events import FeedbackTargetKind
 from synapse_memory.profile.patterns import find_decision_pattern
 from synapse_memory.storage.last_response import LastAnswerReference
 
 
 @dataclass(frozen=True)
 class FeedbackTarget:
-    target_kind: str
+    target_kind: FeedbackTargetKind
     target_ref: str
     display_name: str
 

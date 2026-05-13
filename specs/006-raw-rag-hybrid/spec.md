@@ -27,13 +27,13 @@
 
 사용자는 `ask --hybrid`와 `me what-did-i-think --hybrid`로 dense vector 검색 결과와 BM25 keyword 검색 결과를 RRF(k=60)로 결합할 수 있어야 한다. 회사명, 사람 이름, 프로젝트 slug처럼 dense embedding만으로 놓칠 수 있는 정확 문자열은 상위 결과로 올라와야 한다.
 
-**Why this priority**: v0.6의 핵심 품질 개선은 "당근마켓", "카카오뱅크", 사람 이름 같은 고유명사 recall이다. dense-only 검색은 의미 유사도에는 강하지만 정확 token match가 약할 수 있다.
+**Why this priority**: v0.6의 핵심 품질 개선은 "샘플회사B", "샘플회사C", 사람 이름 같은 고유명사 recall이다. dense-only 검색은 의미 유사도에는 강하지만 정확 token match가 약할 수 있다.
 
 **Independent Test**: dense 결과에서는 2위 이하인 record가 BM25 exact match에서는 1위가 되도록 fixture를 구성한다. `hybrid_search(..., k=60)` 결과에서 exact-match record가 top-1로 올라오는지 검증한다.
 
 **Acceptance Scenarios**:
 
-1. **Given** query가 회사명을 포함한다, **When** 사용자가 `synapse-memory ask "당근마켓 경험" --hybrid`를 실행한다, **Then** dense 결과와 BM25 결과가 RRF로 결합되고 exact keyword match가 상위에 표시된다.
+1. **Given** query가 회사명을 포함한다, **When** 사용자가 `synapse-memory ask "샘플회사B 경험" --hybrid`를 실행한다, **Then** dense 결과와 BM25 결과가 RRF로 결합되고 exact keyword match가 상위에 표시된다.
 2. **Given** 사용자가 `me what-did-i-think --hybrid`를 호출한다, **When** timeline 모드가 아닌 기본 회상 답변을 생성한다, **Then** AI prompt의 자료 순서는 hybrid ranking 결과를 따른다.
 3. **Given** BM25 sidecar index가 아직 없다, **When** 사용자가 `--hybrid`를 호출한다, **Then** 명확한 안내와 함께 `rag index --include-raw` 또는 `rag index` 재실행을 제안한다.
 

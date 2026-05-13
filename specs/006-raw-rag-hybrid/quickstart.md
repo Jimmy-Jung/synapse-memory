@@ -11,7 +11,7 @@ python3 -m pytest tests/test_rag_indexer.py -q
 
 ```bash
 synapse-memory rag index --rebuild
-synapse-memory ask "당근마켓 경험" --top-k 5
+synapse-memory ask "샘플회사B 경험" --top-k 5
 ```
 
 기대:
@@ -33,7 +33,7 @@ synapse-memory rag index --rebuild --include-raw
 ## 3. hybrid ask
 
 ```bash
-synapse-memory ask "당근마켓 경험" --hybrid --top-k 5
+synapse-memory ask "샘플회사B 경험" --hybrid --top-k 5
 ```
 
 기대:

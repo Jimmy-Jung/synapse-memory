@@ -18,7 +18,6 @@ import pytest
 from synapse_memory.eval.golden import (
     CategoryMetrics,
     _diff_multisets,
-    _to_multiset,
     default_synthetic_path,
     evaluate,
     load_golden_set,
@@ -91,14 +90,14 @@ class TestDiffMultisets:
     def test_extra_detection_is_fp(self) -> None:
         det = Counter([("email", "a@b.com")])
         exp = Counter()
-        tp, fp, fn = _diff_multisets(det, exp)
+        _tp, fp, _fn = _diff_multisets(det, exp)
         assert fp == Counter({("email", "a@b.com"): 1})
 
     def test_duplicate_count_handled(self) -> None:
         # detected: 3개, expected: 2개 → tp=2, fp=1
         det = Counter({("email", "x@y.com"): 3})
         exp = Counter({("email", "x@y.com"): 2})
-        tp, fp, fn = _diff_multisets(det, exp)
+        tp, fp, _fn = _diff_multisets(det, exp)
         assert tp[("email", "x@y.com")] == 2
         assert fp[("email", "x@y.com")] == 1
 

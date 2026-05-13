@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "synapse-memory"
-version = "0.6.2"
+version = "0.7.0"
 description = "Personal knowledge memory & RAG layer using Apple FoundationModels"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -62,3 +62,18 @@ pythonpath = ["src"]
 python_version = "3.11"
 strict = true
 warn_return_any = true
+
+[[tool.mypy.overrides]]
+module = "yaml"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+disallow_untyped_calls = false
+disallow_any_generics = false
+warn_return_any = false
+warn_unused_ignores = false
+disable_error_code = ["arg-type", "attr-defined", "var-annotated", "assignment"]

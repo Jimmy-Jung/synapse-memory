@@ -1,4 +1,4 @@
-"""me what-did-i-think / decide 테스트.
+"""persona what-did-i-think / decide 테스트.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import synapse_memory.endpoints.me as me_mod
-from synapse_memory.endpoints.me import (
+import synapse_memory.endpoints.persona as me_mod
+from synapse_memory.endpoints.persona import (
     WhatDidIThinkResult,
     _load_profile_text,
     decide,
@@ -71,7 +71,7 @@ class TestWhatDidIThink:
 
         ref = load_last_answer()
         assert ref is not None
-        assert ref.command == "me.generate.recall"  # R-6: unified me.generate.<recipe>
+        assert ref.command == "persona.generate.recall"  # R-6: unified persona.generate.<recipe>
         assert ref.citations[0].target_ref == "dansim"
 
     def test_strips_claude_meta_prefix(self) -> None:
@@ -212,7 +212,7 @@ class TestDecide:
 
         ref = load_last_answer()
         assert ref is not None
-        assert ref.command == "me.generate.decide"  # R-6: unified me.generate.<recipe>
+        assert ref.command == "persona.generate.decide"  # R-6: unified persona.generate.<recipe>
         assert ref.citations[0].target_ref == "x"
 
     def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
@@ -262,10 +262,112 @@ class TestDecide:
         with pytest.raises(ValueError):
             decide("", store=MagicMock(), ai_env=_ai_env())
 
+    # B2 신뢰 가드 (eng-review 2026-05-13) ----------------------------------
+
+    def test_guard_rejects_when_no_rag_matches(self, tmp_path: Path) -> None:
+        """case 0개 → LLM 호출 안 함, 명시적 거부 응답."""
+        store = MagicMock()
+        store.query.return_value = []
+
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete"
+        ) as mock_complete:
+            result = decide(
+                "이직할까?",
+                store=store,
+                ai_env=_ai_env(),
+                vault_path=tmp_path,
+            )
+
+        mock_complete.assert_not_called()  # critical: LLM 호출 차단
+        assert result.profile_used is False
+        assert result.source_ids == []
+        assert "신뢰 가능한 답변 불가" in result.answer or "자료 없음" in result.answer
+
+    def test_guard_rejects_when_top_match_too_far(self, tmp_path: Path) -> None:
+        """top distance > DECIDE_DISTANCE_THRESHOLD → out-of-domain, LLM 차단."""
+        store = MagicMock()
+        # distance 0.9 > 0.6 임계 → 너무 멀다
+        store.query.return_value = [(_rec("x", "# 무관한 자료"), 0.9)]
+
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete"
+        ) as mock_complete:
+            result = decide(
+                "이직할까?",
+                store=store,
+                ai_env=_ai_env(),
+                vault_path=tmp_path,
+            )
+
+        mock_complete.assert_not_called()  # critical: 위장 인용 방지
+        assert result.profile_used is False
+        assert result.source_ids == []
+        # 거부 응답이 distance 와 threshold 둘 다 명시 (사용자가 calibration 가능)
+        assert "0.9" in result.answer
+        assert "0.6" in result.answer
+
+    def test_guard_passes_when_top_match_close_enough(self, tmp_path: Path) -> None:
+        """top distance ≤ threshold → 기존 흐름 통과, LLM 호출됨."""
+        store = MagicMock()
+        store.query.return_value = [(_rec("x", "# 가까운 자료"), 0.4)]
+
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="추천: A",
+        ) as mock_complete:
+            result = decide(
+                "결정",
+                store=store,
+                ai_env=_ai_env(),
+                vault_path=tmp_path,
+            )
+
+        mock_complete.assert_called_once()
+        assert "추천" in result.answer
+
+    def test_guard_uses_min_distance_across_matches(self, tmp_path: Path) -> None:
+        """여러 매치 중 *가장 가까운* 것을 기준으로 판정."""
+        store = MagicMock()
+        # 첫 매치 멀지만, 두 번째가 가까움 → 통과해야 함
+        store.query.return_value = [
+            (_rec("far", "# 멀다"), 0.8),
+            (_rec("near", "# 가깝다"), 0.5),
+        ]
+
+        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="ok",
+        ) as mock_complete:
+            decide(
+                "결정",
+                store=store,
+                ai_env=_ai_env(),
+                vault_path=tmp_path,
+            )
+
+        mock_complete.assert_called_once()
+
 
 class TestLoadProfileText:
     def test_missing_returns_empty(self, tmp_path: Path) -> None:
         assert _load_profile_text(tmp_path) == ""
+
+    def test_loads_full_profile_no_5000_char_cap(self, tmp_path: Path) -> None:
+        """B2: 5000자 silent truncation 제거 회귀 검증."""
+        ai_dir = tmp_path / "90_System" / "AI"
+        ai_dir.mkdir(parents=True)
+        # 6000자 (cap 이 5000자였던 시점에 잘리던 크기)
+        # MARKER 를 끝에 두어 truncation 시 사라지는지 확인
+        long_profile = "# Profile\n" + ("x" * 5900) + "\nMARKER_END"
+        assert len(long_profile) > 5000
+        (ai_dir / "Profile.md").write_text(long_profile, encoding="utf-8")
+
+        loaded = _load_profile_text(tmp_path)
+
+        # 5000자 이상 보존 + 끝 MARKER 까지 보존 확인
+        assert len(loaded) > 5000
+        assert "MARKER_END" in loaded
 
     def test_loads_multiple_files(self, tmp_path: Path) -> None:
         ai_dir = tmp_path / "90_System" / "AI"

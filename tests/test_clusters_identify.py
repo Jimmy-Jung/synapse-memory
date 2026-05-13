@@ -12,12 +12,10 @@ from pathlib import Path
 import pytest
 
 from synapse_memory.clusters.identify import (
-    ProjectCluster,
     extract_github_repos,
     extract_tags,
     identify_clusters,
 )
-
 
 # ---------------------------------------------------------------------------
 # extract_tags

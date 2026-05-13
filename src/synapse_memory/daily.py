@@ -7,7 +7,7 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
     3. cluster classify --resume     (새 cluster만)
     4. card generate (--force=False) (새 cluster만 Card 생성)
     5. rag index                     (Card upsert)
-    6. me update-profile             (오늘 활동 분석 → MemoryInbox PR)
+    6. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
     7. report                        (DailyReport 작성)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
@@ -18,12 +18,15 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from synapse_memory.status import StatusSink, StatusWriter
 
 StageAction = Callable[[], Any]
 
@@ -150,6 +153,31 @@ def _run_step(
     return StepResult.success(name, elapsed, str(summary))
 
 
+def _emit_progress(
+    on_log: Callable[[str], None],
+    *,
+    index: int,
+    total: int,
+    label: str,
+    status: str,
+    elapsed: float | None = None,
+    status_sink: StatusSink | None = None,
+) -> None:
+    """클러스터 루프 진행 한 줄 출력 — `[i/N] label ... status`.
+
+    백그라운드/파이프 환경에서도 즉시 보이도록 stdout flush를 보장한다.
+    `status_sink`가 주어지면 status JSON에 현재 item도 반영한다.
+    """
+    suffix = f" ({elapsed:.1f}s)" if elapsed is not None else ""
+    on_log(f"  [{index}/{total}] {label} ... {status}{suffix}")
+    if status_sink is not None:
+        status_sink.update_item(index=index, total=total, label=label)
+    import sys
+
+    with contextlib.suppress(Exception):
+        sys.stdout.flush()
+
+
 def _resume_skip_reason(resume_from: str) -> str:
     return f"resume before {resume_from}"
 
@@ -183,12 +211,26 @@ def _build_stage_actions(
     profile_sample_lines: int,
     profile_facts_only: bool,
     on_log: Callable[[str], None],
+    status_sink: StatusSink | None = None,
+    quick_since_days: int | None = None,
+    quick_max_new_clusters: int | None = None,
 ) -> dict[str, StageAction]:
+    """stage 별 action 사전. ``quick_*`` 인자는 ``--quick`` 모드 cutoff 를 활성화."""
+    obsidian_action: StageAction = (
+        _build_collect_obsidian_action(since_days=quick_since_days)
+        if quick_since_days is not None
+        else _collect_obsidian_action
+    )
     return {
         "collect_claude_code": _collect_claude_code_action,
-        "collect_obsidian": _collect_obsidian_action,
-        "classify": _build_classify_action(classify_model, on_log),
-        "generate": _build_generate_action(generate_model, on_log),
+        "collect_obsidian": obsidian_action,
+        "classify": _build_classify_action(
+            classify_model,
+            on_log,
+            status_sink,
+            max_new_clusters=quick_max_new_clusters,
+        ),
+        "generate": _build_generate_action(generate_model, on_log, status_sink),
         "index": _index_action,
         "update_profile": _build_update_profile_action(
             profile_model=profile_model,
@@ -206,6 +248,17 @@ def _collect_claude_code_action() -> str:
     return stats.summary()
 
 
+def _build_collect_obsidian_action(since_days: int | None = None) -> StageAction:
+    def step() -> str:
+        from synapse_memory.collectors.obsidian import collect_obsidian
+
+        stats = collect_obsidian(since_days=since_days)
+        return stats.summary()
+
+    return step
+
+
+# 기존 함수 — 시그니처 보존 (테스트 호환). 새 경로는 _build_collect_obsidian_action.
 def _collect_obsidian_action() -> str:
     from synapse_memory.collectors.obsidian import collect_obsidian
 
@@ -216,6 +269,8 @@ def _collect_obsidian_action() -> str:
 def _build_classify_action(
     classify_model: str,
     on_log: Callable[[str], None],
+    status_sink: StatusSink | None = None,
+    max_new_clusters: int | None = None,
 ) -> StageAction:
     def step() -> str:
         from synapse_memory.cards.auto_classify import (
@@ -235,21 +290,48 @@ def _build_classify_action(
         new_clusters = [c for c in clusters if c.cluster_id not in existing]
         if not new_clusters:
             return "신규 cluster 없음"
+        # --quick 모드: AI 호출 수 제한 (cluster 당 1회 호출이라 daily 시간 직접 지배)
+        truncated = 0
+        if max_new_clusters is not None and len(new_clusters) > max_new_clusters:
+            truncated = len(new_clusters) - max_new_clusters
+            new_clusters = new_clusters[:max_new_clusters]
         obs_root = obs_path()
         cls_dict = dict(existing)
         failed = 0
-        for c in new_clusters:
+        total = len(new_clusters)
+        for i, c in enumerate(new_clusters, start=1):
+            t_cluster = time.monotonic()
             try:
                 cls = classify_cluster(
                     c, obs_root=obs_root, ai_env=env, model=classify_model
                 )
                 cls_dict[c.cluster_id] = cls
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=c.cluster_id,
+                    status="ok",
+                    elapsed=time.monotonic() - t_cluster,
+                    status_sink=status_sink,
+                )
             except Exception as exc:
                 failed += 1
-                on_log(f"    {c.cluster_id} 실패: {exc}")
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=c.cluster_id,
+                    status=f"실패: {exc}",
+                    elapsed=time.monotonic() - t_cluster,
+                    status_sink=status_sink,
+                )
         save_classifications(cls_dict)
         suffix = f", 실패 {failed}개" if failed else ""
-        return f"신규 {len(new_clusters)}개 분류{suffix}"
+        truncate_note = (
+            f" (quick: {truncated}개 다음 호출로 deferred)" if truncated else ""
+        )
+        return f"신규 {len(new_clusters)}개 분류{suffix}{truncate_note}"
 
     return step
 
@@ -257,6 +339,7 @@ def _build_classify_action(
 def _build_generate_action(
     generate_model: str,
     on_log: Callable[[str], None],
+    status_sink: StatusSink | None = None,
 ) -> StageAction:
     def step() -> str:
         from synapse_memory.cards.auto_classify import load_classifications
@@ -278,8 +361,8 @@ def _build_generate_action(
             return "classifications 비어있음"
         clusters = {c.cluster_id: c for c in identify_clusters()}
         obs_root = obs_path()
-        created = 0
-        failed = 0
+
+        pending: list[tuple[str, Any, str, Path]] = []
         for cid, cls in classifications.items():
             if cls.kind not in ("project", "company"):
                 continue
@@ -287,9 +370,23 @@ def _build_generate_action(
                 continue
             if cls.kind == "project":
                 target = projects_dir() / f"{cid}.md"
-                if target.exists():
-                    continue
-                try:
+            else:
+                target = companies_dir() / f"{cid}.md"
+            if target.exists():
+                continue
+            pending.append((cid, cls, cls.kind, target))
+
+        if not pending:
+            return "신규 Card 없음"
+
+        created = 0
+        failed = 0
+        total = len(pending)
+        for i, (cid, cls, kind, _target) in enumerate(pending, start=1):
+            label = f"{cid} ({kind})"
+            t_card = time.monotonic()
+            try:
+                if kind == "project":
                     card = generate_project_card(
                         clusters[cid],
                         candidate_name=cls.candidate_name,
@@ -298,15 +395,7 @@ def _build_generate_action(
                         model=generate_model,
                     )
                     save_project_card(card)
-                    created += 1
-                except Exception as exc:
-                    failed += 1
-                    on_log(f"    {cid} 실패: {exc}")
-            else:
-                target = companies_dir() / f"{cid}.md"
-                if target.exists():
-                    continue
-                try:
+                else:
                     card_c = generate_company_card(
                         clusters[cid],
                         candidate_name=cls.candidate_name,
@@ -315,10 +404,27 @@ def _build_generate_action(
                         model=generate_model,
                     )
                     save_company_card(card_c)
-                    created += 1
-                except Exception as exc:
-                    failed += 1
-                    on_log(f"    {cid} 실패: {exc}")
+                created += 1
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=label,
+                    status="ok",
+                    elapsed=time.monotonic() - t_card,
+                    status_sink=status_sink,
+                )
+            except Exception as exc:
+                failed += 1
+                _emit_progress(
+                    on_log,
+                    index=i,
+                    total=total,
+                    label=label,
+                    status=f"실패: {exc}",
+                    elapsed=time.monotonic() - t_card,
+                    status_sink=status_sink,
+                )
         suffix = f", 실패 {failed}개" if failed else ""
         return f"신규 Card {created}개 생성{suffix}"
 
@@ -490,6 +596,10 @@ def _estimate_usd_today(date: datetime.date) -> float:
         return 0.0
 
 
+_QUICK_DEFAULT_DAYS = 7
+_QUICK_DEFAULT_MAX_CLUSTERS = 10
+
+
 def run_daily(
     *,
     only: set[str] | None = None,
@@ -500,9 +610,13 @@ def run_daily(
     profile_model: str = "sonnet",
     profile_sample_lines: int = 200,
     profile_facts_only: bool = False,
+    quick: bool = False,
+    quick_days: int = _QUICK_DEFAULT_DAYS,
+    quick_max_clusters: int = _QUICK_DEFAULT_MAX_CLUSTERS,
     dry_run: bool = False,
     stage_actions: Mapping[str, StageAction] | None = None,
     on_log: Callable[[str], None] = print,
+    status_sink: StatusSink | None = None,
 ) -> DailyResult:
     """일일 파이프라인 실행.
 
@@ -512,6 +626,14 @@ def run_daily(
         classify_model / generate_model / profile_model: 단계별 AI 모델.
         profile_sample_lines: update-profile의 history 분석 줄 수.
         profile_facts_only: DecisionPattern 추출 skip.
+        quick: B1 quick mode (eng-review 2026-05-13). True 시:
+            - collect_obsidian: ``since_days=quick_days`` cutoff
+            - classify: ``max_new_clusters=quick_max_clusters`` cap
+            - update_profile: auto-skip (heavy AI 호출 회피)
+            full pipeline 은 별도 cron 또는 수동 ``daily`` (no flag) 호출.
+            ChromaDB write 동시성 회피를 위해 quick + full 동시 실행 금지.
+        quick_days: ``quick=True`` 일 때 mtime cutoff 일수. 기본 7.
+        quick_max_clusters: ``quick=True`` 일 때 classify 최대 cluster 수. 기본 10.
         dry_run: True면 단계 이름만 출력.
         stage_actions: stage body override (테스트용).
         on_log: print 대체 (테스트용).
@@ -522,6 +644,12 @@ def run_daily(
             f"unknown daily stage: {resume_from}\n"
             f"valid stages: {', '.join(STEPS)}"
         )
+    if quick and quick_days < 0:
+        raise ValueError(f"quick_days must be >= 0, got {quick_days}")
+    if quick and quick_max_clusters < 0:
+        raise ValueError(
+            f"quick_max_clusters must be >= 0, got {quick_max_clusters}"
+        )
 
     result = DailyResult(resume_from=resume_from)
     t_start = time.monotonic()
@@ -529,6 +657,10 @@ def run_daily(
     selected = set(only) if only else set(STEPS)
     if skip:
         selected -= set(skip)
+    # quick 모드: update_profile auto-skip (heavy AI 호출).
+    # 명시적 only= 로 update_profile 요청 시에는 사용자 의도 우선.
+    if quick and only is None:
+        selected.discard("update_profile")
     if resume_from is not None:
         resume_index = STEPS.index(resume_from)
         selected -= set(STEPS[:resume_index])
@@ -542,6 +674,12 @@ def run_daily(
             on_log(f"{mark} {s}{suffix}")
         return result
 
+    if status_sink is None:
+        try:
+            status_sink = StatusWriter(total_stages=len(STEPS))
+        except Exception:
+            status_sink = StatusSink()
+
     actions = _build_stage_actions(
         classify_model=classify_model,
         generate_model=generate_model,
@@ -549,6 +687,9 @@ def run_daily(
         profile_sample_lines=profile_sample_lines,
         profile_facts_only=profile_facts_only,
         on_log=on_log,
+        status_sink=status_sink,
+        quick_since_days=quick_days if quick else None,
+        quick_max_new_clusters=quick_max_clusters if quick else None,
     )
     if stage_actions:
         actions.update(stage_actions)
@@ -568,12 +709,18 @@ def run_daily(
             on_log(f"\n=== [{stage.name}] ===")
             on_log(f"  건너뜀: {step_result.skip_reason}")
         else:
+            status_sink.begin_stage(stage.name, i + 1)
             action = actions[stage.name]
             if stage.name == "report" and stage.name not in (stage_actions or {}):
                 action = _build_report_action(result)
             step_result = _run_step(stage.name, action, on_log=on_log)
+            status_sink.end_stage(
+                stage.name,
+                failed=step_result.status == StageStatus.FAILED,
+            )
         result.steps.append(step_result)
         results_by_name[stage.name] = step_result
 
     result.total_elapsed = time.monotonic() - t_start
+    status_sink.finish(errors=result.errors)
     return result

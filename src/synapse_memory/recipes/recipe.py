@@ -1,6 +1,6 @@
 """Recipe dataclasses — GenerationRecipe / GenerationContext / GenerationResult.
 
-Spec: ``specs/007-me-recipes/data-model.md`` §1-§4.
+Spec: ``specs/007-persona-recipes/data-model.md`` §1-§4.
 
 본 모듈은 transient (in-memory) 데이터 모델만 정의한다. 영속 상태는
 loader / registry / pipeline 이 다룬다.

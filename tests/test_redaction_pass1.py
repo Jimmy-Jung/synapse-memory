@@ -10,13 +10,11 @@ import pytest
 
 from synapse_memory.redaction import (
     DEFAULT_PATTERNS,
-    Detection,
     is_valid_ipv4,
     is_valid_luhn,
     is_valid_rrn,
     redact,
 )
-
 
 # ---------------------------------------------------------------------------
 # Validators

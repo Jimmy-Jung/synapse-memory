@@ -1,35 +1,35 @@
 # Synapse Memory 문서
 
-Synapse Memory는 Obsidian vault와 Claude Code 활동 로그를 모아, 개인 맥락을 검색하고 답변에 활용하는 로컬 우선 메모리 도구입니다.
+작성자: JunyoungJung  
+작성일: 2026-05-13
 
-처음 읽는다면 아래 순서가 가장 빠릅니다.
+이 문서는 Synapse Memory를 처음 쓰는 사람이 길을 잃지 않도록 읽는 순서를 정리합니다.
+세부 구현 설명보다 "왜 필요하고, 어떻게 시작하고, 매일 무엇을 하면 되는지"를 먼저
+따라가게 구성했습니다.
 
-1. [Getting Started](getting-started.md): 설치부터 첫 질문까지 따라 하기
-2. [사용 시나리오](usage.md): 실제로 매일 어떤 식으로 쓰는지 보기
-3. [CLI 명령 레퍼런스](commands.md): 필요한 명령과 옵션 찾기
-4. [아키텍처](architecture.md): 데이터 흐름, 보안 모델, 설계 이유 이해하기
-5. [개발자 가이드](development.md): 테스트, 구조, 새 기능 추가 방법
-6. [Backlog](backlog.md): 알려진 한계와 다음 작업
+## 읽는 순서
 
-## 한눈에 보기
+1. [처음부터 끝까지 사용하기](start-here.md)
 
-| 하고 싶은 일 | 먼저 볼 문서 | 대표 명령 |
-| --- | --- | --- |
-| 처음 설치하고 실행하기 | [Getting Started](getting-started.md) | `synapse-memory doctor` |
-| 매일 vault와 로그 갱신하기 | [사용 시나리오](usage.md) | `synapse-memory daily --profile-facts-only` |
-| 과거에 한 생각을 찾기 | [사용 시나리오](usage.md) | `synapse-memory me what-did-i-think "TCA"` |
-| 내 자료로 질문하기 | [CLI 명령 레퍼런스](commands.md) | `synapse-memory ask "..."` |
-| 회사 맞춤 이력서 만들기 | [사용 시나리오](usage.md) | `synapse-memory me draft-resume danggeun` |
-| 개인정보 처리 방식을 확인하기 | [아키텍처](architecture.md) | `synapse-memory redactlist show` |
+   설치 후 첫 질문까지 이어지는 기본 흐름입니다. Synapse Memory가 무엇을 모으고,
+   어디에 저장하고, 어떤 명령으로 다시 꺼내 쓰는지 순서대로 설명합니다.
 
-## 핵심 개념
+2. [개인정보, 비용, 삭제](privacy-and-cost.md)
 
-- **L0 raw**: 원본 로그와 vault mirror입니다. `~/.synapse/private/` 아래에 저장되며 외부 LLM에 보내지 않습니다.
-- **Redaction**: 원본에서 이메일, 전화번호, 토큰, 회사명 같은 민감 정보를 마스킹하는 단계입니다.
-- **Card**: 프로젝트나 회사를 요약한 Obsidian 문서입니다. 검색과 이력서 생성의 주요 재료입니다.
-- **RAG index**: Card를 임베딩해서 자연어로 찾을 수 있게 만든 로컬 벡터 DB입니다.
-- **Profile / DecisionPatterns**: 사용자가 검토해서 승인한 성향과 의사결정 패턴입니다. `me decide`가 이 자료를 사용합니다.
+   원본 자료가 어디에 남는지, 외부 AI로 무엇이 나가는지, 비용이 드는 작업은 무엇인지,
+   완전히 지우려면 무엇을 지우면 되는지 정리합니다.
 
-## 권장 읽기 방식
+3. [명령과 문제 해결](reference.md)
 
-바로 써보고 싶다면 [Getting Started](getting-started.md)만 따라 하면 됩니다. 전체 구조가 궁금해졌을 때 [아키텍처](architecture.md)를 읽는 편이 이해가 쉽습니다.
+   매일 쓰는 slash 명령과 CLI 명령, 설정 변경, 환경 복구 방법만 모았습니다.
+
+## 한 문장으로 이해하기
+
+Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 정리해 요약 카드를 만들고,
+외부 AI에는 원본 대신 안전한 카드와 승인된 자료만 보내 답을 받는 도구입니다.
+
+## 어디부터 시작해야 하나요?
+
+처음이라면 바로 [처음부터 끝까지 사용하기](start-here.md)를 읽으면 됩니다. 이미 설치를
+마쳤다면 `/synapse-doctor`, `/synapse-daily`, `/synapse-ask` 세 명령만 먼저 기억하면
+충분합니다.

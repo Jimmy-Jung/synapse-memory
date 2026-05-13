@@ -57,8 +57,8 @@ CareLog                   draft
 Smart_Report              draft
 Tablet                    draft
 ai-symbiote               draft
-dansim-ios                active
-mobile-ios-slc-tablet     draft        iOS 개발자
+sample-ios-app                active
+mobile-ios-tablet-app     draft        iOS 개발자
 projects                  draft                                   ~ 2026-05
 v2                        draft
 이력서-2026                  draft        iOS 개발자                   2023-11
@@ -67,7 +67,7 @@ v2                        draft
 [Company Cards]   /Users/<user>/Library/Mobile Documents/iCloud~md~obsidian/Documents/20_Reference/Companies
 ID                        STATUS         COUNTRY  POSITIONS
 -------------------------------------------------------------------------------------
-danggeun                  target         KR       0
+examplecorp                  target         KR       0
 샘플회사                     hired          KR       2
 
 총 13개
@@ -91,20 +91,20 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --timeline
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **샘플지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
-  > # 카카오뱅크 AI모바일개발팀 지원 (2026)
+- **샘플지원-2026** (샘플회사C 모바일개발팀 지원 (2026)) — 2026-05-31
+  > # 샘플회사C 모바일개발팀 지원 (2026)
   [card_project:샘플지원-2026]
 
-- **danggeun** (당근마켓) — 2026-05-11 (last reviewed)
-  > # 당근마켓
-  [card_company:danggeun]
+- **examplecorp** (샘플회사B) — 2026-05-11 (last reviewed)
+  > # 샘플회사B
+  [card_company:examplecorp]
 
 - **v2** (Synapse Memory v2) — 2026-05-11 (created)
   > # Synapse Memory v2
   [card_project:v2]
 
-- **이력서-2026** (수학에심장을달다 iOS 개발) — 2026-05-10 (created)
-  > # 수학에심장을달다 iOS 개발
+- **이력서-2026** (샘플회사A iOS 개발) — 2026-05-10 (created)
+  > # 샘플회사A iOS 개발
   [card_project:이력서-2026]
 
 - **샘플회사** (샘플회사) — 2026-05-10 (last reviewed)
@@ -125,7 +125,7 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --timeline
 출처 (8):
   - projects
   - 샘플지원-2026
-  - danggeun
+  - examplecorp
   - v2
   - 이력서-2026
   - 샘플회사
@@ -142,20 +142,20 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --by time
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **샘플지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
-  > # 카카오뱅크 AI모바일개발팀 지원 (2026)
+- **샘플지원-2026** (샘플회사C 모바일개발팀 지원 (2026)) — 2026-05-31
+  > # 샘플회사C 모바일개발팀 지원 (2026)
   [card_project:샘플지원-2026]
 
-- **danggeun** (당근마켓) — 2026-05-11 (last reviewed)
-  > # 당근마켓
-  [card_company:danggeun]
+- **examplecorp** (샘플회사B) — 2026-05-11 (last reviewed)
+  > # 샘플회사B
+  [card_company:examplecorp]
 
 - **v2** (Synapse Memory v2) — 2026-05-11 (created)
   > # Synapse Memory v2
   [card_project:v2]
 
-- **이력서-2026** (수학에심장을달다 iOS 개발) — 2026-05-10 (created)
-  > # 수학에심장을달다 iOS 개발
+- **이력서-2026** (샘플회사A iOS 개발) — 2026-05-10 (created)
+  > # 샘플회사A iOS 개발
   [card_project:이력서-2026]
 
 - **샘플회사** (샘플회사) — 2026-05-10 (last reviewed)
@@ -176,7 +176,7 @@ $ synapse-memory me what-did-i-think 클린 아키텍처 --by time
 출처 (8):
   - projects
   - 샘플지원-2026
-  - danggeun
+  - examplecorp
   - v2
   - 이력서-2026
   - 샘플회사
@@ -201,16 +201,16 @@ $ synapse-memory me what-did-i-think 프로젝트 --timeline --limit 2
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **dansim-ios** (단심 (명상 앱)) — 2026-05-12 (오늘 2026-05-12)
-  > # 단심 (명상 앱)
-  [card_project:dansim-ios]
+- **sample-ios-app** (샘플 명상앱) — 2026-05-12 (오늘 2026-05-12)
+  > # 샘플 명상앱
+  [card_project:sample-ios-app]
 
 총 2개 카드 (--limit 2)
 
 ============================================================
 출처 (2):
   - projects
-  - dansim-ios
+  - sample-ios-app
 [exit 0]
 
 $ synapse-memory me what-did-i-think 프로젝트 --timeline --limit 0
@@ -226,17 +226,17 @@ $ synapse-memory me what-did-i-think 전혀 매칭 안 되는 주제 zzz --timel
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **샘플지원-2026** (카카오뱅크 AI모바일개발팀 지원 (2026)) — 2026-05-31
-  > # 카카오뱅크 AI모바일개발팀 지원 (2026)
+- **샘플지원-2026** (샘플회사C 모바일개발팀 지원 (2026)) — 2026-05-31
+  > # 샘플회사C 모바일개발팀 지원 (2026)
   [card_project:샘플지원-2026]
 
 - **v2** (Synapse Memory v2) — 2026-05-11 (created)
   > # Synapse Memory v2
   [card_project:v2]
 
-- **danggeun** (당근마켓) — 2026-05-11 (last reviewed)
-  > # 당근마켓
-  [card_company:danggeun]
+- **examplecorp** (샘플회사B) — 2026-05-11 (last reviewed)
+  > # 샘플회사B
+  [card_company:examplecorp]
 
 - **ai-symbiote** (AI 심바이오트) — 2026-05-10 (created)
   > # AI 심바이오트
@@ -246,8 +246,8 @@ $ synapse-memory me what-did-i-think 전혀 매칭 안 되는 주제 zzz --timel
   > # 2026 프로젝트
   [card_project:-----2026]
 
-- **이력서-2026** (수학에심장을달다 iOS 개발) — 2026-05-10 (created)
-  > # 수학에심장을달다 iOS 개발
+- **이력서-2026** (샘플회사A iOS 개발) — 2026-05-10 (created)
+  > # 샘플회사A iOS 개발
   [card_project:이력서-2026]
 
 - **Tablet** (태블릿 앱) — 2026-05-10 (created)
@@ -261,7 +261,7 @@ $ synapse-memory me what-did-i-think 전혀 매칭 안 되는 주제 zzz --timel
   - projects
   - 샘플지원-2026
   - v2
-  - danggeun
+  - examplecorp
   - ai-symbiote
   - -----2026
   - 이력서-2026
@@ -277,13 +277,13 @@ $ synapse-memory me what-did-i-think 어떤 주제 --timeline
   > # 프로젝트 포트폴리오
   [card_project:projects]
 
-- **dansim-ios** (단심 (명상 앱)) — 2026-05-12 (오늘 2026-05-12)
-  > # 단심 (명상 앱)
-  [card_project:dansim-ios]
+- **sample-ios-app** (샘플 명상앱) — 2026-05-12 (오늘 2026-05-12)
+  > # 샘플 명상앱
+  [card_project:sample-ios-app]
 
-- **danggeun** (당근마켓) — 2026-05-11 (last reviewed)
-  > # 당근마켓
-  [card_company:danggeun]
+- **examplecorp** (샘플회사B) — 2026-05-11 (last reviewed)
+  > # 샘플회사B
+  [card_company:examplecorp]
 
 - **-----2026** (2026 프로젝트) — 2026-05-10 (created)
   > # 2026 프로젝트
@@ -310,8 +310,8 @@ $ synapse-memory me what-did-i-think 어떤 주제 --timeline
 ============================================================
 출처 (8):
   - projects
-  - dansim-ios
-  - danggeun
+  - sample-ios-app
+  - examplecorp
   - -----2026
   - Tablet
   - ai-symbiote

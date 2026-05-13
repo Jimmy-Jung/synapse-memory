@@ -11,8 +11,9 @@ Vault에 저장되며 사람이 직접 편집 가능. Python에서도 parse/seri
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -42,8 +43,8 @@ class ProjectMetric:
     after: str | None = None
     value: str | None = None
 
-    def to_dict(self) -> dict:
-        d = {"name": self.name}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"name": self.name}
         if self.before is not None:
             d["before"] = self.before
         if self.after is not None:
@@ -60,7 +61,7 @@ class ProjectSource:
     type: str   # "obsidian" | "claude_code" | "manual"
     path: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return {"type": self.type, "path": self.path}
 
 
@@ -99,9 +100,9 @@ class ProjectCard:
 # ---------------------------------------------------------------------------
 
 
-def _frontmatter_dict(card: ProjectCard) -> dict:
+def _frontmatter_dict(card: ProjectCard) -> dict[str, Any]:
     """body 제외 모든 필드를 dict로. None/빈 값은 생략 — 깔끔한 yaml."""
-    d: dict = {
+    d: dict[str, Any] = {
         "project_id": card.project_id,
         "display_name": card.display_name,
         "status": card.status,

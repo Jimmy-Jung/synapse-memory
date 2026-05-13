@@ -66,3 +66,4 @@ def test_missing_last_answer_returns_none(
     monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
 
     assert load_last_answer() is None
+

@@ -26,6 +26,9 @@ def _args(**overrides: object) -> argparse.Namespace:
         "profile_model": "sonnet",
         "profile_sample_lines": 200,
         "profile_facts_only": False,
+        "quick": False,
+        "quick_days": 7,
+        "quick_max_clusters": 10,
         "dry_run": False,
     }
     data.update(overrides)

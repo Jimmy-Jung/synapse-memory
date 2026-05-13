@@ -1,7 +1,7 @@
 """Recipe markdown loader — frontmatter parse + validation + 32KB cap.
 
-Spec: ``specs/007-me-recipes/spec.md`` FR-015, FR-016, FR-019
-Research: ``specs/007-me-recipes/research.md`` R-2
+Spec: ``specs/007-persona-recipes/spec.md`` FR-015, FR-016, FR-019
+Research: ``specs/007-persona-recipes/research.md`` R-2
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-12
@@ -34,14 +34,16 @@ class RecipeValidationError(ValueError):
     """Recipe markdown 의 frontmatter / body 가 schema 위반일 때 발생."""
 
 
-def _require_str(meta: dict, key: str) -> str:
+def _require_str(meta: dict[str, Any], key: str) -> str:
     val = meta.get(key)
     if not isinstance(val, str) or not val.strip():
         raise RecipeValidationError(f"required string field missing: {key}")
     return val.strip()
 
 
-def _require_dict(meta: dict, key: str, *, allow_empty: bool = True) -> dict:
+def _require_dict(
+    meta: dict[str, Any], key: str, *, allow_empty: bool = True
+) -> dict[str, Any]:
     if key not in meta:
         raise RecipeValidationError(f"required mapping field missing: {key}")
     val = meta.get(key)
@@ -52,7 +54,7 @@ def _require_dict(meta: dict, key: str, *, allow_empty: bool = True) -> dict:
     return val
 
 
-def _normalize_input_schema(raw: dict) -> dict[str, InputRequirement]:
+def _normalize_input_schema(raw: dict[str, Any]) -> dict[str, InputRequirement]:
     out: dict[str, InputRequirement] = {}
     for k, v in raw.items():
         if not isinstance(k, str) or not k.strip():
@@ -83,7 +85,7 @@ def _validate_save_subpath(value: Any) -> str | None:
     return value.strip()
 
 
-def _coerce_int(meta: dict, key: str, default: int, *, lo: int, hi: int) -> int:
+def _coerce_int(meta: dict[str, Any], key: str, default: int, *, lo: int, hi: int) -> int:
     if key not in meta:
         return default
     val = meta[key]
@@ -94,7 +96,7 @@ def _coerce_int(meta: dict, key: str, default: int, *, lo: int, hi: int) -> int:
     return val
 
 
-def _coerce_bool(meta: dict, key: str, default: bool) -> bool:
+def _coerce_bool(meta: dict[str, Any], key: str, default: bool) -> bool:
     if key not in meta:
         return default
     val = meta[key]
@@ -103,7 +105,7 @@ def _coerce_bool(meta: dict, key: str, default: bool) -> bool:
     return val
 
 
-def _coerce_rag_mode(meta: dict) -> RecipeRagMode:
+def _coerce_rag_mode(meta: dict[str, Any]) -> RecipeRagMode:
     raw = str(meta.get("rag_mode", "dense")).strip().lower()
     if raw not in {"dense", "hybrid"}:
         raise RecipeValidationError(

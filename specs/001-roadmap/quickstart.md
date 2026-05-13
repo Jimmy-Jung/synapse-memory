@@ -40,7 +40,7 @@ synapse-memory me what-did-i-think "클린 아키텍처" --timeline
 ## 2024 Q1 — 2024 Q2
 
 ### 2024-03 (period_end)
-- dansim-ios — "Domain–Data–Presentation 3계층 분리..." [card_project:dansim-ios]
+- sample-ios-app — "Domain–Data–Presentation 3계층 분리..." [card_project:sample-ios-app]
 
 ### 2024-05 (period_end)
 - 이력서-2026 — "도입 기간 2024.01~05, Tuist 멀티 모듈화로 확장..." [card_project:이력서-2026]
@@ -48,7 +48,7 @@ synapse-memory me what-did-i-think "클린 아키텍처" --timeline
 ## 2024 Q3 — 2024 Q4
 
 ### 2024-09 (period_end)
-- mobile-ios-slc-tablet — "Repository 패턴 + DIContainer 조합..." [card_project:mobile-ios-slc-tablet]
+- mobile-ios-tablet-app — "Repository 패턴 + DIContainer 조합..." [card_project:mobile-ios-tablet-app]
 
 (distance fallback 0건)
 ```
@@ -185,10 +185,10 @@ v0.6 출시 후에는 다음이 추가:
 
 ```bash
 synapse-memory rag index --include-raw            # FR-B1
-synapse-memory ask "당근마켓" --hybrid            # FR-B2
+synapse-memory ask "샘플회사B" --hybrid            # FR-B2
 synapse-memory me decide "이직 제안" --preview-prompt  # FR-B3
 synapse-memory me draft-reply "내일 회의 가능?"   # FR-B4
-synapse-memory card update dansim-ios --dry-run   # FR-B5
+synapse-memory card update sample-ios-app --dry-run   # FR-B5
 ```
 
 각 명령의 정확한 동작은 `contracts/cli-contracts.md` 참조. 시나리오는 `specs/006~009-*/quickstart.md` (각 sub-feature 자체 quickstart) 에서 확장.

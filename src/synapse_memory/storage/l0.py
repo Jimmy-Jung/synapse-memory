@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -56,12 +57,8 @@ def ensure_secure_dir(path: Path) -> Path:
     """
     resolved = path.expanduser().resolve()
     resolved.mkdir(parents=True, exist_ok=True)
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(resolved, L0_DIR_MODE)
-    except OSError:
-        # macOS Documents/iCloud 같은 일부 위치는 chmod 거부 가능 — L0는 ~/.synapse라
-        # 거의 발생하지 않지만 안전하게 무시
-        pass
     return resolved
 
 
@@ -76,10 +73,8 @@ def ensure_secure_file(path: Path) -> Path:
     """
     resolved = path.expanduser().resolve()
     if resolved.exists() and resolved.is_file():
-        try:
+        with contextlib.suppress(OSError):
             os.chmod(resolved, L0_FILE_MODE)
-        except OSError:
-            pass
     return resolved
 
 
@@ -88,8 +83,6 @@ def secure_write_text(path: Path, content: str) -> Path:
     resolved = path.expanduser().resolve()
     ensure_secure_dir(resolved.parent)
     resolved.write_text(content, encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(resolved, L0_FILE_MODE)
-    except OSError:
-        pass
     return resolved

@@ -3,7 +3,7 @@
 각 submodule을 직접 import해서 쓰세요::
 
     from synapse_memory.endpoints.ask import ask, AskResult
-    # (W5 이후) from synapse_memory.endpoints.me import draft_resume
+    # (W5 이후) from synapse_memory.endpoints.persona import draft_resume
 
 __init__에서 re-export 안 함 — module name(ask)과 function name(ask) 충돌 회피.
 

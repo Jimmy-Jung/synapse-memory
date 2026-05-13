@@ -39,7 +39,7 @@ DEFAULT_RESUME_MODEL = "sonnet"
 DEFAULT_RESUME_TIMEOUT = 240
 DRAFTS_SUBPATH = Path("30_Creative") / "Drafts"
 
-_RESUME_RECIPE_NAME = "resume"  # 007-me-recipes — `draft_resume` 는 wrapper
+_RESUME_RECIPE_NAME = "resume"  # 007-persona-recipes — `draft_resume` 는 wrapper
 
 
 @dataclass
@@ -98,7 +98,7 @@ def draft_resume(
     store: VectorStore | None = None,
     timeout: int = DEFAULT_RESUME_TIMEOUT,
 ) -> ResumeDraft:
-    """회사 맞춤 이력서 자동 생성 → vault에 저장 (007-me-recipes wrapper).
+    """회사 맞춤 이력서 자동 생성 → vault에 저장 (007-persona-recipes wrapper).
 
     내부적으로 ``recipes.pipeline.generate("resume", ...)`` 를 호출하여
     Profile + locale (CompanyCard.resume_language → Profile.preferred_lang →
@@ -167,7 +167,7 @@ def draft_resume(
 # ---------------------------------------------------------------------------
 
 
-_RECALL_RECIPE_NAME = "recall"  # 007-me-recipes — what_did_i_think distance-mode wrapper
+_RECALL_RECIPE_NAME = "recall"  # 007-persona-recipes — what_did_i_think distance-mode wrapper
 
 
 @dataclass
@@ -250,7 +250,7 @@ def what_did_i_think(
         markdown = _format_timeline_output(groups, limit=limit, fallback_items=fallback)
         source_ids = [c.card_id for c in sorted_cards[:limit] if c.card_id]
         _record_last_answer(
-            command="me.what_did_i_think",
+            command="persona.what_did_i_think",
             query=topic,
             source_ids=source_ids,
         )
@@ -291,7 +291,14 @@ class _PrecomputedResultStore:
 # ---------------------------------------------------------------------------
 
 
-_DECIDE_RECIPE_NAME = "decide"  # 007-me-recipes — decide() wrapper
+_DECIDE_RECIPE_NAME = "decide"  # 007-persona-recipes — decide() wrapper
+
+# B2 guard thresholds (eng-review 2026-05-13)
+#
+# 가장 가까운 매치의 cosine distance 가 이 값보다 크면 out-of-domain 으로 간주.
+# Profile 위장 인용으로 generic 답을 만드는 위험을 차단하기 위한 신뢰 가드.
+# cosine distance 는 0(동일) ~ 2(반대). 0.6 은 보수적 임계값 (실측 후 calibration 가능).
+DECIDE_DISTANCE_THRESHOLD = 0.6
 
 
 @dataclass
@@ -303,14 +310,19 @@ class DecideResult:
 
 
 def _load_profile_text(vault_path: Path | None = None) -> str:
-    """vault Profile.md + DecisionPatterns.md → 단일 텍스트. 없으면 빈 문자열."""
+    """vault Profile.md + DecisionPatterns.md → 단일 텍스트. 없으면 빈 문자열.
+
+    Note: 본 함수는 endpoints 레벨 헬퍼이며, 실제 decide() 흐름은
+    ``recipes.pipeline._load_profile_text`` 가 담당한다. 외부 호출자 호환을 위해
+    유지. 5000자 silent cap 제거 (eng-review B2) — Profile 전체 로드.
+    """
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     parts: list[str] = []
     for fname in ("Profile.md", "DecisionPatterns.md", "DecisionQualityRegistry.md"):
         p = vault / "90_System" / "AI" / fname
         if p.is_file():
             try:
-                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')[:5000]}")
+                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')}")
             except OSError:
                 continue
     return "\n\n".join(parts)
@@ -325,23 +337,63 @@ def decide(
     store: VectorStore | None = None,
     vault_path: Path | None = None,
 ) -> DecideResult:
-    """의사결정 코파일럿 (007-me-recipes wrapper).
+    """의사결정 코파일럿 (007-persona-recipes wrapper).
 
     내부적으로 ``recipes.pipeline.generate("decide", ...)`` 를 호출한다.
     외부 시그니처와 ``DecideResult`` 반환은 SC-005 회귀 가드로 보존.
+
+    B2 신뢰 가드 (eng-review 2026-05-13):
+    1. RAG 매치 0개 → LLM 호출 안 함, "자료 없음" 거부 응답
+    2. 가장 가까운 매치 distance > ``DECIDE_DISTANCE_THRESHOLD`` →
+       out-of-domain, "신뢰 가능 답변 불가" 거부 응답
+
+    Profile 이 없는 영역에서 generic LLM 답을 ``[Profile: ...]`` 인용으로 위장하는
+    현재 위험을 차단한다. retrieve 결과는 ``_PrecomputedResultStore`` 로 recipes
+    pipeline 에 재사용 — 중복 embedding 호출 없음.
     """
     if not situation.strip():
         raise ValueError("situation은 빈 문자열일 수 없음")
 
-    from synapse_memory.recipes import generate as recipes_generate
-
     store = store or open_vector_store()
+    q_vec = embed_query(situation)
+    results = store.query(q_vec, top_k=top_k)
+
+    # Guard 1: 데이터 없음
+    if not results:
+        return DecideResult(
+            situation=situation,
+            answer=(
+                "유사 과거 자료 없음 — `synapse-memory rag index` 먼저 실행하거나, "
+                "`synapse-memory persona update-profile` 로 결정 패턴을 추출하세요. "
+                "현재 vault 자료로는 신뢰 가능한 답변 불가."
+            ),
+            profile_used=False,
+            source_ids=[],
+        )
+
+    # Guard 2: 가장 가까운 매치도 너무 멀다 (out-of-domain)
+    top_distance = min(dist for _rec, dist in results)
+    if top_distance > DECIDE_DISTANCE_THRESHOLD:
+        return DecideResult(
+            situation=situation,
+            answer=(
+                f"질문과 유사한 과거 자료가 충분히 가깝지 않습니다 "
+                f"(가장 가까운 거리 {top_distance:.2f} > 임계 {DECIDE_DISTANCE_THRESHOLD}). "
+                "현재 vault 자료로는 신뢰 가능한 답변 불가 — Profile/Card 인용을 위장한 generic 추천을 막기 위해 거부합니다. "
+                "비슷한 결정 노트를 vault 에 먼저 기록한 뒤 다시 호출하세요."
+            ),
+            profile_used=False,
+            source_ids=[],
+        )
+
+    # Guard 통과 → recipes pipeline 호출 (retrieve 결과 재사용)
+    from synapse_memory.recipes import generate as recipes_generate
 
     result = recipes_generate(
         _DECIDE_RECIPE_NAME,
         inputs={"situation": situation},
         vault_path=vault_path,
-        store=store,
+        store=_PrecomputedResultStore(results),
         ai_env=ai_env,
         model_override=model,
         top_k_override=top_k,
@@ -383,7 +435,7 @@ def _record_last_answer(
 # Timeline recall (FR-A1, specs/002-timeline-recall) — module-private types
 # ---------------------------------------------------------------------------
 #
-# 본 섹션은 ``me what-did-i-think --timeline`` 의 시간축 정렬·분기 그룹화
+# 본 섹션은 ``persona what-did-i-think --timeline`` 의 시간축 정렬·분기 그룹화
 # 출력에 사용되는 transient 객체와 헬퍼 stub 을 정의한다.
 #
 # - data-model: specs/002-timeline-recall/data-model.md

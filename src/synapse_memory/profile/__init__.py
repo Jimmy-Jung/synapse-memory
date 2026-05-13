@@ -22,8 +22,8 @@ from synapse_memory.profile.schema import (
 )
 
 __all__ = [
-    "DecisionPattern",
     "PROFILE_CATEGORIES",
+    "DecisionPattern",
     "ProfileFact",
     "extract_profile_facts",
     "save_profile_update",

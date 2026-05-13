@@ -11,8 +11,8 @@ from synapse_memory.feedback.events import new_event_id
 from synapse_memory.storage.l0 import ensure_l0_root_secure, l0_root, secure_write_text
 
 AnswerCommand: TypeAlias = str
-"""Open string alias. Recognized values: "ask", "me.what_did_i_think", "me.decide",
-and dynamic "me.generate.<recipe_name>" identifiers introduced by 007-me-recipes.
+"""Open string alias. Recognized values: "ask", "persona.what_did_i_think", "persona.decide",
+and dynamic "persona.generate.<recipe_name>" identifiers introduced by 007-persona-recipes.
 Validation in :func:`LastAnswerReference.from_dict` accepts any non-empty string."""
 
 CitationTargetKind: TypeAlias = Literal["card", "pattern"]
@@ -72,7 +72,7 @@ class LastAnswerReference:
         return cls(
             answer_id=str(data["answer_id"]),
             ts=str(data["ts"]),
-            command=command,  # type: ignore[arg-type]
+            command=command,
             query=str(data.get("query", "")),
             citations=tuple(
                 AnswerCitation.from_dict(c)

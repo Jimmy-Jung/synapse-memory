@@ -19,7 +19,7 @@
   "event_id": "01HZX5V3F8GQ4J1Z9D2M0N4P5R",
   "ts": "2026-05-12T14:23:55Z",
   "target_kind": "card",
-  "target_ref": "dansim-ios",
+  "target_ref": "sample-ios-app",
   "action": "reject",
   "weight": -0.30,
   "reason": "<redacted reason>",
@@ -95,7 +95,7 @@
   "answer_id": "01HZX5V3F8GQ4J1Z9D2M0N4P59",
   "session_id": "01HZX5V3F8GQ4J1Z9D2M0N4P50",
   "turn_idx": 1,
-  "citations": ["dansim-ios", "raw_obsidian:abc123:5"],
+  "citations": ["sample-ios-app", "raw_obsidian:abc123:5"],
   "ts": "2026-05-12T14:23:55Z"
 }
 ```
@@ -194,7 +194,7 @@ DecisionPatternExtended.outcome_history sidecar.
 ## F8. ChromaDB collections
 
 ### `cards` (기존)
-- ID: `{source_kind}:{card_id}` (예: `card_project:dansim-ios`)
+- ID: `{source_kind}:{card_id}` (예: `card_project:sample-ios-app`)
 - Metadata: `source_kind, card_id, display_name, status, domains, stack, period_start, period_end, last_reviewed, feedback_score`
 - 신규 metadata: `feedback_score: float` (기본 1.0)
 

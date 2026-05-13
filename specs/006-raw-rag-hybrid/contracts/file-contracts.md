@@ -54,8 +54,8 @@ VectorRecord metadata for raw chunks:
 ```json
 [
   {
-    "query": "당근마켓 경험",
-    "target_id": "card_company:danggeun",
+    "query": "샘플회사B 경험",
+    "target_id": "card_company:examplecorp",
     "dense_rank": 3,
     "bm25_rank": 1
   }

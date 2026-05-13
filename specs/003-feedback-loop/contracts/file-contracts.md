@@ -9,7 +9,7 @@
   "event_id": "20260512T032455123456Z-a1b2c3d4",
   "ts": "2026-05-12T03:24:55.123456Z",
   "target_kind": "card",
-  "target_ref": "dansim-ios",
+  "target_ref": "sample-ios-app",
   "action": "reject",
   "weight": -0.3,
   "reason": "관련 없음",
@@ -38,9 +38,9 @@
   "citations": [
     {
       "target_kind": "card",
-      "target_ref": "dansim-ios",
+      "target_ref": "sample-ios-app",
       "source_kind": "card_project",
-      "display_name": "단심 iOS"
+      "display_name": "샘플 명상앱 iOS"
     }
   ]
 }

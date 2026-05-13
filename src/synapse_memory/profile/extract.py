@@ -121,29 +121,52 @@ def extract_profile_facts(
     ai_env: AIEnvironment | None = None,
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
+    extra_text: str | None = None,
 ) -> list[ProfileFact]:
-    """Claude Code history → ProfileFact 후보.
+    """Claude Code history (+ 선택적 외부 자료) → ProfileFact 후보.
+
+    Args:
+        sample_lines: history.jsonl 마지막 N줄. 0 이면 history 무시.
+        extra_text: 이미 redacted 된 외부 자료 (예: ``ingest_files`` 의
+            ``combined_redacted``). history 와 함께 사용 가능하며, history 없이
+            extra_text 만으로도 호출 가능.
 
     Raises:
         AIError: AI provider 호출 실패.
-        FileNotFoundError: history.jsonl 없음.
+        FileNotFoundError: history 와 extra_text 모두 비어있음.
     """
     history = history_path or (
         l0_root() / "raw" / "claude-code" / "history.jsonl"
     )
-    raw_text = _read_history_tail(history, sample_lines)
-    if not raw_text:
+
+    sections: list[str] = []
+    source_ids: list[str] = []
+
+    if sample_lines > 0:
+        raw_history = _read_history_tail(history, sample_lines)
+        if raw_history:
+            redacted_history = redact_full(raw_history, env=apfel_env).redacted
+            if redacted_history:
+                sections.append(
+                    f"## 사용자 명령 history (최근 {sample_lines}건, redacted)\n\n"
+                    f"{redacted_history}"
+                )
+                source_ids.append("claude-code/history.jsonl")
+
+    if extra_text:
+        sections.append(f"## 외부 첨부 자료 (redacted)\n\n{extra_text}")
+        source_ids.append("persona-ingest")
+
+    if not sections:
         raise FileNotFoundError(
-            f"history 비어있음 또는 없음: {history} — "
-            f"`synapse-memory collect claude-code` 먼저"
+            f"수집할 자료 없음: history={history} sample_lines={sample_lines} "
+            f"extra_text=None — `synapse-memory collect claude-code` 또는 "
+            f"`persona ingest --file ...` 먼저"
         )
 
-    # redaction (Pass 1+2)
-    redacted = redact_full(raw_text, env=apfel_env).redacted
-
+    combined = "\n\n---\n\n".join(sections)
     user_prompt = (
-        f"# 사용자 명령 history (최근 {sample_lines}건, redacted)\n\n"
-        f"{redacted}\n\n"
+        f"# 사용자 자료\n\n{combined}\n\n"
         f"# 지시\n위에서 반복 패턴으로 드러나는 사용자 성향 사실을 JSON으로 추출."
     )
 
@@ -181,7 +204,7 @@ def extract_profile_facts(
                 category=cat,
                 statement=stmt,
                 confidence=max(0.0, min(1.0, conf)),
-                source_ids=["claude-code/history.jsonl"],
+                source_ids=list(source_ids),
                 extracted_at=today,
             )
         )

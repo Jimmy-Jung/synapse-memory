@@ -18,7 +18,7 @@ SYNAPSE_FROM_AGENT=1 synapse-memory ask "클린 아키텍처에서 내가 반복
 ... 답변 본문 ...
 
 Sources:
-- dansim-ios
+- sample-ios-app
 ```
 
 검증:
@@ -50,13 +50,13 @@ tail -1 ~/.synapse/private/feedback.jsonl | python3 -m json.tool
 ## 3. 특정 카드 accept
 
 ```bash
-synapse-memory feedback card dansim-ios --accept
+synapse-memory feedback card sample-ios-app --accept
 ```
 
 기대:
 
 ```text
-✓ Recorded accept for card dansim-ios (weight=+0.20)
+✓ Recorded accept for card sample-ios-app (weight=+0.20)
   → next index will apply updated feedback_score
 ```
 

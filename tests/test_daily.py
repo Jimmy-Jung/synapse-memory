@@ -189,3 +189,108 @@ class TestRunDaily:
         assert "response" not in text.lower()
         assert "classify" in text
         assert "requires classify" in text
+
+
+# ---------------------------------------------------------------------------
+# Quick mode (B1, eng-review 2026-05-13)
+# ---------------------------------------------------------------------------
+
+
+class TestQuickMode:
+    """``run_daily(quick=True)`` 의 cutoff 적용 + update_profile auto-skip 검증."""
+
+    def test_quick_auto_skips_update_profile(self) -> None:
+        """quick=True 시 only= 안 지정하면 update_profile auto-skip."""
+        calls: list[str] = []
+
+        def track(name: str):
+            def step() -> str:
+                calls.append(name)
+                return f"{name}=ok"
+
+            return step
+
+        result = run_daily(
+            quick=True,
+            stage_actions={
+                name: track(name) for name in (
+                    "collect_claude_code", "collect_obsidian", "classify",
+                    "generate", "index", "update_profile", "report",
+                )
+            },
+            on_log=lambda _line: None,
+        )
+
+        assert "update_profile" not in calls
+        by_name = {s.name: s for s in result.steps}
+        # update_profile 은 `selected -= update_profile` 효과로 result.steps 에 없음
+        assert "update_profile" not in by_name
+
+    def test_quick_with_explicit_only_runs_update_profile(self) -> None:
+        """only= 로 명시적 요청 시 quick auto-skip 우선순위 무시 — 사용자 의도 우선."""
+        calls: list[str] = []
+
+        def track(name: str):
+            def step() -> str:
+                calls.append(name)
+                return f"{name}=ok"
+
+            return step
+
+        run_daily(
+            quick=True,
+            only={"update_profile"},
+            stage_actions={"update_profile": track("update_profile")},
+            on_log=lambda _line: None,
+        )
+        assert calls == ["update_profile"]
+
+    def test_quick_false_preserves_full_behavior(self) -> None:
+        """quick=False (기본) 시 모든 stage 실행 — 회귀 가드."""
+        calls: list[str] = []
+
+        def track(name: str):
+            def step() -> str:
+                calls.append(name)
+                return f"{name}=ok"
+
+            return step
+
+        run_daily(
+            stage_actions={
+                name: track(name) for name in (
+                    "collect_claude_code", "collect_obsidian", "classify",
+                    "generate", "index", "update_profile", "report",
+                )
+            },
+            on_log=lambda _line: None,
+        )
+        assert "update_profile" in calls
+
+    def test_quick_negative_days_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            run_daily(quick=True, quick_days=-1, dry_run=True)
+
+    def test_quick_negative_max_clusters_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            run_daily(quick=True, quick_max_clusters=-1, dry_run=True)
+
+    def test_quick_passes_through_to_stage_actions(self) -> None:
+        """quick=True 시 _build_stage_actions 에 quick_since_days / quick_max_new_clusters 전달."""
+        # 직접 _build_stage_actions 를 호출해 cutoff 가 적용된 build 인지 확인
+        from synapse_memory.daily import _build_stage_actions
+
+        actions = _build_stage_actions(
+            classify_model="haiku",
+            generate_model="sonnet",
+            profile_model="sonnet",
+            profile_sample_lines=200,
+            profile_facts_only=False,
+            on_log=lambda _line: None,
+            quick_since_days=7,
+            quick_max_new_clusters=5,
+        )
+        # collect_obsidian 은 closure — invoke 시 since_days=7 로 collect_obsidian 호출
+        # 단위 test 에서는 정확한 closure 인자 확인이 어려움. 일단 인터페이스만 검증.
+        assert "collect_obsidian" in actions
+        assert "classify" in actions

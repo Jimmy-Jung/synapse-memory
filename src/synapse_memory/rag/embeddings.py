@@ -42,7 +42,7 @@ def get_embedder(model_name: str = DEFAULT_EMBEDDING_MODEL) -> Any:
     """
     global _EMBEDDER, _LOADED_MODEL
 
-    if _EMBEDDER is not None and _LOADED_MODEL == model_name:
+    if _EMBEDDER is not None and model_name == _LOADED_MODEL:
         return _EMBEDDER
 
     try:
@@ -55,7 +55,7 @@ def get_embedder(model_name: str = DEFAULT_EMBEDDING_MODEL) -> Any:
     try:
         _EMBEDDER = SentenceTransformer(model_name, trust_remote_code=False)
         _LOADED_MODEL = model_name
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise EmbeddingUnavailableError(
             f"임베딩 모델 로드 실패 ({model_name}): {exc}"
         ) from exc
@@ -80,7 +80,7 @@ def embed_texts(
         show_progress_bar: 대량 인덱싱 시 True.
 
     Returns:
-        ``[len(texts) × EMBEDDING_DIM]`` float 리스트.
+        ``[len(texts) x EMBEDDING_DIM]`` float 리스트.
     """
     if not texts:
         return []
@@ -94,7 +94,7 @@ def embed_texts(
             show_progress_bar=show_progress_bar,
             convert_to_numpy=True,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise EmbeddingError(f"인코딩 실패: {exc}") from exc
 
     return [v.tolist() for v in vectors]

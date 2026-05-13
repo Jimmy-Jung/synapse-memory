@@ -18,12 +18,12 @@ from synapse_memory.collectors.obsidian.mirror import (
     ENV_VAR_VAULT,
     META_DIR,
     STATES_FILE,
+    CollectStats,
     _is_excluded,
     collect_obsidian,
     get_vault_path,
 )
 from synapse_memory.storage.l0 import L0_DIR_MODE, L0_FILE_MODE
-
 
 # ---------------------------------------------------------------------------
 # fixtures
@@ -267,3 +267,97 @@ def test_no_overwrite_unrelated_files(
         dst_root=tmp_path / "l0" / "raw" / "obsidian",
     )
     assert sentinel.read_text() == "DO NOT TOUCH"
+
+
+# ---------------------------------------------------------------------------
+# since_days cutoff (B1, --quick 모드)
+# ---------------------------------------------------------------------------
+
+
+class TestSinceDaysCutoff:
+    """``--quick`` 모드의 mtime 기반 cutoff. vault 파일 손실 없음, 단지 mirror cycle skip."""
+
+    def _set_mtime_days_ago(self, path: Path, days: float) -> None:
+        ts = time.time() - days * 86400.0
+        os.utime(path, (ts, ts))
+
+    def test_recent_files_mirrored_old_files_skipped(
+        self, vault: Path, dst: Path
+    ) -> None:
+        recent = _write_md(vault, "00_Inbox/recent.md", "최근")
+        old = _write_md(vault, "00_Inbox/old.md", "오래된")
+        self._set_mtime_days_ago(recent, 1.0)
+        self._set_mtime_days_ago(old, 30.0)
+
+        stats = collect_obsidian(vault_path=vault, dst_root=dst, since_days=7)
+
+        assert stats.files_scanned == 2
+        assert stats.files_mirrored == 1
+        assert stats.files_skipped_by_cutoff == 1
+        assert (dst / "00_Inbox" / "recent.md").is_file()
+        assert not (dst / "00_Inbox" / "old.md").exists()
+
+    def test_zero_days_skips_all_unmodified_recently(
+        self, vault: Path, dst: Path
+    ) -> None:
+        """since_days=0 → cutoff = now → 모든 파일 skip (boundary)."""
+        f = _write_md(vault, "00_Inbox/note.md", "x")
+        self._set_mtime_days_ago(f, 0.5)  # 12시간 전
+
+        stats = collect_obsidian(vault_path=vault, dst_root=dst, since_days=0)
+        assert stats.files_skipped_by_cutoff == 1
+        assert stats.files_mirrored == 0
+
+    def test_no_cutoff_preserves_full_behavior(
+        self, vault: Path, dst: Path
+    ) -> None:
+        """since_days=None → 기존 동작 그대로 (회귀 가드)."""
+        recent = _write_md(vault, "00_Inbox/recent.md", "a")
+        old = _write_md(vault, "00_Inbox/old.md", "b")
+        self._set_mtime_days_ago(old, 30.0)
+
+        stats = collect_obsidian(vault_path=vault, dst_root=dst)  # no since_days
+        assert stats.files_mirrored == 2
+        assert stats.files_skipped_by_cutoff == 0
+
+    def test_cutoff_preserves_prev_state_for_skipped_files(
+        self, vault: Path, dst: Path
+    ) -> None:
+        """skip 된 오래된 파일의 prev_state 는 보존 — 다음 full mode 호출 시 unchanged 분류."""
+        old = _write_md(vault, "00_Inbox/old.md", "기존")
+        recent = _write_md(vault, "00_Inbox/recent.md", "신규")
+
+        # First full mode: 둘 다 mirror
+        collect_obsidian(vault_path=vault, dst_root=dst)
+
+        # 시간 흐름 시뮬레이션: old 의 mtime 을 30일 전으로
+        self._set_mtime_days_ago(old, 30.0)
+
+        # Quick mode: old 는 cutoff skip, 단 prev_state 는 유지
+        s2 = collect_obsidian(vault_path=vault, dst_root=dst, since_days=7)
+        assert s2.files_skipped_by_cutoff == 1
+        assert s2.files_unchanged == 1  # recent
+
+        # Next full mode (since_days=None): old 의 prev_state 가 보존되었으므로 unchanged
+        # (그렇지 않으면 또 다시 mirror 됨)
+        self._set_mtime_days_ago(old, 30.0)  # 안정화
+        s3 = collect_obsidian(vault_path=vault, dst_root=dst)
+        # old + recent 둘 다 unchanged 가 되어야 함 (mtime/size/sha 일치)
+        assert s3.files_unchanged == 2
+        assert s3.files_mirrored == 0
+
+    def test_negative_since_days_rejected(self, vault: Path, dst: Path) -> None:
+        with pytest.raises(ValueError):
+            collect_obsidian(vault_path=vault, dst_root=dst, since_days=-1)
+
+    def test_stats_summary_shows_cutoff_when_nonzero(
+        self, vault: Path, dst: Path
+    ) -> None:
+        old = _write_md(vault, "00_Inbox/old.md", "x")
+        self._set_mtime_days_ago(old, 30.0)
+        stats = collect_obsidian(vault_path=vault, dst_root=dst, since_days=7)
+        assert "cutoff_skip=1" in stats.summary()
+
+        # since_days=None 일 때는 summary 에 cutoff 가 노출되지 않음 (clean)
+        stats2 = CollectStats()
+        assert "cutoff_skip" not in stats2.summary()

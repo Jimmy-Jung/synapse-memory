@@ -15,13 +15,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from synapse_memory.cards.project import (
+    _FRONTMATTER_RE,
     FRONTMATTER_DELIMITER,
     ProjectSource,
-    _FRONTMATTER_RE,
 )
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 
@@ -42,8 +43,8 @@ class JobPosition:
     keywords: list[str] = field(default_factory=list)
     jd_url: str | None = None
 
-    def to_dict(self) -> dict:
-        d: dict = {"title": self.title}
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {"title": self.title}
         if self.seniority:
             d["seniority"] = self.seniority
         if self.keywords:
@@ -77,8 +78,8 @@ class CompanyCard:
         return f"{self.company_id}.md"
 
 
-def _frontmatter_dict(card: CompanyCard) -> dict:
-    d: dict = {
+def _frontmatter_dict(card: CompanyCard) -> dict[str, Any]:
+    d: dict[str, Any] = {
         "company_id": card.company_id,
         "display_name": card.display_name,
         "status": card.status,

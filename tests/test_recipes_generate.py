@@ -124,7 +124,7 @@ def test_weekly_report_end_to_end(fixture_vault: Path) -> None:
 
     # last_answer ref
     assert result.last_answer_ref is not None
-    assert result.last_answer_ref.command == "me.generate.weekly_report"
+    assert result.last_answer_ref.command == "persona.generate.weekly_report"
     assert "2026-W19" in result.last_answer_ref.query
     assert len(result.last_answer_ref.citations) >= 1
 
