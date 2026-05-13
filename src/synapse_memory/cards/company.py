@@ -25,6 +25,7 @@ from synapse_memory.cards.project import (
     ProjectSource,
 )
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
 
 DEFAULT_COMPANIES_SUBPATH = Path("20_Reference") / "Companies"
 
@@ -168,7 +169,7 @@ def parse_company_card(text: str) -> CompanyCard:
 
 def companies_dir(vault_path: Path | None = None) -> Path:
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / DEFAULT_COMPANIES_SUBPATH
+    return vault / get_config().vault_folders.reference.companies
 
 
 def load_company_card(

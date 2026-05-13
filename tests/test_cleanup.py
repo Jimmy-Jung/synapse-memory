@@ -17,14 +17,12 @@ from synapse_memory.cleanup import (
     scan_cleanup_candidates,
     write_cleanup_manifest,
 )
+from synapse_memory.config import VaultFoldersConfig
 
 
 def _set_mtime(path: Path, days_ago: int) -> None:
     """파일/폴더 mtime을 N일 전으로 조정."""
-    target = (
-        datetime.datetime.now(datetime.UTC)
-        - datetime.timedelta(days=days_ago)
-    ).timestamp()
+    target = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=days_ago)).timestamp()
     os.utime(path, (target, target))
 
 
@@ -118,8 +116,7 @@ def test_scan_old_resume_draft(tmp_path):
 
     plan = scan_cleanup_candidates(vault)
     assert any(
-        c.kind == CleanupKind.OLD_RESUME and c.source_path == str(resume)
-        for c in plan.candidates
+        c.kind == CleanupKind.OLD_RESUME and c.source_path == str(resume) for c in plan.candidates
     )
 
 
@@ -170,8 +167,7 @@ def test_scan_empty_folder(tmp_path):
 
     plan = scan_cleanup_candidates(vault)
     assert any(
-        c.kind == CleanupKind.EMPTY_FOLDER and c.source_path == str(empty)
-        for c in plan.candidates
+        c.kind == CleanupKind.EMPTY_FOLDER and c.source_path == str(empty) for c in plan.candidates
     )
 
 
@@ -202,6 +198,43 @@ def test_apply_real_move_creates_archive_and_removes_source(tmp_path):
     assert not stale.exists()
     archive_root = vault / "40_Archive"
     assert list(archive_root.rglob("stale.md"))
+
+
+def test_cleanup_archive_root_uses_configured_folder(tmp_path):
+    vault = _make_vault(tmp_path)
+    folders = VaultFoldersConfig(archive="99_Archive")
+    stale = vault / "00_Inbox" / "stale.md"
+    stale.write_text("old", encoding="utf-8")
+    _set_mtime(stale, 60)
+
+    plan = scan_cleanup_candidates(vault, folders=folders)
+    candidate = next(c for c in plan.candidates if c.source_path == str(stale))
+
+    assert "99_Archive" in candidate.target_path
+    assert "40_Archive" not in candidate.target_path
+
+    results = apply_cleanup(plan, dry_run=False, vault=vault, folders=folders)
+
+    assert any(r.status == "moved" for r in results)
+    assert not stale.exists()
+    assert list((vault / "99_Archive").rglob("stale.md"))
+    assert not list((vault / "40_Archive").rglob("stale.md"))
+
+
+def test_cleanup_manifest_uses_configured_reports_folder(tmp_path):
+    vault = _make_vault(tmp_path)
+    folders = VaultFoldersConfig()
+    folders.system.ai.cleanup_reports = "99_Archive/CleanupReports"
+
+    manifest = write_cleanup_manifest(
+        vault,
+        [],
+        archive_date="2026-05-14",
+        folders=folders,
+    )
+
+    assert manifest == vault / "99_Archive" / "CleanupReports" / "2026-05-14.md"
+    assert manifest.exists()
 
 
 def test_apply_empty_folder_removes_folder(tmp_path):

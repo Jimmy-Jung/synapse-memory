@@ -89,6 +89,54 @@ class CleanupConfig:
 
 
 @dataclass
+class VaultReferenceFoldersConfig:
+    root: str = "20_Reference"
+    projects: str = "20_Reference/Projects"
+    companies: str = "20_Reference/Companies"
+
+
+@dataclass
+class VaultCreativeFoldersConfig:
+    root: str = "30_Creative"
+    drafts: str = "30_Creative/Drafts"
+
+
+@dataclass
+class VaultSystemAiFoldersConfig:
+    root: str = "90_System/AI"
+    memory_inbox: str = "90_System/AI/MemoryInbox"
+    daily_reports: str = "90_System/AI/DailyReports"
+    cleanup_reports: str = "90_System/AI/CleanupReports"
+    recipes: str = "90_System/AI/recipes"
+    profile: str = "90_System/AI/Profile.md"
+    decision_patterns: str = "90_System/AI/DecisionPatterns.md"
+
+
+@dataclass
+class VaultSystemFoldersConfig:
+    root: str = "90_System"
+    ai: VaultSystemAiFoldersConfig = field(default_factory=VaultSystemAiFoldersConfig)
+    attachments: str = "90_System/Attachments"
+    migration: str = "90_System/_migration"
+
+
+@dataclass
+class VaultFoldersConfig:
+    """vault 내부 폴더 경로.
+
+    모든 값은 vault root 기준 상대 경로다. 기본값은 기존 PARA 구조를 보존한다.
+    """
+
+    inbox: str = "00_Inbox"
+    active: str = "10_Active"
+    reference: VaultReferenceFoldersConfig = field(default_factory=VaultReferenceFoldersConfig)
+    creative: VaultCreativeFoldersConfig = field(default_factory=VaultCreativeFoldersConfig)
+    life: str = "40_Life"
+    archive: str = "40_Archive"
+    system: VaultSystemFoldersConfig = field(default_factory=VaultSystemFoldersConfig)
+
+
+@dataclass
 class ProfileConfig:
     sample_lines: int = 200
 
@@ -143,6 +191,7 @@ class AdvancedConfig:
 @dataclass
 class SynapseConfig:
     vault: str | None = None
+    vault_folders: VaultFoldersConfig = field(default_factory=VaultFoldersConfig)
     ai_provider: str = "claude"  # claude | codex | auto
     models: ModelsConfig = field(default_factory=ModelsConfig)
     top_k: TopKConfig = field(default_factory=TopKConfig)
@@ -194,6 +243,28 @@ def _from_dict(cls: type[T], data: dict[str, Any] | None) -> T:
     return cls(**kwargs)
 
 
+def _normalize_config_raw(raw: dict[str, Any]) -> dict[str, Any]:
+    """config.yaml 입력 호환성 정규화.
+
+    기존 형식은 ``vault: /path`` 문자열이다. 이슈 #12에서 제안된 nested 형식
+    ``vault: {path: /path, folders: ...}``도 받아서 내부 canonical 필드
+    ``vault_folders``로 옮긴다.
+    """
+    normalized = dict(raw)
+    vault_value = normalized.get("vault")
+    if not isinstance(vault_value, dict):
+        return normalized
+
+    vault_path = vault_value.get("path") or vault_value.get("root")
+    normalized["vault"] = vault_path if isinstance(vault_path, str) else None
+
+    folders = vault_value.get("folders")
+    if isinstance(folders, dict) and "vault_folders" not in normalized:
+        normalized["vault_folders"] = folders
+
+    return normalized
+
+
 def load_config(path: Path | None = None) -> SynapseConfig:
     """yaml에서 SynapseConfig 로드. 파일 없거나 빈 경우 default 반환."""
     path = path or DEFAULT_CONFIG_PATH
@@ -205,12 +276,10 @@ def load_config(path: Path | None = None) -> SynapseConfig:
         return SynapseConfig()
     if not isinstance(raw, dict):
         return SynapseConfig()
-    return _from_dict(SynapseConfig, raw)
+    return _from_dict(SynapseConfig, _normalize_config_raw(raw))
 
 
-def save_config(
-    cfg: SynapseConfig, path: Path | None = None, *, make_backup: bool = True
-) -> Path:
+def save_config(cfg: SynapseConfig, path: Path | None = None, *, make_backup: bool = True) -> Path:
     """atomic write + 기존 파일이 있으면 백업."""
     path = path or DEFAULT_CONFIG_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -226,9 +295,7 @@ def save_config(
         allow_unicode=True,
         default_flow_style=False,
     )
-    fd, tmp = tempfile.mkstemp(
-        prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
-    )
+    fd, tmp = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=str(path.parent))
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(text)
@@ -282,8 +349,7 @@ def set_value(cfg: SynapseConfig, dotted_path: str, value: Any) -> None:
     """
     if is_protected_path(dotted_path):
         raise ValueError(
-            f"보호된 키 — config로 변경 불가: {dotted_path} "
-            f"(보안 핵심 — 코드 수정·PR로만)"
+            f"보호된 키 — config로 변경 불가: {dotted_path} (보안 핵심 — 코드 수정·PR로만)"
         )
     parts = dotted_path.split(".")
     obj: Any = cfg
@@ -305,9 +371,7 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
     errors: list[str] = []
 
     if cfg.ai_provider not in ("claude", "codex", "auto"):
-        errors.append(
-            f"ai_provider는 claude/codex/auto 중 하나 — 현재: {cfg.ai_provider!r}"
-        )
+        errors.append(f"ai_provider는 claude/codex/auto 중 하나 — 현재: {cfg.ai_provider!r}")
 
     for field_name in (
         "inbox_stale_days",
@@ -326,15 +390,21 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
             errors.append(f"top_k.{field_name}는 1~50 — 현재: {v!r}")
 
     if not isinstance(cfg.profile.sample_lines, int) or cfg.profile.sample_lines < 10:
-        errors.append(
-            f"profile.sample_lines는 10 이상 — 현재: {cfg.profile.sample_lines!r}"
-        )
+        errors.append(f"profile.sample_lines는 10 이상 — 현재: {cfg.profile.sample_lines!r}")
 
     if cfg.interactive_guard.delay_seconds < 0:
         errors.append("interactive_guard.delay_seconds는 0 이상")
 
     if cfg.cost.summary_days < 1:
         errors.append("cost.summary_days는 1 이상")
+
+    for key, value in _flatten(cfg.vault_folders, prefix="vault_folders.").items():
+        if not isinstance(value, str) or not value.strip():
+            errors.append(f"{key}는 비어 있지 않은 상대 경로 문자열이어야 함")
+            continue
+        path = Path(value)
+        if path.is_absolute() or ".." in path.parts:
+            errors.append(f"{key}는 vault root 기준 안전한 상대 경로여야 함 — 현재: {value!r}")
 
     return errors
 
@@ -372,6 +442,7 @@ def render_config(cfg: SynapseConfig, *, show_advanced: bool = False) -> str:
         sections.setdefault(top, []).append((key, val))
     for top in (
         "vault",
+        "vault_folders",
         "ai_provider",
         "models",
         "top_k",

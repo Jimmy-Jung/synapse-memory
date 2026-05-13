@@ -190,6 +190,16 @@ def _enumerate_vault_folder_clusters(
     if not obs_root.is_dir():
         return {}
 
+    from synapse_memory.config import get_config
+
+    folders = get_config().vault_folders
+    cluster_top_levels = (
+        Path(folders.active).parts[0],
+        Path(folders.reference.root).parts[0],
+        Path(folders.creative.root).parts[0],
+        Path(folders.life).parts[0],
+    )
+
     by_id: dict[str, dict[str, Any]] = {}
     for md in sorted(obs_root.rglob("*.md")):
         rel = md.relative_to(obs_root)
@@ -197,7 +207,7 @@ def _enumerate_vault_folder_clusters(
         if len(parts) < 3:  # top + segment + file 최소
             continue
         top = parts[0]
-        if top not in VAULT_CLUSTER_TOP_LEVELS:
+        if top not in cluster_top_levels:
             continue
 
         # depth 2 segment 가져오되, generic이면 한 단계 더

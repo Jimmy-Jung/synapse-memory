@@ -49,6 +49,54 @@ def test_save_then_load_round_trip(tmp_path):
     assert loaded.ai_provider == "codex"
 
 
+def test_load_vault_folders_archive_override(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "vault": "/tmp/example-vault",
+                "vault_folders": {
+                    "archive": "99_Archive",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.vault == "/tmp/example-vault"
+    assert cfg.vault_folders.archive == "99_Archive"
+
+
+def test_load_nested_vault_path_and_folders_for_compatibility(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "vault": {
+                    "path": "/tmp/example-vault",
+                    "folders": {
+                        "archive": "99_Archive",
+                        "system": {
+                            "ai": {
+                                "cleanup_reports": "99_Archive/CleanupReports",
+                            }
+                        },
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.vault == "/tmp/example-vault"
+    assert cfg.vault_folders.archive == "99_Archive"
+    assert cfg.vault_folders.system.ai.cleanup_reports == "99_Archive/CleanupReports"
+
+
 def test_save_creates_backup_when_existing(tmp_path):
     path = tmp_path / "config.yaml"
     save_config(SynapseConfig(), path, make_backup=False)

@@ -28,11 +28,11 @@ from pathlib import Path
 from synapse_memory.cards.company import list_company_cards
 from synapse_memory.cards.project import list_project_cards
 from synapse_memory.cleanup import scan_cleanup_candidates
+from synapse_memory.config import get_config
 from synapse_memory.doctor import DiagnosticStatus, diagnose_private_permissions
 from synapse_memory.status import read_status
 
 PRIVATE_ROOT = Path.home() / ".synapse" / "private"
-MEMORY_INBOX_SUBPATH = Path("90_System") / "AI" / "MemoryInbox"
 
 
 @dataclass(frozen=True)
@@ -126,7 +126,7 @@ def gather_status(*, vault_path: Path | None = None) -> AssistantStatus:
         except Exception:
             pass
 
-        inbox_dir = vault_path / MEMORY_INBOX_SUBPATH
+        inbox_dir = vault_path / get_config().vault_folders.system.ai.memory_inbox
         if inbox_dir.exists():
             files = sorted(inbox_dir.glob("Profile-*.md"), reverse=True)
             inbox_count = len(files)

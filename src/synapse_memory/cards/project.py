@@ -18,6 +18,7 @@ from typing import Any
 import yaml
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
 
 DEFAULT_PROJECTS_SUBPATH = Path("20_Reference") / "Projects"
 FRONTMATTER_DELIMITER = "---"
@@ -222,7 +223,7 @@ def parse_project_card(text: str) -> ProjectCard:
 def projects_dir(vault_path: Path | None = None) -> Path:
     """Project Card 저장 디렉토리. ``<vault>/20_Reference/Projects``."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / DEFAULT_PROJECTS_SUBPATH
+    return vault / get_config().vault_folders.reference.projects
 
 
 def slugify(name: str) -> str:

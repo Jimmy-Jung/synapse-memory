@@ -1,9 +1,9 @@
 """vault 청소 도우미 — 오래된·휴면·빈 자료를 archive 폴더로 *이동*.
 
 핵심 원칙:
-- 영구 삭제 0건. 모든 이동은 ``<vault>/40_Archive/_cleanup-YYYY-MM-DD/``로.
+- 영구 삭제 0건. 모든 이동은 설정된 archive 폴더의 ``_cleanup-YYYY-MM-DD/``로.
 - 기본은 ``dry_run=True``. ``apply=True``를 명시해야 실제 이동.
-- 모든 이동은 ``<vault>/90_System/AI/CleanupReports/YYYY-MM-DD.md``에 매니페스트로 기록.
+- 모든 이동은 설정된 CleanupReports 폴더에 매니페스트로 기록.
 - 진실원본(`Profile.md`, `DecisionPatterns.md`, `recipes/` 등)은 절대 건드리지 않음.
 - frontmatter ``pinned: true`` 또는 ``cleanup: skip``이 있으면 건너뜀.
 
@@ -23,19 +23,13 @@ from typing import Any
 
 import yaml
 
+from synapse_memory.config import VaultFoldersConfig
+
 DEFAULT_INBOX_STALE_DAYS = 30
 DEFAULT_DORMANT_PROJECT_DAYS = 90
 DEFAULT_OLD_RESUME_DAYS = 90
 DEFAULT_STALE_MEMORY_INBOX_DAYS = 60
 DEFAULT_OLD_DAILY_REPORTS_DAYS = 90
-
-PROTECTED_FILES: tuple[str, ...] = (
-    "90_System/AI/Profile.md",
-    "90_System/AI/DecisionPatterns.md",
-)
-PROTECTED_DIRS: tuple[str, ...] = (
-    "90_System/AI/recipes",
-)
 
 
 class CleanupKind(StrEnum):
@@ -81,17 +75,13 @@ class CleanupPlan:
         payload = {
             "vault_path": self.vault_path,
             "scanned_at": self.scanned_at,
-            "candidates": [
-                {**asdict(c), "kind": c.kind.value} for c in self.candidates
-            ],
+            "candidates": [{**asdict(c), "kind": c.kind.value} for c in self.candidates],
         }
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def _file_age_days(path: Path, now: datetime.datetime) -> int:
-    mtime = datetime.datetime.fromtimestamp(
-        path.stat().st_mtime, tz=datetime.UTC
-    )
+    mtime = datetime.datetime.fromtimestamp(path.stat().st_mtime, tz=datetime.UTC)
     return (now - mtime).days
 
 
@@ -112,11 +102,29 @@ def _read_frontmatter(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _is_protected(rel_path: Path) -> bool:
+def _relative_config_path(value: str, *, key: str) -> Path:
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(f"{key}는 vault root 기준 안전한 상대 경로여야 함: {value!r}")
+    return path
+
+
+def _vault_path(vault: Path, rel_path: str, *, key: str) -> Path:
+    return vault / _relative_config_path(rel_path, key=key)
+
+
+def _is_protected(rel_path: Path, folders: VaultFoldersConfig) -> bool:
     rel = str(rel_path).replace("\\", "/")
-    if rel in PROTECTED_FILES:
+    protected_files = {
+        folders.system.ai.profile,
+        folders.system.ai.decision_patterns,
+    }
+    protected_dirs = {
+        folders.system.ai.recipes,
+    }
+    if rel in protected_files:
         return True
-    return any(rel.startswith(d + "/") for d in PROTECTED_DIRS)
+    return any(rel.startswith(d + "/") for d in protected_dirs)
 
 
 def _has_skip_marker(fm: dict[str, Any] | None) -> bool:
@@ -128,8 +136,15 @@ def _has_skip_marker(fm: dict[str, Any] | None) -> bool:
     return isinstance(cleanup, str) and cleanup.lower() == "skip"
 
 
-def _archive_target(vault: Path, source: Path, *, archive_date: str) -> Path:
-    archive_root = vault / "40_Archive" / f"_cleanup-{archive_date}"
+def _archive_target(
+    vault: Path,
+    source: Path,
+    *,
+    archive_date: str,
+    folders: VaultFoldersConfig,
+) -> Path:
+    archive_root = _vault_path(vault, folders.archive, key="vault_folders.archive")
+    archive_root = archive_root / f"_cleanup-{archive_date}"
     try:
         rel = source.relative_to(vault)
     except ValueError:
@@ -150,10 +165,15 @@ def _is_card_empty(fm: dict[str, Any] | None) -> bool:
 
 
 def _scan_inbox_stale(
-    vault: Path, *, threshold_days: int, archive_date: str, now: datetime.datetime
+    vault: Path,
+    *,
+    threshold_days: int,
+    archive_date: str,
+    now: datetime.datetime,
+    folders: VaultFoldersConfig,
 ) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    inbox = vault / "00_Inbox"
+    inbox = _vault_path(vault, folders.inbox, key="vault_folders.inbox")
     if not inbox.is_dir():
         return out
     for p in inbox.rglob("*.md"):
@@ -164,13 +184,13 @@ def _scan_inbox_stale(
         age = _file_age_days(p, now)
         if age < threshold_days:
             continue
-        target = _archive_target(vault, p, archive_date=archive_date)
+        target = _archive_target(vault, p, archive_date=archive_date, folders=folders)
         out.append(
             CleanupCandidate(
                 kind=CleanupKind.INBOX_STALE,
                 source_path=str(p),
                 target_path=str(target),
-                reason=f"00_Inbox에서 {age}일 미정리",
+                reason=f"{folders.inbox}에서 {age}일 미정리",
                 age_days=age,
                 size_bytes=p.stat().st_size,
             )
@@ -179,10 +199,15 @@ def _scan_inbox_stale(
 
 
 def _scan_dormant_projects(
-    vault: Path, *, threshold_days: int, archive_date: str, now: datetime.datetime
+    vault: Path,
+    *,
+    threshold_days: int,
+    archive_date: str,
+    now: datetime.datetime,
+    folders: VaultFoldersConfig,
 ) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    active = vault / "10_Active"
+    active = _vault_path(vault, folders.active, key="vault_folders.active")
     if not active.is_dir():
         return out
     for company in active.iterdir():
@@ -200,7 +225,7 @@ def _scan_dormant_projects(
             max_age = max(_file_age_days(f, now) for f in files)
             if max_age < threshold_days:
                 continue
-            target = _archive_target(vault, project, archive_date=archive_date)
+            target = _archive_target(vault, project, archive_date=archive_date, folders=folders)
             out.append(
                 CleanupCandidate(
                     kind=CleanupKind.DORMANT_PROJECT,
@@ -215,10 +240,15 @@ def _scan_dormant_projects(
 
 
 def _scan_old_resume_drafts(
-    vault: Path, *, threshold_days: int, archive_date: str, now: datetime.datetime
+    vault: Path,
+    *,
+    threshold_days: int,
+    archive_date: str,
+    now: datetime.datetime,
+    folders: VaultFoldersConfig,
 ) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    drafts = vault / "30_Creative" / "Drafts"
+    drafts = _vault_path(vault, folders.creative.drafts, key="vault_folders.creative.drafts")
     if not drafts.is_dir():
         return out
     for p in drafts.glob("Resume - *.md"):
@@ -227,7 +257,7 @@ def _scan_old_resume_drafts(
         age = _file_age_days(p, now)
         if age < threshold_days:
             continue
-        target = _archive_target(vault, p, archive_date=archive_date)
+        target = _archive_target(vault, p, archive_date=archive_date, folders=folders)
         out.append(
             CleanupCandidate(
                 kind=CleanupKind.OLD_RESUME,
@@ -242,10 +272,19 @@ def _scan_old_resume_drafts(
 
 
 def _scan_stale_memory_inbox(
-    vault: Path, *, threshold_days: int, archive_date: str, now: datetime.datetime
+    vault: Path,
+    *,
+    threshold_days: int,
+    archive_date: str,
+    now: datetime.datetime,
+    folders: VaultFoldersConfig,
 ) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    inbox = vault / "90_System" / "AI" / "MemoryInbox"
+    inbox = _vault_path(
+        vault,
+        folders.system.ai.memory_inbox,
+        key="vault_folders.system.ai.memory_inbox",
+    )
     if not inbox.is_dir():
         return out
     for p in inbox.glob("Profile-*.md"):
@@ -254,7 +293,7 @@ def _scan_stale_memory_inbox(
         age = _file_age_days(p, now)
         if age < threshold_days:
             continue
-        target = _archive_target(vault, p, archive_date=archive_date)
+        target = _archive_target(vault, p, archive_date=archive_date, folders=folders)
         out.append(
             CleanupCandidate(
                 kind=CleanupKind.STALE_MEMORY_INBOX,
@@ -268,10 +307,16 @@ def _scan_stale_memory_inbox(
     return out
 
 
-def _scan_empty_cards(vault: Path, *, archive_date: str) -> list[CleanupCandidate]:
+def _scan_empty_cards(
+    vault: Path, *, archive_date: str, folders: VaultFoldersConfig
+) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    for sub in ("20_Reference/Projects", "20_Reference/Companies"):
-        d = vault / sub
+    card_dirs = (
+        ("vault_folders.reference.projects", folders.reference.projects),
+        ("vault_folders.reference.companies", folders.reference.companies),
+    )
+    for key, sub in card_dirs:
+        d = _vault_path(vault, sub, key=key)
         if not d.is_dir():
             continue
         for p in d.glob("*.md"):
@@ -280,7 +325,7 @@ def _scan_empty_cards(vault: Path, *, archive_date: str) -> list[CleanupCandidat
                 continue
             if not _is_card_empty(fm):
                 continue
-            target = _archive_target(vault, p, archive_date=archive_date)
+            target = _archive_target(vault, p, archive_date=archive_date, folders=folders)
             out.append(
                 CleanupCandidate(
                     kind=CleanupKind.EMPTY_CARD,
@@ -295,17 +340,26 @@ def _scan_empty_cards(vault: Path, *, archive_date: str) -> list[CleanupCandidat
 
 
 def _scan_old_daily_reports(
-    vault: Path, *, threshold_days: int, archive_date: str, now: datetime.datetime
+    vault: Path,
+    *,
+    threshold_days: int,
+    archive_date: str,
+    now: datetime.datetime,
+    folders: VaultFoldersConfig,
 ) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    reports = vault / "90_System" / "AI" / "DailyReports"
+    reports = _vault_path(
+        vault,
+        folders.system.ai.daily_reports,
+        key="vault_folders.system.ai.daily_reports",
+    )
     if not reports.is_dir():
         return out
     for p in reports.glob("*.md"):
         age = _file_age_days(p, now)
         if age < threshold_days:
             continue
-        target = _archive_target(vault, p, archive_date=archive_date)
+        target = _archive_target(vault, p, archive_date=archive_date, folders=folders)
         out.append(
             CleanupCandidate(
                 kind=CleanupKind.OLD_DAILY_REPORT,
@@ -319,9 +373,13 @@ def _scan_old_daily_reports(
     return out
 
 
-def _scan_empty_folders(vault: Path) -> list[CleanupCandidate]:
+def _scan_empty_folders(vault: Path, *, folders: VaultFoldersConfig) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
-    skip_top = {"40_Archive", "20_Reference", "90_System"}
+    skip_top = {
+        _relative_config_path(folders.archive, key="vault_folders.archive").parts[0],
+        _relative_config_path(folders.reference.root, key="vault_folders.reference.root").parts[0],
+        _relative_config_path(folders.system.root, key="vault_folders.system.root").parts[0],
+    }
     for top in vault.iterdir():
         if not top.is_dir() or top.name.startswith(".") or top.name in skip_top:
             continue
@@ -332,7 +390,7 @@ def _scan_empty_folders(vault: Path) -> list[CleanupCandidate]:
                 rel = sub.relative_to(vault)
             except ValueError:
                 continue
-            if _is_protected(rel):
+            if _is_protected(rel, folders):
                 continue
             if any(sub.iterdir()):
                 continue
@@ -358,6 +416,7 @@ def scan_cleanup_candidates(
     old_resume_days: int | None = None,
     stale_memory_inbox_days: int | None = None,
     old_daily_reports_days: int | None = None,
+    folders: VaultFoldersConfig | None = None,
 ) -> CleanupPlan:
     """vault를 read-only로 스캔하여 청소 후보 목록 반환.
 
@@ -367,10 +426,9 @@ def scan_cleanup_candidates(
     from synapse_memory.config import get_config
 
     cfg = get_config()
+    folders = folders or cfg.vault_folders
     inbox_stale_days = (
-        inbox_stale_days
-        if inbox_stale_days is not None
-        else cfg.cleanup.inbox_stale_days
+        inbox_stale_days if inbox_stale_days is not None else cfg.cleanup.inbox_stale_days
     )
     dormant_project_days = (
         dormant_project_days
@@ -400,33 +458,38 @@ def scan_cleanup_candidates(
         threshold_days=inbox_stale_days,
         archive_date=archive_date,
         now=now,
+        folders=folders,
     )
     candidates += _scan_dormant_projects(
         vault,
         threshold_days=dormant_project_days,
         archive_date=archive_date,
         now=now,
+        folders=folders,
     )
     candidates += _scan_old_resume_drafts(
         vault,
         threshold_days=old_resume_days,
         archive_date=archive_date,
         now=now,
+        folders=folders,
     )
     candidates += _scan_stale_memory_inbox(
         vault,
         threshold_days=stale_memory_inbox_days,
         archive_date=archive_date,
         now=now,
+        folders=folders,
     )
-    candidates += _scan_empty_cards(vault, archive_date=archive_date)
+    candidates += _scan_empty_cards(vault, archive_date=archive_date, folders=folders)
     candidates += _scan_old_daily_reports(
         vault,
         threshold_days=old_daily_reports_days,
         archive_date=archive_date,
         now=now,
+        folders=folders,
     )
-    candidates += _scan_empty_folders(vault)
+    candidates += _scan_empty_folders(vault, folders=folders)
 
     return CleanupPlan(
         vault_path=str(vault),
@@ -441,6 +504,7 @@ def apply_cleanup(
     selected: list[CleanupCandidate] | None = None,
     dry_run: bool = True,
     vault: Path | None = None,
+    folders: VaultFoldersConfig | None = None,
 ) -> list[CleanupResult]:
     """선택된 후보를 archive 폴더로 이동.
 
@@ -450,6 +514,11 @@ def apply_cleanup(
         dry_run: True이면 실제 이동 없이 결과만 기록.
         vault: plan.vault_path 대신 명시 (테스트용).
     """
+    if folders is None:
+        from synapse_memory.config import get_config
+
+        folders = get_config().vault_folders
+
     items = selected if selected is not None else plan.candidates
     vault_path = vault or Path(plan.vault_path)
     results: list[CleanupResult] = []
@@ -461,7 +530,7 @@ def apply_cleanup(
                 rel = source.relative_to(vault_path)
             except ValueError:
                 rel = None
-            if rel is not None and _is_protected(rel):
+            if rel is not None and _is_protected(rel, folders):
                 results.append(
                     CleanupResult(
                         candidate=c,
@@ -481,17 +550,13 @@ def apply_cleanup(
                 continue
 
             if dry_run:
-                results.append(
-                    CleanupResult(candidate=c, status="dry_run", detail="이동 예정")
-                )
+                results.append(CleanupResult(candidate=c, status="dry_run", detail="이동 예정"))
                 continue
 
             if c.kind == CleanupKind.EMPTY_FOLDER:
                 if source.is_dir() and not any(source.iterdir()):
                     source.rmdir()
-                    results.append(
-                        CleanupResult(candidate=c, status="moved", detail="폴더 제거")
-                    )
+                    results.append(CleanupResult(candidate=c, status="moved", detail="폴더 제거"))
                 else:
                     results.append(
                         CleanupResult(
@@ -505,13 +570,9 @@ def apply_cleanup(
             target = Path(c.target_path)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(target))
-            results.append(
-                CleanupResult(candidate=c, status="moved", detail=str(target))
-            )
+            results.append(CleanupResult(candidate=c, status="moved", detail=str(target)))
         except Exception as e:
-            results.append(
-                CleanupResult(candidate=c, status="failed", detail=str(e))
-            )
+            results.append(CleanupResult(candidate=c, status="failed", detail=str(e)))
 
     return results
 
@@ -521,13 +582,23 @@ def write_cleanup_manifest(
     results: list[CleanupResult],
     *,
     archive_date: str | None = None,
+    folders: VaultFoldersConfig | None = None,
 ) -> Path:
     """이동 결과를 매니페스트 마크다운으로 vault에 기록.
 
-    위치: ``<vault>/90_System/AI/CleanupReports/YYYY-MM-DD.md``
+    위치: 설정된 CleanupReports 폴더의 ``YYYY-MM-DD.md``
     """
+    if folders is None:
+        from synapse_memory.config import get_config
+
+        folders = get_config().vault_folders
+
     archive_date = archive_date or datetime.datetime.now().strftime("%Y-%m-%d")
-    report_dir = vault / "90_System" / "AI" / "CleanupReports"
+    report_dir = _vault_path(
+        vault,
+        folders.system.ai.cleanup_reports,
+        key="vault_folders.system.ai.cleanup_reports",
+    )
     report_dir.mkdir(parents=True, exist_ok=True)
     out_path = report_dir / f"{archive_date}.md"
 

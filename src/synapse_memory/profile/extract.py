@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment, AIError
 from synapse_memory.llm.apfel import ApfelEnvironment
@@ -288,7 +289,7 @@ def save_profile_update(
 ) -> Path:
     """후보 → vault MemoryInbox에 markdown PR. 사용자 검토 후 진실원본 반영."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    inbox = vault / MEMORY_INBOX_SUBPATH
+    inbox = vault / get_config().vault_folders.system.ai.memory_inbox
     inbox.mkdir(parents=True, exist_ok=True)
 
     today = datetime.date.today().isoformat()

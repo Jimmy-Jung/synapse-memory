@@ -44,15 +44,7 @@ STATES_FILE = "states.json"
 # vault CLAUDE.md 원칙: AI 메모리는 mirror 안 함 (순환 방지),
 # Attachments/binary와 마이그레이션 스냅샷도 제외.
 # plugin config 디렉토리(.claude, .codex 등)도 PII 가치 낮음 + 토큰 가능성.
-EXCLUDED_DIRS: tuple[str, ...] = (
-    "90_System/AI",
-    "90_System/Attachments",
-    "90_System/_migration",
-    ".obsidian",
-    ".trash",
-    ".claude",
-    ".codex",
-)
+EXCLUDED_DIRS: tuple[str, ...] = (".obsidian", ".trash", ".claude", ".codex")
 # 부분 매칭 — 파일 경로에 포함되면 제외.
 # iCloud sync-conflict 파일 패턴 — ``Note (sync-conflict 2026-...)`` 또는
 # ``.sync-conflict-...`` 모두 커버하기 위해 점 없이 매칭.
@@ -115,8 +107,17 @@ def get_vault_path() -> Path:
 
 def _is_excluded(rel_path: Path) -> bool:
     """exclude 패턴 매칭."""
+    from synapse_memory.config import get_config
+
     rel_str = rel_path.as_posix()
-    for ex in EXCLUDED_DIRS:
+    folders = get_config().vault_folders
+    excluded_dirs = (
+        folders.system.ai.root,
+        folders.system.attachments,
+        folders.system.migration,
+        *EXCLUDED_DIRS,
+    )
+    for ex in excluded_dirs:
         if rel_str == ex or rel_str.startswith(ex + "/"):
             return True
     return any(sub in rel_str for sub in EXCLUDED_SUBSTRINGS)

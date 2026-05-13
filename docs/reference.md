@@ -183,6 +183,25 @@ synapse-memory config validate
 
 설정 변경은 자동 백업을 남깁니다. 보안 핵심 키는 설정 명령으로 바꿀 수 없습니다.
 
+### vault 폴더 이름 바꾸기
+
+Synapse가 쓰는 vault 내부 폴더는 `~/.synapse/config.yaml`의 `vault_folders`에서
+바꿀 수 있습니다. 기본값은 기존 PARA 구조를 유지합니다.
+
+예를 들어 archive 폴더를 `99_Archive`로 통일하려면 다음처럼 설정합니다.
+
+```yaml
+vault: /Users/me/Obsidian/Vault
+vault_folders:
+  archive: 99_Archive
+  system:
+    ai:
+      cleanup_reports: 99_Archive/CleanupReports
+```
+
+이후 `synapse-memory config validate`로 설정을 확인하세요. `cleanup`은 오래된 노트를
+`99_Archive/_cleanup-YYYY-MM-DD/`로 이동하고, cleanup report도 위 경로에 씁니다.
+
 ## 비용 확인
 
 ```bash

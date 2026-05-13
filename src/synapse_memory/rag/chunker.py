@@ -88,8 +88,10 @@ def discover_raw_sources(
     sources: list[RawSource] = []
 
     if vault_path is not None:
+        from synapse_memory.config import get_config
+
         vault_root = vault_path.expanduser().resolve()
-        active_root = vault_root / "10_Active"
+        active_root = vault_root / get_config().vault_folders.active
         if active_root.is_dir():
             sources.extend(
                 RawSource("raw_obsidian", path, vault_root)

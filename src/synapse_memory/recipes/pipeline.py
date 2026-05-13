@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
 from synapse_memory.rag.bm25 import BM25IndexError
@@ -76,7 +77,7 @@ def _load_profile_text(vault: Path) -> str:
     안전망 — Profile 이 너무 크면 ``RecipePromptTooLargeError`` 로 명시적 실패 (silent X).
     """
     parts: list[str] = []
-    base = vault / "90_System" / "AI"
+    base = vault / get_config().vault_folders.system.ai.root
     for fname in _PROFILE_FILES:
         p = base / fname
         if p.is_file():
@@ -211,7 +212,7 @@ def _build_last_answer(
 
 
 def _make_registry(vault: Path, builtin_dir: Path) -> RecipeRegistry:
-    user_dir = vault / "90_System" / "AI" / "recipes"
+    user_dir = vault / get_config().vault_folders.system.ai.recipes
     reg = RecipeRegistry(builtin_dir=builtin_dir, user_dir=user_dir)
     reg.scan()
     return reg

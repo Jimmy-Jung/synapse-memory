@@ -1331,12 +1331,13 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     recipe_source = "?"
     try:
         from synapse_memory.collectors.obsidian.mirror import get_vault_path
+        from synapse_memory.config import get_config
         from synapse_memory.recipes.registry import RecipeRegistry
 
         _vault = vault_path or get_vault_path()
         _reg = RecipeRegistry(
             builtin_dir=Path(__file__).resolve().parent / "recipes" / "builtin",
-            user_dir=_vault / "90_System" / "AI" / "recipes",
+            user_dir=_vault / get_config().vault_folders.system.ai.recipes,
         )
         _reg.scan()
         recipe = _reg.recipes.get(result.recipe_name)
@@ -1360,6 +1361,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
 
 def _recipes_registry_for_vault(vault_arg: str | None) -> Any:
     """persona recipes list/show 의 공통 helper — RecipeRegistry 인스턴스 반환."""
+    from synapse_memory.config import get_config
     from synapse_memory.recipes.registry import RecipeRegistry
 
     vault = (
@@ -1368,7 +1370,7 @@ def _recipes_registry_for_vault(vault_arg: str | None) -> Any:
         else get_obsidian_vault().expanduser().resolve()
     )
     builtin_dir = Path(__file__).resolve().parent / "recipes" / "builtin"
-    user_dir = vault / "90_System" / "AI" / "recipes"
+    user_dir = vault / get_config().vault_folders.system.ai.recipes
     reg = RecipeRegistry(builtin_dir=builtin_dir, user_dir=user_dir)
     reg.scan()
     return reg

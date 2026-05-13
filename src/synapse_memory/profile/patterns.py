@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
 
 _FIELD_RE = re.compile(r"^\s*(?:[-*]\s*)?(trigger|action|rationale|confidence):\s*(.+?)\s*$")
 
@@ -70,4 +71,4 @@ def _pattern_id(trigger: str, action: str) -> str:
 
 def _patterns_path(vault_path: Path | None) -> Path:
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / "90_System" / "AI" / "DecisionPatterns.md"
+    return vault / get_config().vault_folders.system.ai.decision_patterns

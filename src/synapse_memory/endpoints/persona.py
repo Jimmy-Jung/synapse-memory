@@ -19,6 +19,7 @@ from typing import Literal
 
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.rag import (
     VectorRecord,
@@ -145,7 +146,7 @@ def draft_resume(
 
     # 기존 filename rule 유지 (SC-005): `Resume - {display_name} ({YYYY-MM}).md`
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    drafts_dir = vault / DRAFTS_SUBPATH
+    drafts_dir = vault / get_config().vault_folders.creative.drafts
     drafts_dir.mkdir(parents=True, exist_ok=True)
     today = datetime.date.today().isoformat()
     safe_name = company.display_name.replace("/", "-").replace("\\", "-")
@@ -318,8 +319,9 @@ def _load_profile_text(vault_path: Path | None = None) -> str:
     """
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     parts: list[str] = []
+    profile_root = vault / get_config().vault_folders.system.ai.root
     for fname in ("Profile.md", "DecisionPatterns.md", "DecisionQualityRegistry.md"):
-        p = vault / "90_System" / "AI" / fname
+        p = profile_root / fname
         if p.is_file():
             try:
                 parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')}")
