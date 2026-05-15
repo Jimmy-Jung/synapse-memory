@@ -1,0 +1,101 @@
+name: Release Publish
+
+# release/X.Y.Z PR 이 main 에 merge 되면 동작.
+# vX.Y.Z tag 를 만들고, installer zip 을 빌드해 GitHub Release 를 생성한다.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.event.pull_request.merged == true && startsWith(github.head_ref, 'release/')
+    runs-on: macos-15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Extract version from branch
+        id: ver
+        run: |
+          v="${GITHUB_HEAD_REF#release/}"
+          if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Branch suffix must be X.Y.Z (got: $v)"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Guard — pyproject version matches branch
+        run: |
+          file=$(awk -F'"' '/^version = /{print $2; exit}' pyproject.toml)
+          want="${{ steps.ver.outputs.version }}"
+          if [[ "$file" != "$want" ]]; then
+            echo "::error::pyproject.toml=$file but PR head was release/$want"
+            exit 1
+          fi
+
+      - name: Guard — tag does not already exist
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          if git rev-parse "v$v" >/dev/null 2>&1; then
+            echo "::error::Tag v$v already exists — release already published?"
+            exit 1
+          fi
+
+      - name: Extract release notes from CHANGELOG
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          python3 - <<'PY' > release-notes.md
+          import os
+          import pathlib
+          import re
+          import sys
+
+          v = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = rf"## \[{re.escape(v)}\][^\n]*\n(.*?)(?=\n## \[|\Z)"
+          m = re.search(pattern, text, re.S)
+          if not m:
+              print(f"::error::CHANGELOG entry for [{v}] not found", file=sys.stderr)
+              sys.exit(1)
+          sys.stdout.write(m.group(1).strip() + "\n")
+          PY
+
+      - name: Build installer zip
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          mkdir -p dist
+          git archive \
+            --prefix="SynapseMemory-v$v/" \
+            --format=zip \
+            -o "dist/SynapseMemory-v$v-macos-installer.zip" \
+            HEAD
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create + push tag
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          git tag -a "v$v" -m "v$v"
+          git push origin "v$v"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          gh release create "v$v" \
+            --title "v$v" \
+            --notes-file release-notes.md \
+            "dist/SynapseMemory-v$v-macos-installer.zip"

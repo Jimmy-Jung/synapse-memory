@@ -1,0 +1,97 @@
+name: Release Check
+
+# release/X.Y.Z 브랜치 → main 으로 가는 PR 에서만 동작.
+# 버전/문서/CHANGELOG 정합성 + pytest 를 검증한다.
+# 모두 통과해야 merge → release-publish 가 안전하게 동작.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  verify:
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from branch
+        id: ver
+        run: |
+          v="${GITHUB_HEAD_REF#release/}"
+          if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Branch suffix must be X.Y.Z (got: $v)"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Verify pyproject.toml version
+        run: |
+          file=$(awk -F'"' '/^version = /{print $2; exit}' pyproject.toml)
+          want="${{ steps.ver.outputs.version }}"
+          if [[ "$file" != "$want" ]]; then
+            echo "::error::pyproject.toml version=$file but branch expects $want"
+            exit 1
+          fi
+
+      - name: Verify __version__
+        run: |
+          file=$(awk -F'"' '/^__version__ = /{print $2; exit}' src/synapse_memory/__init__.py)
+          want="${{ steps.ver.outputs.version }}"
+          if [[ "$file" != "$want" ]]; then
+            echo "::error::__version__=$file but branch expects $want"
+            exit 1
+          fi
+
+      - name: Verify README installer link
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          need_url="releases/download/v$v/SynapseMemory-v$v-macos-installer.zip"
+          if ! grep -q "$need_url" README.md; then
+            echo "::error::README missing installer link for v$v"
+            exit 1
+          fi
+          if grep -E "SynapseMemory-v[0-9]+\.[0-9]+\.[0-9]+-macos-installer\.zip" README.md \
+              | grep -v "SynapseMemory-v$v-macos-installer.zip"; then
+            echo "::error::README still references older installer versions"
+            exit 1
+          fi
+
+      - name: Verify CHANGELOG entry (no TODO, non-empty)
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          v = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = rf"## \[{re.escape(v)}\][^\n]*\n(.*?)(?=\n## \[|\Z)"
+          m = re.search(pattern, text, re.S)
+          if not m:
+              print(f"::error::CHANGELOG missing [{v}] section")
+              sys.exit(1)
+          body = m.group(1).strip()
+          if not body:
+              print(f"::error::CHANGELOG [{v}] body empty")
+              sys.exit(1)
+          if "TODO" in body:
+              print(f"::error::CHANGELOG [{v}] still contains TODO placeholder")
+              sys.exit(1)
+          PY
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: python3 -m pip install -e ".[dev]"
+
+      - name: Pytest
+        run: python3 -m pytest -W ignore::DeprecationWarning
