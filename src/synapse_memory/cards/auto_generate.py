@@ -287,6 +287,7 @@ def generate_company_card(
         system=COMPANY_CARD_SYSTEM,
         model=model,
         env=ai_env,
+        timeout=DEFAULT_GENERATE_TIMEOUT,
     )
 
     cleaned = _strip_outer_fence(text)

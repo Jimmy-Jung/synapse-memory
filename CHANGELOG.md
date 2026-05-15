@@ -2,6 +2,39 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.8.4] — 2026-05-15
+
+### Fixed — `daily` 파이프라인 비용·타임아웃 회귀
+
+- `cli.py:daily` 가 `--classify-model` / `--generate-model` / `--profile-model`
+  의 argparse `default` 값(`haiku`/`sonnet`/`sonnet`)을 그대로 사용해
+  `~/.synapse/config.yaml` 의 `models.<provider>.<task>` 를 **완전히 무시**
+  하던 버그 수정. 이제 CLI 인자가 명시되지 않으면 `_resolve_model()` 을 통해
+  config 우선순위(`CLI 인자 → SYNAPSE_AI_PROVIDER → config.ai_provider`)를
+  따른다. 영향: 사용자가 cost 절감을 위해 `card_generate: haiku` 로 바꿔도
+  실제 daily 실행은 sonnet 으로 호출되어 의도한 절감이 일어나지 않던 문제.
+- `cards/auto_generate.py:generate_company_card` 에 `timeout=DEFAULT_GENERATE_TIMEOUT`
+  (180s) 누락. project 카드와 달리 회사 카드 호출만 `claude.py` 의
+  `DEFAULT_TIMEOUT_SEC=60` 으로 떨어져 12KB 입력 처리 중 120s 부근에서
+  반복 타임아웃이 발생하던 회귀 수정.
+
+### Changed — `update_profile` 후속 단계 자동 보호
+
+- `daily.py:DAILY_STAGES` 의 `update_profile` 의존성에 `generate` 추가.
+- `_build_generate_action` 이 생성 0건 + 실패 ≥1건인 완전 실패 상황에서
+  `RuntimeError` 를 발생시키도록 변경 → 단계 status 가 `FAILED` 가 되어
+  `_blocking_dependency` 로직이 후속 `update_profile` 을 자동 skip.
+  이전엔 generate 가 모두 실패해도 status=SUCCESS 였기에 update_profile 이
+  16+ 회의 apfel redaction call 을 무의미하게 소비하던 비용 leak 차단.
+
+### 결과
+
+검증 실행 (`synapse-memory daily --quick`) 기준:
+- 동일 `companies` 카드 생성: sonnet 80.2s / $0.17 → **haiku 32.4s / $0.10**
+  (시간 60% ↓, 비용 42% ↓)
+- daily 1회 총 시간: 102s → **55.8s** (46% ↓)
+- 4회 연속 타임아웃 회귀(180s/120s/120s) 재발 없음
+
 ## [0.8.1] — 2026-05-13
 
 ### Added — Codex 플러그인 surface 보강

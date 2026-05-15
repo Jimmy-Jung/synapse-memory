@@ -53,7 +53,7 @@ DAILY_STAGES = (
     DailyStage(
         "update_profile",
         "ProfileFact/DecisionPattern 후보 추출",
-        ("collect_claude_code", "classify"),
+        ("collect_claude_code", "classify", "generate"),
     ),
     DailyStage("report", "DailyReport 작성"),
 )
@@ -426,7 +426,12 @@ def _build_generate_action(
                     status_sink=status_sink,
                 )
         suffix = f", 실패 {failed}개" if failed else ""
-        return f"신규 Card {created}개 생성{suffix}"
+        summary = f"신규 Card {created}개 생성{suffix}"
+        # 생성 0, 실패>0 인 완전 실패는 단계 자체를 FAILED 로 표시해 update_profile
+        # 등 후속 단계가 자동으로 skip 되도록 한다.
+        if created == 0 and failed > 0:
+            raise RuntimeError(summary)
+        return summary
 
     return step
 

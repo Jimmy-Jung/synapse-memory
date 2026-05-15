@@ -666,14 +666,20 @@ def cmd_daily(args: argparse.Namespace) -> int:
             "update_profile auto-skip. full pipeline 은 `synapse-memory daily` (no flag)."
         )
 
+    # CLI 인자가 None이면 config (models.<provider>.<task>) 우선 적용.
+    # run_daily는 None을 받으면 자체 기본값 "sonnet"/"haiku"로 폴백.
+    classify_model = _resolve_model(args.classify_model, "classify") or "haiku"
+    generate_model = _resolve_model(args.generate_model, "card_generate") or "sonnet"
+    profile_model = _resolve_model(args.profile_model, "update_profile") or "sonnet"
+
     try:
         result = run_daily(
             only=only,
             skip=skip,
             resume_from=args.resume_from,
-            classify_model=args.classify_model,
-            generate_model=args.generate_model,
-            profile_model=args.profile_model,
+            classify_model=classify_model,
+            generate_model=generate_model,
+            profile_model=profile_model,
             profile_sample_lines=args.profile_sample_lines,
             profile_facts_only=args.profile_facts_only,
             quick=args.quick,
@@ -2575,9 +2581,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=STEPS,
         help="지정 stage부터 daily 재개",
     )
-    p_daily.add_argument("--classify-model", default="haiku")
-    p_daily.add_argument("--generate-model", default="sonnet")
-    p_daily.add_argument("--profile-model", default="sonnet")
+    # default=None — CLI 인자가 명시되지 않으면 cmd_daily에서
+    # _resolve_model() 로 config.models.<provider>.<task> 를 따른다.
+    p_daily.add_argument("--classify-model", default=None)
+    p_daily.add_argument("--generate-model", default=None)
+    p_daily.add_argument("--profile-model", default=None)
     p_daily.add_argument("--profile-sample-lines", type=int, default=200)
     p_daily.add_argument("--profile-facts-only", action="store_true")
     p_daily.add_argument(
