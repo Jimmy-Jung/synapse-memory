@@ -1069,7 +1069,10 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
 
     path = save_profile_update(facts, patterns)
     print(f"\n{OK} MemoryInbox PR 저장: {path}")
-    print("  검토 후 vault 90_System/AI/Profile.md, DecisionPatterns.md 반영")
+    from synapse_memory.config import get_config as _get_config
+
+    ai_folders = _get_config().vault_folders.system.ai
+    print(f"  검토 후 vault {ai_folders.profile}, {ai_folders.decision_patterns} 반영")
     return 0
 
 
@@ -1134,7 +1137,10 @@ def cmd_persona_ingest(args: argparse.Namespace) -> int:
 
     path = save_profile_update(facts, patterns=None)
     print(f"\n{OK} MemoryInbox PR 저장: {path}")
-    print("  검토 후 vault 90_System/AI/Profile.md 반영")
+    from synapse_memory.config import get_config as _get_config
+
+    profile_path = _get_config().vault_folders.system.ai.profile
+    print(f"  검토 후 vault {profile_path} 반영")
     return 0
 
 
