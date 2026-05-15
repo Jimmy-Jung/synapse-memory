@@ -2,6 +2,20 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.8.5] — 2026-05-15
+
+### Fixed — CLI 안내 텍스트의 PARA 폴더 하드코딩 (#12)
+
+- `cli.py:cmd_profile_update` / `cmd_persona_ingest` 가 MemoryInbox PR 저장
+  후 출력하던 "검토 후 vault 90_System/AI/Profile.md, DecisionPatterns.md
+  반영" 안내가 정적 문자열이라, 사용자가 `vault_folders.system.ai.profile`
+  /`.decision_patterns` 을 override 해도 잘못된 경로를 안내하던 문제 수정.
+  이제 `get_config().vault_folders.system.ai.{profile,decision_patterns}`
+  를 읽어 실제 설정 경로를 출력.
+- 이슈 #12 (PARA 폴더 경로 외부화) 의 잔여 cosmetic 하드코딩 처리 — 핵심
+  외부화 로직은 0.8.3 (dc3b1b7) 에서 이미 완료, 본 패치는 안내 메시지
+  마무리.
+
 ## [0.8.4] — 2026-05-15
 
 ### Fixed — `daily` 파이프라인 비용·타임아웃 회귀
