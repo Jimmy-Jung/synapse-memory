@@ -22,7 +22,13 @@
 3. [명령과 문제 해결](reference.md)
 
    Claude Code slash 명령, Codex skill 요청, CLI 명령, 설정 변경, 환경 복구 방법만
-   모았습니다.
+   모았습니다. v0.9.0 이후 추가된 흐름도 같은 문서에 정리돼 있습니다.
+
+   - 기존 vault를 새 폴더 구조로 옮기기 (`migrate-folders`, v0.9.0)
+   - 개인 메모를 외부 AI에 안전 전달 (`/sm:redact`, v0.10.0)
+   - 다른 프로젝트에서 sm 컨텍스트 활용 (`/sm:setup`, `/sm:sync`, v0.11.0)
+   - Profile 후보 GUI 승인 (`/sm:apply-profile`, v0.12.0)
+   - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
 
 ## 한 문장으로 이해하기
 
