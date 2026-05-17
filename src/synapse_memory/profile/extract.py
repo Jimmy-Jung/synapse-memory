@@ -307,6 +307,8 @@ def save_profile_update(
         f"fact_count: {len(facts)}",
         f"pattern_count: {len(patterns) if patterns else 0}",
         "status: pending_review",
+        "tags:",
+        "  - node/profile-update",
         "---",
         "",
         f"# Profile 갱신 후보 ({today})",

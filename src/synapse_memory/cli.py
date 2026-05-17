@@ -391,6 +391,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ Private 폴더 deny 진단 실패: {exc}")
 
+    # Dataview 플러그인 점검 — MOC 동적 인덱스 의존성
+    try:
+        from synapse_memory.config import load_config
+        from synapse_memory.doctor import diagnose_dataview_plugin
+
+        dv_cfg = load_config()
+        dv_result = diagnose_dataview_plugin(dv_cfg.vault)
+        if dv_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {dv_result.message}")
+        elif dv_result.status == DiagnosticStatus.WARN:
+            print(f"⚠ {dv_result.message}")
+        else:
+            print(f"{FAIL} {dv_result.message}")
+    except Exception as exc:
+        print(f"⚠ Dataview 플러그인 진단 실패: {exc}")
+
     # AI provider CLI
     ai_env = detect_ai_environment()
     if ai_env.ready:
@@ -2390,6 +2406,29 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_moc(args: argparse.Namespace) -> int:
+    """vault 90_System/AI/MOC.md 생성·갱신 (Obsidian Graph 진입점)."""
+    from synapse_memory.collectors.obsidian import get_vault_path
+    from synapse_memory.moc import write_or_update_moc
+
+    vault = (
+        Path(args.vault).expanduser().resolve()
+        if args.vault
+        else get_vault_path()
+    )
+    if not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        return 2
+
+    path = write_or_update_moc(vault)
+    print(f"{OK} MOC 갱신: {path}")
+    print(
+        "  Dataview 미설치 시 동적 인덱스가 동작하지 않습니다. "
+        "`synapse-memory doctor` 로 점검하세요."
+    )
+    return 0
+
+
 def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
     """vault MemoryInbox의 status=pending_review 후보 파일 목록 출력."""
     import json as _json
@@ -2624,6 +2663,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="cwd 프로젝트만 갱신 (기본: 등록 전체)",
     )
     p_sync.set_defaults(func=cmd_sync)
+
+    p_moc = sub.add_parser(
+        "moc",
+        help="vault 90_System/AI/MOC.md 생성·갱신 (Obsidian Graph 진입점)",
+    )
+    p_moc.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_moc.set_defaults(func=cmd_moc)
 
     p_list_pending = sub.add_parser(
         "list-pending-profiles",

@@ -530,6 +530,8 @@ def render_daily_report(
         f"new_facts: {_extract_first_int(result.steps, 'fact=')}",
         f"est_usd: {est_usd:.4f}",
         f"resume_from: {result.resume_from or ''}",
+        "tags:",
+        "  - node/daily-report",
         "---",
         "",
         f"# Daily Report — {date}",
