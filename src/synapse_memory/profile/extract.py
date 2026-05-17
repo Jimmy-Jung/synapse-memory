@@ -286,13 +286,18 @@ def save_profile_update(
     patterns: list[DecisionPattern] | None = None,
     *,
     vault_path: Path | None = None,
+    date: datetime.date | None = None,
 ) -> Path:
     """후보 → vault MemoryInbox에 markdown PR. 사용자 검토 후 진실원본 반영."""
+    from synapse_memory.folders import year_month_path
+
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    inbox = vault / get_config().vault_folders.system.ai.memory_inbox
+    inbox_base = vault / get_config().vault_folders.system.ai.memory_inbox
+    today_date = date or datetime.date.today()
+    inbox = year_month_path(inbox_base, today_date)
     inbox.mkdir(parents=True, exist_ok=True)
 
-    today = datetime.date.today().isoformat()
+    today = today_date.isoformat()
     path = inbox / f"Profile-{today}.md"
 
     lines: list[str] = [

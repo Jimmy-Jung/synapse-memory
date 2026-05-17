@@ -283,7 +283,7 @@ class TestSaveProfileUpdate:
         path = save_profile_update(facts, patterns, vault_path=tmp_path)
 
         assert path.is_file()
-        assert path.parent.relative_to(tmp_path) == MEMORY_INBOX_SUBPATH
+        assert (tmp_path / MEMORY_INBOX_SUBPATH) in path.parents
         content = path.read_text(encoding="utf-8")
         assert "type: profile_update" in content
         assert "단계별 의사코드" in content
