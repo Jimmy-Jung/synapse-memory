@@ -758,6 +758,71 @@ def cmd_daily_status(args: argparse.Namespace) -> int:
         return 130
 
 
+def cmd_migrate_folders(args: argparse.Namespace) -> int:
+    """기존 flat 파일을 {YYYY}/{MM}/ 폴더 구조로 이동."""
+    from synapse_memory.collectors.obsidian import get_vault_path
+    from synapse_memory.config import get_config
+    from synapse_memory.folders.migrate import (
+        DAILY_REPORT_PATTERN,
+        PROFILE_PATTERN,
+        execute_migration,
+        scan_flat_files,
+    )
+
+    vault = (
+        Path(args.vault).expanduser().resolve()
+        if args.vault
+        else get_vault_path()
+    )
+    if not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        return 2
+
+    cfg = get_config()
+    targets = [
+        (vault / cfg.vault_folders.system.ai.memory_inbox, PROFILE_PATTERN, "MemoryInbox"),
+        (vault / cfg.vault_folders.system.ai.daily_reports, DAILY_REPORT_PATTERN, "DailyReports"),
+    ]
+
+    total_moved = 0
+    total_conflicts = 0
+    total_skipped: list[Path] = []
+    total_errors: list[tuple[Path, str]] = []
+
+    for base, pattern, label in targets:
+        plans, skipped = scan_flat_files(base, pattern)
+        total_skipped.extend(skipped)
+        if not plans and not skipped:
+            print(f"  {label:<14} (대상 없음)")
+            continue
+        result = execute_migration(plans, dry_run=args.dry_run)
+        moved_n = len(result.moved)
+        conflict_n = len(result.conflicts)
+        total_moved += moved_n
+        total_conflicts += conflict_n
+        total_errors.extend(result.errors)
+        prefix = "  dry-run" if args.dry_run else "  이동"
+        print(f"{prefix} {label:<14} {moved_n}건, 충돌 {conflict_n}건, skipped {len(skipped)}건")
+        for plan in result.moved:
+            arrow = "→" if not args.dry_run else "·"
+            print(f"    {plan.src.name} {arrow} {plan.dst.relative_to(base)}")
+        for src, dst in result.conflicts:
+            print(f"    ⚠ 충돌: {src.name} (대상 {dst.relative_to(base)} 이미 존재)", file=sys.stderr)
+        for src, err in result.errors:
+            print(f"    ✖ 실패: {src.name} — {err}", file=sys.stderr)
+
+    if args.report_unknown and total_skipped:
+        print("\n[skipped — 패턴 불일치]")
+        for p in total_skipped:
+            print(f"  {p}")
+
+    if total_errors:
+        return 2
+    if total_conflicts:
+        return 1
+    return 0
+
+
 def cmd_config_show(args: argparse.Namespace) -> int:
     """현재 효력 있는 config 출력."""
     from synapse_memory.config import (
@@ -2733,6 +2798,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_rl_rm = rl_sub.add_parser("remove", help="항목 제거")
     p_rl_rm.add_argument("item", help="제거할 항목 (정확히 일치)")
     p_rl_rm.set_defaults(func=cmd_redactlist_remove)
+
+    p_migrate = sub.add_parser(
+        "migrate-folders",
+        help="기존 flat MemoryInbox/DailyReports 파일을 {YYYY}/{MM}/ 구조로 이동 (1회성)",
+    )
+    p_migrate.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="실제 이동 없이 의도된 이동 리스트만 출력",
+    )
+    p_migrate.add_argument(
+        "--report-unknown",
+        action="store_true",
+        help="패턴에 맞지 않아 건너뛴 파일 목록 표시",
+    )
+    p_migrate.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_migrate.set_defaults(func=cmd_migrate_folders)
 
     return parser
 
