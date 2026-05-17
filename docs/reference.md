@@ -166,6 +166,38 @@ synapse-memory persona draft-resume examplecorp
 
 승인한 자료만 회상, 의사결정, 이력서 초안에 사용됩니다.
 
+## Profile 후보 GUI 승인 — `/sm:apply-profile`
+
+`/sm:daily`가 만든 `MemoryInbox/{YYYY}/{MM}/Profile-YYYY-MM-DD.md` 후보를 항목별로 검토하고 승인분만 vault `Profile.md` / `DecisionPatterns.md`에 반영합니다.
+
+```bash
+/sm:apply-profile                  # 가장 최근 pending 후보
+/sm:apply-profile 2026-05-17       # 특정 날짜
+/sm:apply-profile --all-pending    # 오래된 순으로 전부
+```
+
+### 흐름
+
+1. 슬래시 호출 → `synapse-memory list-pending-profiles --json` 으로 pending 목록 조회
+2. 후보 파일 Read → ProfileFact + DecisionPattern 항목 평탄화
+3. AskUserQuestion 4개씩 (Yes / No / Edit)
+4. 승인분 → Profile.md / DecisionPatterns.md에 Edit으로 추가
+5. 후보 파일 frontmatter `status: pending_review` → `status: applied` + `applied_date` 갱신
+
+### `/sm:daily` 종료 후 자동 제안
+
+daily가 정상 종료되고 `update_profile`이 성공하면 prompt가 자동으로 apply 흐름을 제안합니다. 사용자가 Yes 답할 때만 진입 — 강제 트리거 없음.
+
+### 보조 CLI
+
+```bash
+# pending 후보 목록만 보기
+synapse-memory list-pending-profiles
+synapse-memory list-pending-profiles --json   # 슬래시 prompt가 파싱
+```
+
+`applied` 마감된 후보는 list-pending 결과에서 자동 제외됩니다 (idempotent — apply 흐름 다시 호출 안 됨).
+
 ## 다른 프로젝트에서 sm 컨텍스트 활용하기
 
 다른 프로젝트 디렉터리에서도 Claude Code/Codex가 vault Profile·Patterns 요약을 자연스럽게 인식하게 만들 수 있습니다. `synapse-memory setup` 명령이 그 프로젝트의 `AGENTS.md`(Codex 표준)와 `CLAUDE.md`(Claude Code 표준)에 marker로 감싼 컨텍스트 블록을 삽입하고, `~/.synapse/projects.yaml`에 등록합니다.

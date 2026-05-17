@@ -36,3 +36,16 @@ SYNAPSE_FROM_AGENT=1 synapse-memory daily --resume-from classify
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --dry-run --resume-from index
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick --quick-days 14
 ```
+
+## 종료 후 흐름 — apply 제안
+
+daily가 정상 종료되고 `update_profile` 단계가 성공하면(즉 신규 `Profile-YYYY-MM-DD.md` 후보가 생성되면), AskUserQuestion으로 다음을 사용자에게 제안하세요.
+
+> "오늘자 Profile 후보가 생성됐습니다. 지금 `/sm:apply-profile` 흐름으로 항목별 검토할까요?"
+>
+> A. 지금 검토 시작 (Yes)
+> B. 나중에 (No)
+
+A 선택 시 `/sm:apply-profile` 흐름으로 이어집니다. B 선택 시 일반 종료. 사용자가 옵션을 명시 선택하지 않은 상태로는 apply 자동 진입 금지 — Constitution VI Installation Consent 준수.
+
+`--dry-run` 모드이거나 `update_profile` 단계가 실패·skip이면 이 제안을 생략하세요 (신규 후보가 없음).
