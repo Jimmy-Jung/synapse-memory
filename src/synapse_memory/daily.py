@@ -495,10 +495,12 @@ def write_daily_report(
 ) -> Path:
     from synapse_memory.collectors.obsidian import get_vault_path
     from synapse_memory.config import get_config
+    from synapse_memory.folders import year_month_path
 
     report_date = date or datetime.date.today()
     root = vault_path or get_vault_path()
-    report_dir = root / get_config().vault_folders.system.ai.daily_reports
+    report_base = root / get_config().vault_folders.system.ai.daily_reports
+    report_dir = year_month_path(report_base, report_date)
     report_dir.mkdir(parents=True, exist_ok=True)
     path = report_dir / f"{report_date.isoformat()}.md"
     path.write_text(
