@@ -166,6 +166,68 @@ synapse-memory persona draft-resume examplecorp
 
 승인한 자료만 회상, 의사결정, 이력서 초안에 사용됩니다.
 
+## 다른 프로젝트에서 sm 컨텍스트 활용하기
+
+다른 프로젝트 디렉터리에서도 Claude Code/Codex가 vault Profile·Patterns 요약을 자연스럽게 인식하게 만들 수 있습니다. `synapse-memory setup` 명령이 그 프로젝트의 `AGENTS.md`(Codex 표준)와 `CLAUDE.md`(Claude Code 표준)에 marker로 감싼 컨텍스트 블록을 삽입하고, `~/.synapse/projects.yaml`에 등록합니다.
+
+```bash
+# 새 프로젝트 디렉터리에서 1회 실행
+cd ~/proj/my-ios-app
+synapse-memory setup                    # both (AGENTS.md + CLAUDE.md, 기본)
+synapse-memory setup --target agents    # AGENTS.md만 (Codex 전용)
+synapse-memory setup --target claude    # CLAUDE.md만 (Claude Code 전용)
+synapse-memory setup --dry-run          # 변경 미리보기
+```
+
+marker 형식 (HTML 주석이라 마크다운 렌더링 시 비가시):
+
+```text
+<!-- SYNAPSE-MEMORY START -->
+## Second Brain (Synapse Memory)
+
+Profile: /Users/jimmy/.../Profile.md
+Patterns: /Users/jimmy/.../DecisionPatterns.md
+
+명령: `/sm:recall <topic>` · `/sm:ask <질문>` 으로 사용자 자료를 조회.
+
+### Quick reference
+
+**Facts**
+- ...
+
+**Decision patterns**
+- ...
+<!-- SYNAPSE-MEMORY END -->
+```
+
+마커 외부 라인은 그대로 보존됩니다. 같은 vault 상태에서 setup을 두 번 실행하면 결과 파일은 byte-level 동일입니다 (idempotent).
+
+### marker 갱신 — sync
+
+vault `Profile.md` 또는 `DecisionPatterns.md` 가 바뀐 뒤에 등록된 프로젝트들의 marker도 새 내용으로 갱신하려면:
+
+```bash
+synapse-memory sync              # 등록된 모든 프로젝트 갱신
+synapse-memory sync --current    # 현재 디렉터리 프로젝트만 갱신
+```
+
+- 자동 트리거 없음. `synapse-memory daily` 같은 다른 명령이 sync를 자동 호출하지 않습니다.
+- 등록된 path가 사라진 entry는 `state: stale` 로 표시되고, 나머지는 정상 처리됩니다.
+
+### registry 위치
+
+`~/.synapse/projects.yaml` 에 다음 스키마로 저장됩니다.
+
+```yaml
+version: 1
+projects:
+  - path: /Users/jimmy/proj/my-ios-app
+    target: both              # both | agents | claude
+    registered_at: 2026-05-17
+    last_sync: 2026-05-17
+    state: active             # active | stale
+```
+
 ## 개인 메모를 외부 AI에 안전하게 전달하기
 
 vault 안에 외부 AI가 직접 읽으면 안 되는 개인 메모가 있다면 `90_System/Private/` 폴더를 관례로 사용합니다. Claude Code는 vault `.claude/settings.json` 의 `permissions.deny` 로 차단합니다.
