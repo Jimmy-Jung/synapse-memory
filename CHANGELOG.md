@@ -2,6 +2,49 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.9.0] — 2026-05-17
+
+### Changed — MemoryInbox / DailyReports year/month folder structure (#011)
+
+매일 `synapse-memory daily` 실행으로 누적되는 후보·리포트 파일이 flat하게 쌓여
+탐색이 어려운 문제를 해결. 신규 파일은 자동으로 `{YYYY}/{MM}/` 하위 폴더에
+생성된다.
+
+- `save_profile_update(profile/extract.py)`: 신규 `date` 키워드 인자 + 경로
+  산출에 `synapse_memory.folders.year_month_path` 사용. 결과 경로:
+  `MemoryInbox/{YYYY}/{MM}/Profile-{YYYY-MM-DD}.md`
+- `write_daily_report(daily.py)`: 동일 패턴 적용. 결과 경로:
+  `DailyReports/{YYYY}/{MM}/{YYYY-MM-DD}.md`
+- 신규 모듈 `src/synapse_memory/folders/`: `year_month_path()`,
+  `find_candidate_files()` (재귀 glob). 다른 모듈도 MemoryInbox·DailyReports
+  scan 시 이 helper를 통과해야 함.
+
+### Added — `migrate-folders` CLI (1회성 마이그레이션 도구)
+
+기존 flat 파일이 있는 vault에서 새 구조로 안전하게 옮기는 도구.
+
+- `synapse-memory migrate-folders [--dry-run] [--report-unknown] [--vault PATH]`
+- 정규식 매치: `Profile-YYYY-MM-DD.md` (MemoryInbox 전용), `YYYY-MM-DD.md`
+  (DailyReports 전용)
+- 충돌 시 fail-closed: 대상 파일이 이미 존재하면 이동 안 함, conflict로 보고
+- idempotent: 두 번 실행해도 0건 이동
+- 종료 코드: `0`=정상 / `1`=충돌 있음 / `2`=시스템 에러
+
+### Breaking — apply-profile / cleanup 등 후속 코드 영향
+
+- MemoryInbox candidate를 읽는 후속 기능(예: apply-profile, cleanup scan)은
+  flat 스캔 대신 `folders.find_candidate_files()` 같은 재귀 스캔을 사용해야
+  한다. 이번 릴리스에는 기존 cleanup·apply 호출 경로는 변경되지 않았으니
+  v0.10.x 작업 전 점검 필요.
+
+### Internal
+
+- 신규 unit + integration 테스트 21개 (`tests/test_folders_*.py`,
+  `tests/test_daily_year_month.py`, `tests/test_cli_migrate_folders.py`).
+  전체 `pytest` 847 passed.
+- spec/plan/tasks: `specs/011-yearmonth-folders/`. 실제 vault migration
+  검증 기록: `verification-2026-05-17.md`.
+
 ## [0.8.5] — 2026-05-15
 
 ### Fixed — CLI 안내 텍스트의 PARA 폴더 하드코딩 (#12)
