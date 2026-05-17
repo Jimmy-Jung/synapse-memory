@@ -2,6 +2,41 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.11.0] — 2026-05-17
+
+### Added — `setup` + `sync` CLI: cross-project Profile marker (#013)
+
+다른 프로젝트에서도 Claude Code와 Codex가 vault Profile·Patterns 요약을 인식하도록 `AGENTS.md`/`CLAUDE.md`에 HTML comment marker로 컨텍스트를 삽입한다.
+
+- `synapse-memory setup [--target {agents,claude,both}] [--dry-run]`
+  - 현재 cwd 프로젝트의 `AGENTS.md` (Codex 표준) / `CLAUDE.md` (Claude Code 표준)에 `<!-- SYNAPSE-MEMORY START -->` … `<!-- SYNAPSE-MEMORY END -->` 블록 삽입 또는 교체
+  - `~/.synapse/projects.yaml` 에 cwd 등록 (`{path, target, registered_at, last_sync, state}`)
+  - byte-level idempotent — 같은 vault 상태로 재실행 시 결과 동일
+  - marker 외부 라인 보존, unclosed marker fail-closed (종료 코드 1)
+- `synapse-memory sync [--current]`
+  - 등록된 모든 프로젝트 marker 갱신, `last_sync` 업데이트
+  - 등록된 path가 사라진 entry는 `state: stale` 표시 (나머지는 정상 처리)
+  - `--current`: cwd 프로젝트만
+  - **자동 트리거 없음** — `daily` 같은 다른 명령이 sync를 부르지 않음 (명시 호출만, 사용자 결정 2026-05-17)
+
+### Added — `synapse_memory.projects` 신규 패키지
+
+- `projects.marker`: `MARKER_START`/`MARKER_END` 상수, `inject_or_replace`, `extract_block`, `MarkerParseError`
+- `projects.registry`: `ProjectEntry` dataclass, atomic write(`tempfile + os.replace`), `load_registry`/`save_registry`/`upsert_entry`/`mark_stale`
+- `projects.summary`: `generate_marker_body(profile, patterns, *, fact_top_n=5, pattern_top_m=4)`
+
+### Slash + Skill
+
+- Claude Code marketplace: `commands/setup.md`, `commands/sync.md`
+- Codex skill: `skills/setup/SKILL.md`, `skills/sync/SKILL.md`
+- docs: `docs/reference.md` "다른 프로젝트에서 sm 컨텍스트 활용하기" 섹션
+
+### Internal
+
+- 신규 unit + integration 테스트 18개 (marker 6 + registry 4 + summary 3 + CLI 5)
+- 전체 `pytest` 876 passed (858 → 876)
+- spec/plan/tasks: `specs/013-sm-setup-sync/`
+
 ## [0.10.0] — 2026-05-17
 
 ### Added — `redact file` CLI + `/sm:redact` 슬래시 (#012)
