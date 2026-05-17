@@ -2244,6 +2244,152 @@ def cmd_redact_file(args: argparse.Namespace) -> int:
     return 0
 
 
+def _setup_vault_path() -> Path:
+    """vault 경로 resolver (테스트에서 monkeypatch 가능)."""
+    from synapse_memory.config import get_config
+
+    return Path(get_config().vault).expanduser().resolve()
+
+
+def _setup_registry_path() -> Path:
+    """projects.yaml 경로 (테스트에서 monkeypatch 가능)."""
+    return Path.home() / ".synapse" / "projects.yaml"
+
+
+def _setup_profile_patterns_paths(vault: Path) -> tuple[Path, Path]:
+    from synapse_memory.config import get_config
+
+    cfg = get_config()
+    profile = vault / cfg.vault_folders.system.ai.profile
+    patterns = vault / cfg.vault_folders.system.ai.decision_patterns
+    return profile, patterns
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """현재 디렉터리 프로젝트에 marker 삽입 + registry 등록."""
+    import datetime as _datetime
+
+    from synapse_memory.projects.marker import MarkerParseError, inject_or_replace
+    from synapse_memory.projects.registry import (
+        ProjectEntry,
+        load_registry,
+        save_registry,
+        upsert_entry,
+    )
+    from synapse_memory.projects.summary import generate_marker_body
+
+    vault = _setup_vault_path()
+    profile, patterns = _setup_profile_patterns_paths(vault)
+    body = generate_marker_body(profile, patterns)
+
+    project = Path.cwd().resolve()
+    targets_for = {
+        "agents": ["AGENTS.md"],
+        "claude": ["CLAUDE.md"],
+        "both": ["AGENTS.md", "CLAUDE.md"],
+    }[args.target]
+
+    if args.dry_run:
+        print(f"[dry-run] project: {project}")
+        for name in targets_for:
+            target_file = project / name
+            status = "신규 생성" if not target_file.is_file() else "갱신"
+            print(f"  {status}: {target_file}")
+        print(f"  registry: {_setup_registry_path()} (등록 예정, target={args.target})")
+        return 0
+
+    for name in targets_for:
+        target_file = project / name
+        try:
+            changed, _ = inject_or_replace(target_file, body)
+        except MarkerParseError as exc:
+            print(f"{FAIL} {exc}", file=sys.stderr)
+            return 1
+        action = "변경됨" if changed else "동일"
+        print(f"  {OK} {target_file} — {action}")
+
+    registry = _setup_registry_path()
+    entries = load_registry(registry)
+    new = ProjectEntry(
+        path=project,
+        target=args.target,
+        registered_at=_datetime.date.today(),
+        last_sync=None,
+        state="active",
+    )
+    entries = upsert_entry(entries, new)
+    save_registry(entries, registry)
+    print(f"  {OK} registry: {registry}")
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    """등록된 모든 프로젝트(또는 --current) marker 갱신."""
+    import datetime as _datetime
+
+    from synapse_memory.projects.marker import MarkerParseError, inject_or_replace
+    from synapse_memory.projects.registry import (
+        ProjectEntry,
+        load_registry,
+        mark_stale,
+        save_registry,
+    )
+    from synapse_memory.projects.summary import generate_marker_body
+
+    vault = _setup_vault_path()
+    profile, patterns = _setup_profile_patterns_paths(vault)
+    body = generate_marker_body(profile, patterns)
+
+    registry = _setup_registry_path()
+    entries = load_registry(registry)
+    if not entries:
+        print("등록된 프로젝트가 없습니다. `synapse-memory setup` 먼저 실행하세요.")
+        return 0
+
+    if args.current:
+        cwd = Path.cwd().resolve()
+        entries_to_sync = [e for e in entries if e.path == cwd]
+        if not entries_to_sync:
+            print(f"{FAIL} 현재 디렉터리가 registry에 없습니다: {cwd}", file=sys.stderr)
+            return 2
+    else:
+        entries_to_sync = list(entries)
+
+    today = _datetime.date.today()
+    new_entries = list(entries)
+    for entry in entries_to_sync:
+        if not entry.path.is_dir():
+            new_entries = mark_stale(new_entries, entry.path)
+            print(f"  ⚠ stale: {entry.path}", file=sys.stderr)
+            continue
+        targets_for = {
+            "agents": ["AGENTS.md"],
+            "claude": ["CLAUDE.md"],
+            "both": ["AGENTS.md", "CLAUDE.md"],
+        }[entry.target]
+        for name in targets_for:
+            target_file = entry.path / name
+            try:
+                inject_or_replace(target_file, body)
+            except MarkerParseError as exc:
+                print(f"{FAIL} {exc}", file=sys.stderr)
+                return 1
+        new_entries = [
+            ProjectEntry(
+                path=e.path,
+                target=e.target,
+                registered_at=e.registered_at,
+                last_sync=today if e.path == entry.path else e.last_sync,
+                state=e.state,
+            )
+            for e in new_entries
+        ]
+        print(f"  {OK} sync: {entry.path}")
+
+    save_registry(new_entries, registry)
+    return 0
+
+
 def cmd_collect_obsidian(args: argparse.Namespace) -> int:
     """Obsidian vault → L0 mirror (incremental)."""
     vault: Path = args.vault.expanduser().resolve()
@@ -2392,6 +2538,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="결과 저장 경로 (미지정 시 stdout)",
     )
     p_redact_file.set_defaults(func=cmd_redact_file)
+
+    p_setup = sub.add_parser(
+        "setup",
+        help="현재 디렉터리에 SYNAPSE-MEMORY marker 삽입 + ~/.synapse/projects.yaml 등록",
+    )
+    p_setup.add_argument(
+        "--target",
+        choices=("agents", "claude", "both"),
+        default="both",
+        help="대상 파일 (기본: both)",
+    )
+    p_setup.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="의도된 변경만 출력, 파일/registry 변경 X",
+    )
+    p_setup.set_defaults(func=cmd_setup)
+
+    p_sync = sub.add_parser(
+        "sync",
+        help="등록된 모든 프로젝트의 SYNAPSE-MEMORY marker 갱신",
+    )
+    p_sync.add_argument(
+        "--current",
+        action="store_true",
+        help="cwd 프로젝트만 갱신 (기본: 등록 전체)",
+    )
+    p_sync.set_defaults(func=cmd_sync)
 
     p_eval = sub.add_parser("eval", help="평가/측정")
     eval_sub = p_eval.add_subparsers(dest="kind", required=True, metavar="KIND")
