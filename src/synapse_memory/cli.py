@@ -391,6 +391,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ Private 폴더 deny 진단 실패: {exc}")
 
+    # Dataview 플러그인 점검 — MOC 동적 인덱스 의존성
+    try:
+        from synapse_memory.config import load_config
+        from synapse_memory.doctor import diagnose_dataview_plugin
+
+        dv_cfg = load_config()
+        dv_result = diagnose_dataview_plugin(dv_cfg.vault)
+        if dv_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {dv_result.message}")
+        elif dv_result.status == DiagnosticStatus.WARN:
+            print(f"⚠ {dv_result.message}")
+        else:
+            print(f"{FAIL} {dv_result.message}")
+    except Exception as exc:
+        print(f"⚠ Dataview 플러그인 진단 실패: {exc}")
+
     # AI provider CLI
     ai_env = detect_ai_environment()
     if ai_env.ready:

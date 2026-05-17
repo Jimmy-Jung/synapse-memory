@@ -135,6 +135,64 @@ def diagnose_private_folder_deny(vault: Path) -> DiagnosticResult:
     )
 
 
+def diagnose_dataview_plugin(vault: Path) -> DiagnosticResult:
+    """vault `.obsidian/community-plugins.json`에서 Dataview 플러그인 활성 여부 검사."""
+    vault_root = vault.expanduser()
+    obsidian = vault_root / ".obsidian"
+    plugins_file = obsidian / "community-plugins.json"
+
+    if not obsidian.is_dir():
+        return DiagnosticResult(
+            check_id="dataview_plugin",
+            status=DiagnosticStatus.WARN,
+            message=(
+                f"{obsidian} 없음 — Obsidian이 이 vault에 한 번도 열린 적 없을 가능성. "
+                "vault를 한 번 열고 다시 시도하세요."
+            ),
+            target=obsidian,
+        )
+
+    if not plugins_file.is_file():
+        return DiagnosticResult(
+            check_id="dataview_plugin",
+            status=DiagnosticStatus.WARN,
+            message=(
+                f"{plugins_file} 없음 — Obsidian Community plugin 미설치 가능성. "
+                "Dataview는 MOC 동적 인덱스에 필요합니다."
+            ),
+            target=plugins_file,
+        )
+
+    try:
+        data = json.loads(plugins_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return DiagnosticResult(
+            check_id="dataview_plugin",
+            status=DiagnosticStatus.FAIL,
+            message=f"{plugins_file} 파싱 실패: {exc}",
+            target=plugins_file,
+        )
+
+    plugins = data if isinstance(data, list) else []
+    if "dataview" in plugins:
+        return DiagnosticResult(
+            check_id="dataview_plugin",
+            status=DiagnosticStatus.OK,
+            message="Dataview 플러그인 활성화됨",
+            target=plugins_file,
+        )
+
+    return DiagnosticResult(
+        check_id="dataview_plugin",
+        status=DiagnosticStatus.WARN,
+        message=(
+            "Dataview 플러그인 미설치 — MOC.md의 동적 인덱스가 동작하지 않습니다. "
+            "Obsidian → Settings → Community plugins → 'Dataview' 검색 후 설치·활성화."
+        ),
+        target=plugins_file,
+    )
+
+
 def diagnose_runtime_shim(shim_path: Path) -> DiagnosticResult:
     path = shim_path.expanduser()
     if not path.is_file():
