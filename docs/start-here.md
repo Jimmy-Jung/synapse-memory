@@ -43,6 +43,7 @@ $ask "내 최근 프로젝트를 요약해줘"
 | --- | --- | --- |
 | 환경 점검 | `/sm:doctor` | `$doctor` |
 | 새 자료 정리 | `/sm:daily` | `$daily` |
+| Profile 후보 GUI 승인 | `/sm:apply-profile` | `$apply-profile` |
 | 자료에 질문 | `/sm:ask` | `$ask` |
 
 첫 `daily`는 노트 양에 따라 오래 걸릴 수 있습니다. 빠르게 체험하려면 터미널에서
