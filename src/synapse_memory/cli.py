@@ -2406,6 +2406,29 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_moc(args: argparse.Namespace) -> int:
+    """vault 90_System/AI/MOC.md 생성·갱신 (Obsidian Graph 진입점)."""
+    from synapse_memory.collectors.obsidian import get_vault_path
+    from synapse_memory.moc import write_or_update_moc
+
+    vault = (
+        Path(args.vault).expanduser().resolve()
+        if args.vault
+        else get_vault_path()
+    )
+    if not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        return 2
+
+    path = write_or_update_moc(vault)
+    print(f"{OK} MOC 갱신: {path}")
+    print(
+        "  Dataview 미설치 시 동적 인덱스가 동작하지 않습니다. "
+        "`synapse-memory doctor` 로 점검하세요."
+    )
+    return 0
+
+
 def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
     """vault MemoryInbox의 status=pending_review 후보 파일 목록 출력."""
     import json as _json
@@ -2640,6 +2663,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="cwd 프로젝트만 갱신 (기본: 등록 전체)",
     )
     p_sync.set_defaults(func=cmd_sync)
+
+    p_moc = sub.add_parser(
+        "moc",
+        help="vault 90_System/AI/MOC.md 생성·갱신 (Obsidian Graph 진입점)",
+    )
+    p_moc.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_moc.set_defaults(func=cmd_moc)
 
     p_list_pending = sub.add_parser(
         "list-pending-profiles",
