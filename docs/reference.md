@@ -166,6 +166,48 @@ synapse-memory persona draft-resume examplecorp
 
 승인한 자료만 회상, 의사결정, 이력서 초안에 사용됩니다.
 
+## 개인 메모를 외부 AI에 안전하게 전달하기
+
+vault 안에 외부 AI가 직접 읽으면 안 되는 개인 메모가 있다면 `90_System/Private/` 폴더를 관례로 사용합니다. Claude Code는 vault `.claude/settings.json` 의 `permissions.deny` 로 차단합니다.
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(./90_System/Private/**)",
+      "Glob(./90_System/Private/**)",
+      "Write(./90_System/Private/**)"
+    ]
+  }
+}
+```
+
+`synapse-memory doctor` 가 자동으로 점검합니다. Private 폴더가 있는데 위 세 deny 패턴이 빠지면 ⚠ 경고가 표시됩니다.
+
+외부 AI에 일부 내용을 공유해야 한다면 `synapse-memory redact file` 로 로컬에서 미리 마스킹한 결과만 전달합니다.
+
+```bash
+# stdout에 redacted 결과 출력
+synapse-memory redact file 90_System/Private/personalmemory.md
+
+# 파일로 저장
+synapse-memory redact file 90_System/Private/personalmemory.md --out /tmp/redacted.md
+```
+
+- Pass 1 (regex + redactlist) + Pass 2 (apfel 로컬 LLM) 적용
+- 원본 파일은 변경되지 않습니다
+- 단일 파일 1 MB 한도, UTF-8 텍스트만
+- apfel 미설치 환경에서는 Pass 1 only fallback (자유형 PII는 검출 못 함 → 결과 재확인 권장)
+- 종료 코드: `0` = 정상 / `2` = 입력 무효
+
+### Codex 격리 정책
+
+Codex CLI 는 Claude Code 의 `permissions.deny` 와 동등한 차단 매커니즘이 없습니다. 다음 두 가지 정책 기반 가드를 권장합니다.
+
+1. vault 루트 또는 `~/.codex/AGENTS.md` 헤더에 명시:
+   > Codex MUST NOT access `90_System/Private/` and MUST NOT read or quote files under that folder.
+2. Codex 실행 시 작업 디렉터리를 vault 루트가 아닌 sub-folder (예: `10_Active/<project>/`) 로 잡습니다. Codex 의 sandbox 정책이 작업 디렉터리 밖 접근을 막아줍니다.
+
 ## 기존 vault를 새 폴더 구조로 옮기기 (1회성)
 
 v0.8.x까지는 `MemoryInbox/Profile-YYYY-MM-DD.md`와 `DailyReports/YYYY-MM-DD.md`가 flat하게 쌓였습니다. v0.9.0부터 자동으로 `{YYYY}/{MM}/` 하위에 생성되며, 기존 flat 파일은 `migrate-folders` 명령으로 옮길 수 있습니다.

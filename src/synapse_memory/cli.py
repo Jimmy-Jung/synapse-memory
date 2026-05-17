@@ -375,6 +375,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ vault config 진단 실패: {exc}")
 
+    # vault `90_System/Private/` deny 일관성 — 외부 AI 차단 점검
+    try:
+        from synapse_memory.config import load_config
+        from synapse_memory.doctor import diagnose_private_folder_deny
+
+        pf_cfg = load_config()
+        pf_result = diagnose_private_folder_deny(pf_cfg.vault)
+        if pf_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {pf_result.message}")
+        elif pf_result.status == DiagnosticStatus.WARN:
+            print(f"⚠ {pf_result.message}")
+        else:
+            print(f"{FAIL} {pf_result.message}")
+    except Exception as exc:
+        print(f"⚠ Private 폴더 deny 진단 실패: {exc}")
+
     # AI provider CLI
     ai_env = detect_ai_environment()
     if ai_env.ready:
@@ -2171,6 +2187,63 @@ def cmd_redact_backfill_claude_code(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+_REDACT_FILE_MAX_BYTES = 1 * 1024 * 1024
+
+
+def cmd_redact_file(args: argparse.Namespace) -> int:
+    """단일 파일을 Pass 1+2로 redact해 stdout 또는 --out 경로에 기록."""
+    from synapse_memory.redaction import (
+        DEFAULT_PATTERNS,
+        build_redactlist_patterns,
+        load_redactlist,
+        redact_full,
+    )
+    from synapse_memory.redaction.pass1 import redact as pass1_redact
+
+    path = Path(args.path).expanduser().resolve()
+    if not path.is_file():
+        print(f"{FAIL} 파일이 없습니다: {path}", file=sys.stderr)
+        return 2
+    size = path.stat().st_size
+    if size > _REDACT_FILE_MAX_BYTES:
+        print(
+            f"{FAIL} 입력이 1 MB를 초과했습니다 ({size} bytes). 분할 처리 권장.",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        print(
+            f"{FAIL} UTF-8 텍스트가 아닙니다 (binary 파일은 skip): {path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    env = detect_environment()
+    if env.apfel_path is None:
+        print(
+            "[warn] apfel 미설치 — Pass 1 (regex + redactlist)만 적용한 결과를 출력합니다.",
+            file=sys.stderr,
+        )
+        items = load_redactlist()
+        extra_patterns = build_redactlist_patterns(items)
+        patterns = list(DEFAULT_PATTERNS) + list(extra_patterns)
+        result = pass1_redact(text, patterns=patterns)
+        redacted = result.redacted
+    else:
+        result = redact_full(text, env=env)
+        redacted = result.redacted
+
+    if args.out:
+        out_path = Path(args.out).expanduser().resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(redacted, encoding="utf-8")
+    else:
+        sys.stdout.write(redacted)
+    return 0
+
+
 def cmd_collect_obsidian(args: argparse.Namespace) -> int:
     """Obsidian vault → L0 mirror (incremental)."""
     vault: Path = args.vault.expanduser().resolve()
@@ -2308,6 +2381,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="이미 백필된 파일 skip",
     )
     p_bf_cc.set_defaults(func=cmd_redact_backfill_claude_code)
+
+    p_redact_file = redact_sub.add_parser(
+        "file", help="단일 파일을 Pass 1+2로 redact해 stdout/--out에 출력"
+    )
+    p_redact_file.add_argument("path", help="redact할 입력 파일 경로")
+    p_redact_file.add_argument(
+        "--out",
+        default=None,
+        help="결과 저장 경로 (미지정 시 stdout)",
+    )
+    p_redact_file.set_defaults(func=cmd_redact_file)
 
     p_eval = sub.add_parser("eval", help="평가/측정")
     eval_sub = p_eval.add_subparsers(dest="kind", required=True, metavar="KIND")

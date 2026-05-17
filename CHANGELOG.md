@@ -2,6 +2,39 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.10.0] — 2026-05-17
+
+### Added — `redact file` CLI + `/sm:redact` 슬래시 (#012)
+
+vault 안의 개인 메모를 외부 AI에 보내기 전 로컬에서 마스킹하기 위한 명령.
+
+- `synapse-memory redact file <path> [--out PATH]`
+- Pass 1 (regex + redactlist) + Pass 2 (apfel 로컬 LLM) 통합 적용
+- apfel 미설치 환경은 Pass 1 only fallback (regex + redactlist는 그대로 동작) + stderr 경고
+- 입력 한도: 1 MB, UTF-8 텍스트만. binary는 skip + 경고
+- 종료 코드: `0` = 정상 / `2` = 입력 무효 (파일 없음 / 1 MB 초과 / binary)
+- Claude Code 슬래시 `/sm:redact <path>` + Codex skill `redact` 신규 등록
+
+### Added — `synapse-memory doctor` Private 폴더 차단 점검 (#012)
+
+신규 `diagnose_private_folder_deny(vault)` 진단을 doctor 흐름에 추가. vault `90_System/Private/`가 있을 때 `.claude/settings.json` 의 `permissions.deny` 에 다음 3개 패턴이 모두 등록됐는지 검사한다.
+
+- `Read(./90_System/Private/**)`
+- `Glob(./90_System/Private/**)`
+- `Write(./90_System/Private/**)`
+
+누락 시 ⚠ 경고 + 수정 안내. Private 폴더가 없으면 OK (불필요).
+
+### Docs — Private 폴더 관례 + Codex 격리 정책
+
+`docs/reference.md` 에 "개인 메모를 외부 AI에 안전하게 전달하기" + "Codex 격리 정책" 섹션 추가. `.claudeignore` 는 Claude Code 공식 매커니즘이 아니라 도입하지 않았다 (2026-05-17 spike 검증). Codex 는 강제 차단 기능이 없어 AGENTS.md 가이드 + 작업 디렉터리 sub-folder 분리 권장.
+
+### Internal
+
+- 신규 unit + integration 테스트 11개 (`tests/test_cli_redact_file.py` 7개, `tests/test_doctor_private_check.py` 4개)
+- 전체 `pytest` 858 passed (847 → 858)
+- spec/plan/tasks: `specs/012-private-permissions/`
+
 ## [0.9.0] — 2026-05-17
 
 ### Changed — MemoryInbox / DailyReports year/month folder structure (#011)
