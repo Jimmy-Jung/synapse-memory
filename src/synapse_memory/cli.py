@@ -2390,6 +2390,64 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
+    """vault MemoryInbox의 status=pending_review 후보 파일 목록 출력."""
+    import json as _json
+    import re as _re
+
+    from synapse_memory.collectors.obsidian import get_vault_path
+    from synapse_memory.config import get_config
+    from synapse_memory.folders import find_candidate_files
+
+    vault = (
+        Path(args.vault).expanduser().resolve()
+        if args.vault
+        else get_vault_path()
+    )
+    if not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        return 2
+
+    inbox = vault / get_config().vault_folders.system.ai.memory_inbox
+    candidates = find_candidate_files(inbox, pattern="Profile-*.md")
+
+    date_pattern = _re.compile(r"^Profile-(\d{4})-(\d{2})-(\d{2})\.md$")
+    pending: list[dict[str, str]] = []
+    for path in candidates:
+        m = date_pattern.match(path.name)
+        if m is None:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if "\nstatus: applied" in text or text.startswith("status: applied"):
+            continue
+        date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+        status = "pending_review"
+        if "\nstatus: " in text:
+            for line in text.splitlines():
+                if line.startswith("status:"):
+                    status = line.split(":", 1)[1].strip()
+                    break
+        if status == "applied":
+            continue
+        pending.append({"date": date, "path": str(path), "status": status})
+
+    pending.sort(key=lambda x: x["date"])
+
+    if args.json:
+        sys.stdout.write(_json.dumps(pending, ensure_ascii=False))
+        return 0
+
+    if not pending:
+        print("pending 후보가 없습니다.")
+        return 0
+    for entry in pending:
+        print(f"{entry['date']} — {entry['path']}")
+    return 0
+
+
 def cmd_collect_obsidian(args: argparse.Namespace) -> int:
     """Obsidian vault → L0 mirror (incremental)."""
     vault: Path = args.vault.expanduser().resolve()
@@ -2566,6 +2624,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="cwd 프로젝트만 갱신 (기본: 등록 전체)",
     )
     p_sync.set_defaults(func=cmd_sync)
+
+    p_list_pending = sub.add_parser(
+        "list-pending-profiles",
+        help="vault MemoryInbox의 status=pending_review 후보 파일 목록",
+    )
+    p_list_pending.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_list_pending.add_argument(
+        "--json",
+        action="store_true",
+        help="JSON 배열로 출력 (슬래시 prompt가 파싱하기 좋게)",
+    )
+    p_list_pending.set_defaults(func=cmd_list_pending_profiles)
 
     p_eval = sub.add_parser("eval", help="평가/측정")
     eval_sub = p_eval.add_subparsers(dest="kind", required=True, metavar="KIND")

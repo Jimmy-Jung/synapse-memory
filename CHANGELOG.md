@@ -2,6 +2,37 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.12.0] — 2026-05-17
+
+### Added — `/sm:apply-profile` GUI 승인 워크플로 (#014)
+
+`/sm:daily`가 만든 `MemoryInbox/{YYYY}/{MM}/Profile-YYYY-MM-DD.md` 후보를 항목별로 검토하고 승인분만 vault `Profile.md` / `DecisionPatterns.md`에 반영하는 슬래시 흐름.
+
+- Claude Code slash `/sm:apply-profile [date | --all-pending]` + Codex skill `apply-profile`
+- AskUserQuestion 4개씩 묶어 Y/N/Edit 항목별 승인 (plan-mode GUI 패턴)
+- 승인분만 vault Profile.md (카테고리 섹션) / DecisionPatterns.md (`## Approved Patterns`)에 Edit으로 추가
+- 후보 파일 frontmatter `status: pending_review` → `status: applied` + `applied_date` 갱신
+
+### Added — `synapse-memory list-pending-profiles` 보조 CLI
+
+슬래시 prompt가 후보 발견에 사용. 직접 호출도 가능.
+
+- `synapse-memory list-pending-profiles [--vault PATH] [--json]`
+- `folders.find_candidate_files` (011 sprint 산출물) 재사용
+- recursive scan, `applied` 마감된 후보는 자동 제외
+- JSON 모드: 슬래시 prompt가 파싱하기 좋게 `[{date, path, status}, ...]`
+
+### Changed — `/sm:daily` 종료 후 apply 흐름 자동 제안 (#014)
+
+`commands/daily.md` prompt가 update_profile 성공 시 AskUserQuestion으로 "지금 검토할까요?"를 묻습니다. 사용자가 Yes 답해야 진입 — 자동 강제 진입 없음 (Constitution VI Installation Consent 준수). dry-run 또는 update_profile 실패·skip 시 제안 생략.
+
+### Internal
+
+- 신규 test 3개 (`tests/test_cli_list_pending_profiles.py`)
+- 전체 `pytest` 879 passed (876 → 879)
+- spec/plan/tasks: `specs/014-apply-profile/`
+- 신규 코드 최소화 — apply 흐름의 항목 파싱·AskUserQuestion·파일 편집은 모두 슬래시 prompt 안에서 AI가 처리. CLI는 list-pending-profiles 보조 1개만 추가.
+
 ## [0.11.0] — 2026-05-17
 
 ### Added — `setup` + `sync` CLI: cross-project Profile marker (#013)
