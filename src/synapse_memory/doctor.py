@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from collections.abc import Callable
@@ -72,6 +73,65 @@ def diagnose_private_permissions(private_root: Path) -> DiagnosticResult:
         status=DiagnosticStatus.OK,
         message=f"{root} 권한 정상",
         target=root,
+    )
+
+
+_PRIVATE_FOLDER_DENY_REQUIRED = (
+    "Read(./90_System/Private/**)",
+    "Glob(./90_System/Private/**)",
+    "Write(./90_System/Private/**)",
+)
+
+
+def diagnose_private_folder_deny(vault: Path) -> DiagnosticResult:
+    """vault `90_System/Private/`가 있으면 `.claude/settings.json`의 permissions.deny 검사."""
+    vault_root = vault.expanduser()
+    private = vault_root / "90_System" / "Private"
+    if not private.is_dir():
+        return DiagnosticResult(
+            check_id="private_folder_deny",
+            status=DiagnosticStatus.OK,
+            message="vault에 Private 폴더 없음 — 추가 차단 설정 불필요",
+            target=private,
+        )
+
+    settings = vault_root / ".claude" / "settings.json"
+    if not settings.is_file():
+        return DiagnosticResult(
+            check_id="private_folder_deny",
+            status=DiagnosticStatus.WARN,
+            message=(
+                f"Private 폴더 있음, 그러나 {settings} 없음. "
+                "permissions.deny로 Read/Glob/Write 셋 다 차단 필요."
+            ),
+            target=settings,
+        )
+
+    try:
+        data = json.loads(settings.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return DiagnosticResult(
+            check_id="private_folder_deny",
+            status=DiagnosticStatus.FAIL,
+            message=f"{settings} 파싱 실패: {exc}",
+            target=settings,
+        )
+
+    deny = set(data.get("permissions", {}).get("deny", []))
+    missing = [rule for rule in _PRIVATE_FOLDER_DENY_REQUIRED if rule not in deny]
+    if missing:
+        return DiagnosticResult(
+            check_id="private_folder_deny",
+            status=DiagnosticStatus.WARN,
+            message="permissions.deny에 누락된 항목: " + ", ".join(missing),
+            target=settings,
+        )
+
+    return DiagnosticResult(
+        check_id="private_folder_deny",
+        status=DiagnosticStatus.OK,
+        message="Private 폴더 차단 정상 (Read/Glob/Write 셋 다 deny)",
+        target=settings,
     )
 
 

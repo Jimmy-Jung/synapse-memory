@@ -375,6 +375,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ vault config 진단 실패: {exc}")
 
+    # vault `90_System/Private/` deny 일관성 — 외부 AI 차단 점검
+    try:
+        from synapse_memory.config import load_config
+        from synapse_memory.doctor import diagnose_private_folder_deny
+
+        pf_cfg = load_config()
+        pf_result = diagnose_private_folder_deny(pf_cfg.vault)
+        if pf_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {pf_result.message}")
+        elif pf_result.status == DiagnosticStatus.WARN:
+            print(f"⚠ {pf_result.message}")
+        else:
+            print(f"{FAIL} {pf_result.message}")
+    except Exception as exc:
+        print(f"⚠ Private 폴더 deny 진단 실패: {exc}")
+
     # AI provider CLI
     ai_env = detect_ai_environment()
     if ai_env.ready:
