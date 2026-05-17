@@ -2,6 +2,47 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.13.0] — 2026-05-17
+
+### Added — Obsidian Graph 시각화 (P1+P2, #015)
+
+vault에 쌓이는 자료를 Obsidian Graph view에서 노드 유형별로 시각적으로 탐방할 수 있게 만드는 첫 단계. node 태그 + MOC + Dataview doctor 체크.
+
+#### node/* frontmatter 태그 (US1)
+
+신규 생성되는 다음 파일들 frontmatter에 자동 부착:
+
+- Card (project/company): `tags: [node/card]`
+- MemoryInbox Profile 후보: `tags: [node/profile-update]`
+- DailyReport: `tags: [node/daily-report]`
+
+Obsidian Graph view 설정에서 그룹별 색상을 한 번 설정하면 노드 유형이 시각적으로 분리됩니다.
+
+#### `synapse-memory moc` + `/sm:moc` (US2)
+
+`90_System/AI/MOC.md`를 동적 인덱스로 생성·갱신.
+
+- Projects / Companies / Profile updates / Daily reports 각 영역 Dataview 블록
+- `<!-- SYNAPSE-MEMORY-MOC START/END -->` marker 사이만 교체 — 사용자 자유 메모 보존
+- byte-level idempotent
+- 자동 트리거 없음 (Constitution VI Installation Consent)
+- Claude Code slash `/sm:moc` + Codex skill `moc`
+
+#### `synapse-memory doctor` Dataview 점검 (US3)
+
+신규 `diagnose_dataview_plugin(vault)` 진단을 doctor에 등록. vault `.obsidian/community-plugins.json`에 `"dataview"` 활성화 여부 검사. 미설치 시 ⚠ + 설치 안내.
+
+### Deferred — Suggested wikilink (US4 P3)
+
+자동 wikilink (`## Suggested links` 섹션) 도입은 본 sprint 범위 외. 이유: cluster 분류가 LLM 기반이라 잘못된 link로 graph noise 양산 위험. node 태그 + MOC만으로 graph가 풍부해진 뒤 별 sprint에서 재검토.
+
+### Internal
+
+- 신규 unit + integration 테스트 11개 (node tags 4 + doctor dataview 3 + MOC generator 4)
+- 전체 `pytest` 890 passed (879 → 890)
+- spec/plan/tasks: `specs/015-graph-viz/`
+- 신규 패키지 `synapse_memory.moc` (1 module)
+
 ## [0.12.0] — 2026-05-17
 
 ### Added — `/sm:apply-profile` GUI 승인 워크플로 (#014)
