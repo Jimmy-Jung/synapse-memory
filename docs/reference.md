@@ -166,6 +166,52 @@ synapse-memory persona draft-resume examplecorp
 
 승인한 자료만 회상, 의사결정, 이력서 초안에 사용됩니다.
 
+## Obsidian Graph 시각화 — `/sm:moc` + node 태그
+
+vault에 쌓이는 자료(Card / Profile 후보 / DailyReport)를 Obsidian Graph view에서 노드 유형별로 둘러보고, 어디를 보완할지 시각적으로 찾는 흐름.
+
+### node 색상 그룹
+
+신규 생성되는 다음 파일들 frontmatter에 자동 부착되는 태그:
+
+| 파일 유형 | 태그 |
+|---|---|
+| Project / Company Card | `node/card` |
+| MemoryInbox Profile 후보 | `node/profile-update` |
+| DailyReport | `node/daily-report` |
+
+Obsidian → Graph view → 설정 → Groups에 다음을 추가하면 노드 유형별 색상이 분리됩니다.
+
+```
+tag:#node/card             → 색 A
+tag:#node/profile-update   → 색 B
+tag:#node/daily-report     → 색 C
+```
+
+### MOC (Map of Contents)
+
+`/sm:moc` 또는 `synapse-memory moc` 호출 → `90_System/AI/MOC.md` 생성·갱신. Dataview 블록으로 Projects / Companies / Profile updates / Daily reports 각 영역의 최신 항목을 동적 인덱스로 표시.
+
+```bash
+synapse-memory moc                    # config의 vault 사용
+synapse-memory moc --vault /path/to/vault
+```
+
+- marker 사이만 교체 — 사용자가 MOC.md에 추가한 자유 메모는 보존
+- byte-level idempotent (같은 vault 상태로 재실행 시 결과 동일)
+- 자동 트리거 없음 — daily 등 다른 명령이 MOC를 자동 갱신하지 않음
+
+### Dataview 의존성
+
+MOC 동적 인덱스는 **Dataview 플러그인 필수**입니다. 미설치 시 MOC.md 본문은 그대로 보이지만 데이터 영역은 빈 화면. `synapse-memory doctor` 가 자동으로 점검:
+
+```
+✗ Dataview 플러그인 미설치 — MOC.md의 동적 인덱스가 동작하지 않습니다.
+  Obsidian → Settings → Community plugins → 'Dataview' 검색 후 설치·활성화.
+```
+
+설치 안내대로 Obsidian에서 1회 설정하면 doctor의 ⚠ 가 사라집니다.
+
 ## Profile 후보 GUI 승인 — `/sm:apply-profile`
 
 `/sm:daily`가 만든 `MemoryInbox/{YYYY}/{MM}/Profile-YYYY-MM-DD.md` 후보를 항목별로 검토하고 승인분만 vault `Profile.md` / `DecisionPatterns.md`에 반영합니다.
