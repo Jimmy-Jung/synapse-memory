@@ -136,6 +136,7 @@ def _frontmatter_dict(card: ProjectCard) -> dict[str, Any]:
         d["created"] = card.created
     if card.last_reviewed:
         d["last_reviewed"] = card.last_reviewed
+    d["tags"] = ["node/card"]
     return d
 
 
