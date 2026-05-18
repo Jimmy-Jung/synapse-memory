@@ -2,6 +2,55 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.0] — 2026-05-18
+
+### Added — 외부 데이터 수집기 13종 확장 (spec 016)
+
+`~/.synapse/private/raw/` 로 mirror 되는 데이터 소스를 기존 2종(Claude Code,
+Obsidian) 에서 15종으로 확장. 각 컬렉터는 source 미존재 / 권한 부재 시 안전하게
+skip 하며 (`daily.py` 의 `_run_step` try/except 격리), 모든 SQLite 접근은
+`mode=ro` URI 로 source data 무변경 보장.
+
+**Tier 1 — 개발자 활동 5종** (PR #21, v0.14.0 에 이미 포함되어 빌드됨)
+
+- `shell_history` — `~/.zsh_history`, `~/.bash_history` mirror
+- `cursor` — Cursor IDE SQLite snapshot
+- `continue_dev` — Continue.dev (VS Code) 세션 JSON
+- `aider` — Aider 터미널 AI pair 대화
+- `git_self` — 본인 git commit 로그 (`SYNAPSE_GIT_SELF_ROOTS` opt-in)
+
+**Tier 2 — 로컬 파일 3종** (PR #22)
+
+- `apple_notes` — Apple Notes `NoteStore.sqlite`
+- `day_one` — Day One Journal SQLite
+- `vscode_local_history` — VS Code 파일별 auto-snapshot
+- 공통 헬퍼 `_sqlite_mirror.py` — `sqlite3.backup` + mtime/sha256 변경 감지
+
+**Tier 3 — PII opt-in 3종** (PR #23)
+
+- `imessage` — iMessage `chat.db` (macOS Full Disk Access 필요)
+- `gmail_sent` — Gmail Sent (OAuth, `SYNAPSE_GMAIL_ENABLE` opt-in,
+  `google-api-python-client` lazy import 로 미설치 환경 안전)
+- `calendar` — macOS Calendar ICS
+
+**Tier 4 — 행동 데이터 3종** (PR #24)
+
+- `browser_history` — Chrome / Safari / Arc History SQLite
+- `screen_time` — macOS `knowledgeC.db`
+- `apple_health` — iOS Health `export*.zip` drop-in (기본 `~/Downloads`)
+
+### Added — `daily` 파이프라인 stage 확장
+
+`daily.py` `DAILY_STAGES` 에 신규 컬렉터 13 stage 추가. 모두 incremental
+(기존 처리분 자동 skip), `--only` / `--skip` / `--resume-from` 호환.
+
+### Internal
+
+- 신규 unit + integration 테스트 (각 컬렉터별 mirror test 모듈 13종)
+- 첫 설치 안전성 검토 완료 — source 부재 / 권한 부재 / 3rd-party 미설치
+  모두 crash 없이 빈 stats 반환 확인
+- spec/plan/tasks: `specs/016-collectors-expansion/`
+
 ## [0.14.0] — 2026-05-18
 
 ### Added — 로컬 LLM 동작 원리 문서
