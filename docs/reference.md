@@ -478,6 +478,9 @@ synapse-memory doctor --fix-config
 | `collect_apple_notes` | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | ✅ | Full Disk Access 필요 시 errors |
 | `collect_day_one` | `~/Library/Group Containers/<TEAM_ID>.dayoneapp2/` | ✅ | `SYNAPSE_DAYONE_HOME` override 가능 |
 | `collect_vscode_local_history` | `~/Library/Application Support/Code/User/History/` | ✅ | VS Code 자동 snapshot |
+| `collect_imessage` | `~/Library/Messages/chat.db` | ✅ | Full Disk Access 필요. `SYNAPSE_IMESSAGE_DISABLE=1` 로 opt-out |
+| `collect_gmail_sent` | Gmail API (Sent 라벨) | ⛔ opt-in | `SYNAPSE_GMAIL_ENABLE=1` + OAuth credentials 필요 |
+| `collect_calendar` | `~/Library/Calendars/*.calendar/Events/*.ics` | ✅ | macOS Calendar.app 디스크 캐시 |
 | `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
 
 ### `collect_git_self` 켜기
@@ -498,6 +501,41 @@ export SYNAPSE_GIT_SELF_EMAIL="you@example.com"
 
 각 repo 마다 마지막 처리한 commit SHA 가 `.offsets/<repo>.sha` 에 저장돼 다음
 호출 때 그 이후만 mirror — incremental 입니다.
+
+### `collect_gmail_sent` 켜기
+
+Gmail Sent 라벨 메타 (subject, snippet, label_ids) 만 JSONL mirror. 본문은
+저장하지 않습니다.
+
+```bash
+# 1. Google Cloud Console 에서 OAuth 2.0 client ID (Desktop) 생성 후
+#    credentials.json 다운로드 → 다음 경로에 두기 (또는 env override)
+mkdir -p ~/.config/synapse-memory
+mv ~/Downloads/credentials.json ~/.config/synapse-memory/gmail-credentials.json
+
+# 2. Python 의존성 (optional)
+pip install google-api-python-client google-auth-oauthlib
+
+# 3. opt-in env
+export SYNAPSE_GMAIL_ENABLE=1
+
+# 4. 다음 daily 실행에서 OAuth browser flow 1회 (token 캐시됨)
+/sm:daily
+```
+
+token cache 는 `~/.config/synapse-memory/gmail-token.json`. refresh token 으로
+이후 호출 자동 갱신.
+
+### `collect_imessage` 끄기 (선택)
+
+iMessage 는 PII 가 매우 무겁습니다. 기본 활성이지만 비활성화하려면:
+
+```bash
+export SYNAPSE_IMESSAGE_DISABLE=1
+```
+
+Full Disk Access 권한이 없으면 mirror 가 errors 에 기록되고 daily 흐름은 계속
+진행됩니다 (블로킹 없음).
 
 ## 완전히 지우고 싶을 때
 

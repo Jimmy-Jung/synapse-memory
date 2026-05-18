@@ -63,6 +63,9 @@ DAILY_STAGES = (
     DailyStage(
         "collect_vscode_local_history", "VS Code Local History mirror"
     ),
+    DailyStage("collect_imessage", "iMessage chat.db mirror"),
+    DailyStage("collect_gmail_sent", "Gmail Sent mirror (opt-in)"),
+    DailyStage("collect_calendar", "Calendar ICS mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -260,6 +263,9 @@ def _build_stage_actions(
         "collect_apple_notes": _collect_apple_notes_action,
         "collect_day_one": _collect_day_one_action,
         "collect_vscode_local_history": _collect_vscode_local_history_action,
+        "collect_imessage": _collect_imessage_action,
+        "collect_gmail_sent": _collect_gmail_sent_action,
+        "collect_calendar": _collect_calendar_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -348,6 +354,27 @@ def _collect_vscode_local_history_action() -> str:
     )
 
     stats = collect_vscode_local_history()
+    return stats.summary()
+
+
+def _collect_imessage_action() -> str:
+    from synapse_memory.collectors.imessage import collect_imessage
+
+    stats = collect_imessage()
+    return stats.summary()
+
+
+def _collect_gmail_sent_action() -> str:
+    from synapse_memory.collectors.gmail_sent import collect_gmail_sent
+
+    stats = collect_gmail_sent()
+    return stats.summary()
+
+
+def _collect_calendar_action() -> str:
+    from synapse_memory.collectors.calendar import collect_calendar
+
+    stats = collect_calendar()
     return stats.summary()
 
 
@@ -960,6 +987,8 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
         "collect_apple_notes",
         "collect_day_one",
         "collect_vscode_local_history",
+        "collect_imessage",
+        "collect_calendar",
     ):
         labels = {
             "collect_cursor": "Cursor DB",
@@ -967,6 +996,8 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             "collect_apple_notes": "Apple Notes DB",
             "collect_day_one": "Day One DB",
             "collect_vscode_local_history": "VS Code 히스토리",
+            "collect_imessage": "iMessage DB",
+            "collect_calendar": "Calendar ICS",
         }
         label = labels[stage]
         kv = _parse_kv(raw)
@@ -988,6 +1019,20 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             parts = [
                 f"본인 commit {kv.get('commits', 0)}개 mirror "
                 f"(repo {kv.get('mirrored', 0)}/{kv.get('scanned', 0)})"
+            ]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("errors", 0):
+                parts.append(f"· 에러 {kv['errors']}")
+            return " ".join(parts)
+    elif stage == "collect_gmail_sent":
+        if raw.strip() == "disabled":
+            return "Gmail Sent — opt-out (SYNAPSE_GMAIL_ENABLE 미설정)"
+        kv = _parse_kv(raw)
+        if "added" in kv:
+            parts = [
+                f"Gmail Sent {kv.get('added', 0)}개 mirror "
+                f"(목록 {kv.get('listed', 0)}개)"
             ]
             if kv.get("bytes", 0) > 0:
                 parts.append(f"({_format_bytes(kv['bytes'])})")
