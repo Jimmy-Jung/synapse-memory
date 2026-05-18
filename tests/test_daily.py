@@ -222,6 +222,14 @@ class TestHumanizeSummary:
         assert "빈 파일 1" in out
         assert "에러 1" in out
 
+    def test_collect_codex_shares_format_with_claude(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        raw = "scanned=10 mirrored=3 bytes+=2048 truncations=0 skipped_empty=0 errors=0"
+        out = _humanize_stage_summary("collect_codex", raw)
+        assert "Codex 활동 로그 3개 mirror" in out
+        assert "KB" in out
+
     def test_collect_obsidian_includes_unchanged(self) -> None:
         from synapse_memory.daily import _humanize_stage_summary
 

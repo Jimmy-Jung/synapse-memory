@@ -2,6 +2,34 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.14.0] — 2026-05-18
+
+### Added — 로컬 LLM 동작 원리 문서
+
+- `docs/local-llm.md` 추가 — Apple FoundationModel(apfel) 게이트가 어떤 사용자
+  시나리오(`/sm:daily`, `/sm:ask`, `/sm:doctor`)에서 어떻게 호출되는지를
+  mermaid 다이어그램과 함께 정리. `docs/README.md` 인덱스에 연결.
+
+### Changed — DailyReport Stage Summary 사람 친화 렌더링
+
+`v0.13.x` 까지 Stage Summary 표의 Summary 칼럼이 stdout 로그를 그대로 끼워 넣은
+모양(`scanned=252 mirrored=9 bytes+=73888700 truncations=0 skipped_empty=0 errors=0`)
+이었다. 운영자가 매일 보는 보고서치고는 노이즈가 많아서, stage 별로 한 문장 요약으로
+바꾸었다.
+
+- `collect_claude_code` / `collect_obsidian`: `"Claude 활동 로그 9개 mirror (70.5 MB)"`,
+  `"vault 노트 17개 mirror (209.3 KB) · 변경 없음 1348"` 식으로 변환.
+  이상치(truncations / skipped_empty / errors > 0) 가 있을 때만 뒤에 표시 — 정상
+  케이스는 깔끔하게 유지.
+- `index`: `"Project Card 25개, Company Card 3개 인덱싱"`
+- `update_profile`: `"Fact 13개, Pattern 13개 → Profile-2026-05-18.md"`
+- `classify` / `generate` / `report` 는 이미 한국어 사람 친화 — 그대로 통과.
+
+원시 카운터는 표 아래 `<details>` 토글 블록(`Raw stage counters (디버깅용)`)으로
+보존되어, 디버깅이 필요할 때 한 번 펼쳐서 확인 가능.
+
+알 수 없는 stage 나 변환 실패 시 raw 를 그대로 두는 안전한 fallback 동작.
+
 ## [0.13.1] — 2026-05-18
 
 ### Fixed — 플러그인 manifest 버전 동기화
@@ -20,32 +48,6 @@ All notable changes to Synapse Memory are documented here.
 
 - `scripts/release.sh` 에 양쪽 `plugin.json` `version` 필드 자동 bump 단계를
   추가. 다음 릴리즈부터는 manifest drift 가 재발하지 않는다.
-
-### Added — 로컬 LLM 동작 원리 문서
-
-- `docs/local-llm.md` 추가 — Apple FoundationModel(apfel) 게이트가 어떤 사용자
-  시나리오(`/sm:daily`, `/sm:ask`, `/sm:doctor`)에서 어떻게 호출되는지를
-  mermaid 다이어그램과 함께 정리. `docs/README.md` 인덱스에 연결.
-
-### Changed — DailyReport Stage Summary 사람 친화 렌더링
-
-`v0.13.0` 까지 Stage Summary 표의 Summary 칼럼이 stdout 로그를 그대로 끼워 넣은
-모양(`scanned=252 mirrored=9 bytes+=73888700 truncations=0 skipped_empty=0 errors=0`)
-이었다. 운영자가 매일 보는 보고서치고는 노이즈가 많아서, stage 별로 한 문장 요약으로
-바꾸었다.
-
-- `collect_claude_code` / `collect_obsidian`: `"Claude 활동 로그 9개 mirror (70.5 MB)"`,
-  `"vault 노트 17개 mirror (209.3 KB) · 변경 없음 1348"` 식으로 변환.
-  이상치(truncations / skipped_empty / errors > 0) 가 있을 때만 뒤에 표시 — 정상
-  케이스는 깔끔하게 유지.
-- `index`: `"Project Card 25개, Company Card 3개 인덱싱"`
-- `update_profile`: `"Fact 13개, Pattern 13개 → Profile-2026-05-18.md"`
-- `classify` / `generate` / `report` 는 이미 한국어 사람 친화 — 그대로 통과.
-
-원시 카운터는 표 아래 `<details>` 토글 블록(`Raw stage counters (디버깅용)`)으로
-보존되어, 디버깅이 필요할 때 한 번 펼쳐서 확인 가능.
-
-알 수 없는 stage 나 변환 실패 시 raw 를 그대로 두는 안전한 fallback 동작.
 
 ## [0.13.0] — 2026-05-17
 

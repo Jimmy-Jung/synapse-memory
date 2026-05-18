@@ -464,6 +464,10 @@ def _build_update_profile_action(
         from synapse_memory.config import get_config
         from synapse_memory.llm import detect_ai_environment
         from synapse_memory.profile.dedupe import dedupe_against_vault
+        from synapse_memory.profile.dismissed import (
+            dismissed_path,
+            load_dismissed,
+        )
         from synapse_memory.profile.extract import (
             extract_decision_patterns,
             extract_profile_facts,
@@ -486,26 +490,41 @@ def _build_update_profile_action(
                 ai_env=env,
             )
 
-        # vault 진실원본과 비교해 신규 항목만 남김 — 매일 동일 항목 재질문 방지.
+        # vault 진실원본 + dismissed 인덱스 기준으로 신규만 남김.
         vault = get_vault_path()
         ai_folders = get_config().vault_folders.system.ai
+        dismissed = load_dismissed(dismissed_path(vault))
         facts, patterns, report = dedupe_against_vault(
             facts,
             patterns,
             profile_path=vault / ai_folders.profile,
             decision_patterns_path=vault / ai_folders.decision_patterns,
+            dismissed_facts=dismissed.facts,
+            dismissed_patterns=dismissed.patterns,
+        )
+
+        dismiss_note = (
+            f" dismissed_idx={dismissed.total}"
+            + (
+                f" (만료 {dismissed.expired_count} 재노출)"
+                if dismissed.expired_count
+                else ""
+            )
+            if dismissed.total or dismissed.expired_count
+            else ""
         )
 
         if not facts and not patterns:
             return (
                 "신규 fact/pattern 없음 — vault dedupe 으로 "
                 f"{report.total_dropped}개 제거 (candidate 미생성)"
+                f"{dismiss_note}"
             )
 
         path = save_profile_update(facts, patterns)
         return (
             f"fact={len(facts)} pattern={len(patterns)} "
-            f"(vault dedupe -{report.total_dropped}) → {path.name}"
+            f"(vault dedupe -{report.total_dropped}{dismiss_note}) → {path.name}"
         )
 
     return step
@@ -673,10 +692,11 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
     """Stage 별 raw summary → 사람 친화 문장. 알 수 없으면 raw 그대로."""
     if not raw:
         return raw
-    if stage == "collect_claude_code":
+    if stage in ("collect_claude_code", "collect_codex"):
+        label = "Claude 활동 로그" if stage == "collect_claude_code" else "Codex 활동 로그"
         kv = _parse_kv(raw)
         if "mirrored" in kv:
-            parts = [f"Claude 활동 로그 {kv['mirrored']}개 mirror"]
+            parts = [f"{label} {kv['mirrored']}개 mirror"]
             if kv.get("bytes", 0) > 0:
                 parts.append(f"({_format_bytes(kv['bytes'])})")
             extras: list[str] = []
