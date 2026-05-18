@@ -2,6 +2,25 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.13.1] — 2026-05-18
+
+### Fixed — 플러그인 manifest 버전 동기화
+
+`v0.13.0` 까지 `release.sh` 가 `pyproject.toml` / `__init__.py` / `README.md` /
+`CHANGELOG.md` 만 bump 했기 때문에, Claude Code · Codex 플러그인 설정 화면에는
+계속 `0.8.4` 가 표시되는 문제가 있었다. 이번 릴리즈는 manifest 정합성만 맞추는
+패치이며 기능 변경은 없다.
+
+- `.claude-plugin/plugin.json` `version`: `0.8.4` → `0.13.1`
+- `.codex-plugin/plugin.json` `version`: `0.8.4` → `0.13.1`
+- `src/synapse_memory/__init__.py` `__version__`: `0.8.5` → `0.13.1`
+  (`pyproject.toml` 과 어긋나 있던 잔여물 정리)
+
+### Changed — release 자동화 보강
+
+- `scripts/release.sh` 에 양쪽 `plugin.json` `version` 필드 자동 bump 단계를
+  추가. 다음 릴리즈부터는 manifest drift 가 재발하지 않는다.
+
 ## [0.13.0] — 2026-05-17
 
 ### Added — Obsidian Graph 시각화 (P1+P2, #015)
