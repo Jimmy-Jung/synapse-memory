@@ -3,12 +3,13 @@
 Steps (incremental — 이미 처리된 건 자동 skip)::
 
     1. collect claude-code           (mirror 새 줄만)
-    2. collect obsidian              (변경 .md만)
-    3. cluster classify --resume     (새 cluster만)
-    4. card generate (--force=False) (새 cluster만 Card 생성)
-    5. rag index                     (Card upsert)
-    6. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
-    7. report                        (DailyReport 작성)
+    2. collect codex                 (~/.codex 새 줄만)
+    3. collect obsidian              (변경 .md만)
+    4. cluster classify --resume     (새 cluster만)
+    5. card generate (--force=False) (새 cluster만 Card 생성)
+    6. rag index                     (Card upsert)
+    7. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
+    8. report                        (DailyReport 작성)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -46,6 +47,7 @@ class DailyStage:
 
 DAILY_STAGES = (
     DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
+    DailyStage("collect_codex", "Codex CLI 로그 mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -223,6 +225,7 @@ def _build_stage_actions(
     )
     return {
         "collect_claude_code": _collect_claude_code_action,
+        "collect_codex": _collect_codex_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -245,6 +248,13 @@ def _collect_claude_code_action() -> str:
     from synapse_memory.collectors.claude_code import collect_claude_code
 
     stats = collect_claude_code()
+    return stats.summary()
+
+
+def _collect_codex_action() -> str:
+    from synapse_memory.collectors.codex import collect_codex
+
+    stats = collect_codex()
     return stats.summary()
 
 
@@ -450,7 +460,10 @@ def _build_update_profile_action(
     profile_facts_only: bool,
 ) -> StageAction:
     def step() -> str:
+        from synapse_memory.collectors.obsidian.mirror import get_vault_path
+        from synapse_memory.config import get_config
         from synapse_memory.llm import detect_ai_environment
+        from synapse_memory.profile.dedupe import dedupe_against_vault
         from synapse_memory.profile.extract import (
             extract_decision_patterns,
             extract_profile_facts,
@@ -472,8 +485,28 @@ def _build_update_profile_action(
                 model=profile_model,
                 ai_env=env,
             )
+
+        # vault 진실원본과 비교해 신규 항목만 남김 — 매일 동일 항목 재질문 방지.
+        vault = get_vault_path()
+        ai_folders = get_config().vault_folders.system.ai
+        facts, patterns, report = dedupe_against_vault(
+            facts,
+            patterns,
+            profile_path=vault / ai_folders.profile,
+            decision_patterns_path=vault / ai_folders.decision_patterns,
+        )
+
+        if not facts and not patterns:
+            return (
+                "신규 fact/pattern 없음 — vault dedupe 으로 "
+                f"{report.total_dropped}개 제거 (candidate 미생성)"
+            )
+
         path = save_profile_update(facts, patterns)
-        return f"fact={len(facts)} pattern={len(patterns)} → {path.name}"
+        return (
+            f"fact={len(facts)} pattern={len(patterns)} "
+            f"(vault dedupe -{report.total_dropped}) → {path.name}"
+        )
 
     return step
 
@@ -541,13 +574,27 @@ def render_daily_report(
         "| Stage | Status | Elapsed | Summary | Reason |",
         "|---|---:|---:|---|---|",
     ]
+    raw_rows: list[tuple[str, str]] = []
     for step in result.steps:
         reason = step.error or step.skip_reason
+        human = _humanize_stage_summary(step.name, step.summary)
         lines.append(
             "| "
             f"{step.name} | {step.status} | {step.elapsed:.1f}s | "
-            f"{_clean_cell(step.summary)} | {_clean_cell(reason)} |"
+            f"{_clean_cell(human)} | {_clean_cell(reason)} |"
         )
+        if (
+            step.summary
+            and human != step.summary
+            and _has_raw_counters(step.summary)
+        ):
+            raw_rows.append((step.name, step.summary))
+
+    if raw_rows:
+        lines.extend(["", "<details>", "<summary>Raw stage counters (디버깅용)</summary>", ""])
+        for name, raw in raw_rows:
+            lines.append(f"- `{name}`: {raw}")
+        lines.extend(["", "</details>"])
 
     failures = [step for step in result.steps if step.status == StageStatus.FAILED]
     lines.extend(["", "## Failures", ""])
@@ -590,6 +637,99 @@ def _extract_first_int(steps: list[StepResult], marker: str) -> int:
         if match:
             return int(match.group(0))
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Summary humanization
+# ---------------------------------------------------------------------------
+#
+# 각 stage 의 raw summary 문자열을 사람이 읽기 좋은 한 문장으로 변환한다.
+# 변환 실패하거나 알 수 없는 stage 면 raw 를 그대로 둔다 (회귀 시 디버깅 보전).
+
+
+def _format_bytes(num: int) -> str:
+    """바이트 수를 사람용 단위(B / KB / MB / GB)로 변환."""
+    n = float(num)
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            if unit == "B":
+                return f"{int(n)} B"
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{num} B"
+
+
+def _parse_kv(raw: str) -> dict[str, int]:
+    """`key=value` / `key+=value` 토큰을 dict 로 파싱. value 정수만."""
+    import re
+
+    out: dict[str, int] = {}
+    for m in re.finditer(r"(\w+)\+?=(\d+)", raw):
+        out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def _humanize_stage_summary(stage: str, raw: str) -> str:
+    """Stage 별 raw summary → 사람 친화 문장. 알 수 없으면 raw 그대로."""
+    if not raw:
+        return raw
+    if stage == "collect_claude_code":
+        kv = _parse_kv(raw)
+        if "mirrored" in kv:
+            parts = [f"Claude 활동 로그 {kv['mirrored']}개 mirror"]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            extras: list[str] = []
+            if kv.get("truncations", 0):
+                extras.append(f"잘림 {kv['truncations']}")
+            if kv.get("skipped_empty", 0):
+                extras.append(f"빈 파일 {kv['skipped_empty']}")
+            if kv.get("errors", 0):
+                extras.append(f"에러 {kv['errors']}")
+            if extras:
+                parts.append("· " + ", ".join(extras))
+            return " ".join(parts)
+    elif stage == "collect_obsidian":
+        kv = _parse_kv(raw)
+        if "mirrored" in kv:
+            parts = [f"vault 노트 {kv['mirrored']}개 mirror"]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            extras: list[str] = []
+            if kv.get("unchanged", 0):
+                extras.append(f"변경 없음 {kv['unchanged']}")
+            if kv.get("cutoff_skip", 0):
+                extras.append(f"cutoff skip {kv['cutoff_skip']}")
+            if kv.get("errors", 0):
+                extras.append(f"에러 {kv['errors']}")
+            if extras:
+                parts.append("· " + ", ".join(extras))
+            return " ".join(parts)
+    elif stage == "index":
+        kv = _parse_kv(raw)
+        if "project" in kv or "company" in kv:
+            return (
+                f"Project Card {kv.get('project', 0)}개, "
+                f"Company Card {kv.get('company', 0)}개 인덱싱"
+            )
+    elif stage == "update_profile":
+        kv = _parse_kv(raw)
+        if "fact" in kv or "pattern" in kv:
+            parts = [
+                f"Fact {kv.get('fact', 0)}개, Pattern {kv.get('pattern', 0)}개"
+            ]
+            if "→" in raw:
+                tail = raw.split("→", 1)[1].strip()
+                if tail:
+                    parts.append(f"→ {tail}")
+            return " ".join(parts)
+    # classify / generate / report 는 이미 한국어 사람 친화 — 그대로
+    return raw
+
+
+def _has_raw_counters(raw: str) -> bool:
+    """raw 가 key=value 카운터를 포함하면 details 블록 가치 있음."""
+    return "=" in raw
 
 
 def _estimate_usd_today(date: datetime.date) -> float:

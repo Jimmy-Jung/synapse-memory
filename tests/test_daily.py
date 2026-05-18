@@ -192,6 +192,114 @@ class TestRunDaily:
 
 
 # ---------------------------------------------------------------------------
+# Summary humanization (0.13.1, DailyReport readability)
+# ---------------------------------------------------------------------------
+
+
+class TestHumanizeSummary:
+    """`_humanize_stage_summary` 가 stage 별 raw 카운터를 사람 문장으로 변환."""
+
+    def test_collect_claude_code_with_bytes_renders_size(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        raw = (
+            "scanned=252 mirrored=9 bytes+=73888700 truncations=0 "
+            "skipped_empty=0 errors=0"
+        )
+        out = _humanize_stage_summary("collect_claude_code", raw)
+        assert "9개 mirror" in out
+        assert "MB" in out  # 70.5 MB 정도
+        # 정상 케이스에서는 truncations/errors 가 0 이라 노이즈 안 붙음
+        assert "잘림" not in out
+        assert "에러" not in out
+
+    def test_collect_claude_code_surfaces_anomalies(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        raw = "scanned=5 mirrored=3 bytes+=1024 truncations=2 skipped_empty=1 errors=1"
+        out = _humanize_stage_summary("collect_claude_code", raw)
+        assert "잘림 2" in out
+        assert "빈 파일 1" in out
+        assert "에러 1" in out
+
+    def test_collect_obsidian_includes_unchanged(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        raw = "scanned=1365 mirrored=17 unchanged=1348 bytes+=214273 errors=0"
+        out = _humanize_stage_summary("collect_obsidian", raw)
+        assert "17개 mirror" in out
+        assert "변경 없음 1348" in out
+        assert "KB" in out
+
+    def test_index_translates_card_counts(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        out = _humanize_stage_summary("index", "project=25 company=3")
+        assert "Project Card 25개" in out
+        assert "Company Card 3개" in out
+
+    def test_update_profile_preserves_path(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        raw = "fact=13 pattern=13 → Profile-2026-05-18.md"
+        out = _humanize_stage_summary("update_profile", raw)
+        assert "Fact 13개" in out
+        assert "Pattern 13개" in out
+        assert "Profile-2026-05-18.md" in out
+
+    def test_already_human_summaries_pass_through(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        assert (
+            _humanize_stage_summary("classify", "신규 cluster 없음")
+            == "신규 cluster 없음"
+        )
+        assert (
+            _humanize_stage_summary("generate", "신규 Card 1개 생성")
+            == "신규 Card 1개 생성"
+        )
+
+    def test_unknown_stage_or_empty_returns_raw(self) -> None:
+        from synapse_memory.daily import _humanize_stage_summary
+
+        assert _humanize_stage_summary("unknown_stage", "foo=1 bar=2") == "foo=1 bar=2"
+        assert _humanize_stage_summary("collect_claude_code", "") == ""
+
+    def test_render_inserts_human_summary_and_raw_details(self) -> None:
+        result = run_daily(
+            stage_actions={
+                "collect_claude_code": _ok(
+                    "scanned=10 mirrored=2 bytes+=4096 truncations=0 "
+                    "skipped_empty=0 errors=0"
+                ),
+                "collect_obsidian": _ok(
+                    "scanned=100 mirrored=5 unchanged=95 bytes+=1024 errors=0"
+                ),
+                "classify": _ok("신규 cluster 없음"),
+                "generate": _ok("신규 Card 1개 생성"),
+                "index": _ok("project=25 company=3"),
+                "update_profile": _ok(
+                    "fact=13 pattern=13 → Profile-2026-05-18.md"
+                ),
+                "report": _ok("report skipped in test"),
+            },
+            on_log=lambda _line: None,
+        )
+
+        text = render_daily_report(result, date="2026-05-18", est_usd=0.5)
+
+        # 사람 친화 문장이 표에 들어 있어야 함
+        assert "Claude 활동 로그 2개 mirror" in text
+        assert "vault 노트 5개 mirror" in text
+        assert "Project Card 25개" in text
+        assert "Fact 13개" in text
+        # raw 카운터는 details 블록으로 보존
+        assert "<details>" in text
+        assert "scanned=10 mirrored=2" in text
+        assert "fact=13 pattern=13" in text
+
+
+# ---------------------------------------------------------------------------
 # Quick mode (B1, eng-review 2026-05-13)
 # ---------------------------------------------------------------------------
 
