@@ -172,6 +172,50 @@ class TestRunDaily:
         assert "[ ] collect_obsidian (resume skip)" in out
         assert "[x] classify" in out
 
+    def test_render_daily_report_profile_pipeline_section(self) -> None:
+        """update_profile 메타가 있으면 Profile Pipeline 섹션이 렌더링."""
+        from synapse_memory.daily import DailyResult
+
+        result = DailyResult()
+        result.profile_meta = {
+            "raw_facts": 8,
+            "raw_patterns": 3,
+            "promoted_facts": 2,
+            "promoted_patterns": 1,
+            "awaiting_facts": 6,
+            "awaiting_patterns": 2,
+            "vault_dropped": 4,
+            "dismissed_total": 12,
+            "dismissed_expired": 1,
+            "candidate_facts": 2,
+            "candidate_patterns": 1,
+            "dismissed_reason_counts": {
+                "user_changed": 3,
+                "one_time": 5,
+                "": 2,
+                "irrelevant": 2,
+            },
+        }
+        text = render_daily_report(result, date="2026-05-18", est_usd=0.0)
+        assert "## Profile Pipeline" in text
+        assert "raw 추출: fact 8 · pattern 3" in text
+        assert "promoted (ledger 통과): fact 2 · pattern 1" in text
+        assert "awaiting (ledger 대기): fact 6 · pattern 2" in text
+        assert "vault dedupe 제거: 4" in text
+        assert "dismissed index: 활성 12, 만료 재노출 1" in text
+        assert "### dismissed reason 분포" in text
+        # 카운트 내림차순
+        assert text.index("one_time: 5") < text.index("user_changed: 3")
+        # 빈 reason 은 (미상) 라벨
+        assert "(미상): 2" in text
+
+    def test_render_daily_report_no_profile_section_when_meta_empty(self) -> None:
+        from synapse_memory.daily import DailyResult
+
+        result = DailyResult()  # profile_meta = {}
+        text = render_daily_report(result, date="2026-05-18", est_usd=0.0)
+        assert "## Profile Pipeline" not in text
+
     def test_render_daily_report_excludes_raw_fields(self, tmp_path: Path) -> None:
         result = run_daily(
             stage_actions={

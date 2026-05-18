@@ -271,6 +271,7 @@ class TestExtractWithExtraText:
         with pytest.raises(FileNotFoundError):
             extract_profile_facts(
                 history_path=tmp_path / "missing.jsonl",
+                codex_history_path=tmp_path / "missing_codex.jsonl",
                 sample_lines=200,
                 ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),

@@ -162,6 +162,7 @@ class TestExtractProfileFacts:
         with pytest.raises(FileNotFoundError):
             extract_profile_facts(
                 history_path=tmp_path / "missing.jsonl",
+                codex_history_path=tmp_path / "missing_codex.jsonl",
                 ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
@@ -311,6 +312,100 @@ class TestSaveProfileUpdate:
         assert path.is_file()
         content = path.read_text(encoding="utf-8")
         assert "fact_count: 0" in content
+
+
+class TestSaveProfileUpdateLedgerMeta:
+    """B 묶음 — ledger 메타가 candidate 파일에 함께 출력되어 정렬·판단 보조."""
+
+    def test_frontmatter_includes_avg_confidence(self, tmp_path: Path) -> None:
+        facts = [
+            ProfileFact(category="tech", statement="A", confidence=0.9,
+                        extracted_at="2026-05-18"),
+            ProfileFact(category="tech", statement="B", confidence=0.5,
+                        extracted_at="2026-05-18"),
+        ]
+        path = save_profile_update(facts, [], vault_path=tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "fact_avg_confidence: 0.70" in content
+        assert "pattern_avg_confidence: 0.00" in content
+
+    def test_meta_suffix_when_ledger_passed(self, tmp_path: Path) -> None:
+        from synapse_memory.profile.ledger import (
+            LedgerEntry,
+            _ledger_key,
+            record_extraction,
+        )
+
+        facts = [
+            ProfileFact(category="preference", statement="한국어 응답 선호",
+                        confidence=0.85, extracted_at="2026-05-18"),
+        ]
+        ledger: dict[str, LedgerEntry] = {}
+        # 4일 누적 시뮬레이션
+        import datetime as _dt
+        for day in (15, 16, 17, 18):
+            record_extraction(
+                ledger, facts, [],
+                today=_dt.date(2026, 5, day),
+            )
+
+        path = save_profile_update(facts, [], vault_path=tmp_path, ledger=ledger)
+        content = path.read_text(encoding="utf-8")
+        assert "↳ ledger: 4회 등장" in content
+        assert "peak 0.85" in content
+        assert "첫 2026-05-15" in content
+
+    def test_meta_omitted_when_no_ledger(self, tmp_path: Path) -> None:
+        facts = [
+            ProfileFact(category="tech", statement="A", confidence=0.9,
+                        extracted_at="2026-05-18"),
+        ]
+        content = save_profile_update(facts, [], vault_path=tmp_path).read_text(
+            encoding="utf-8"
+        )
+        # 안내문에는 `↳ ledger:` 표현이 포함되지만 bullet 형태 (`  ↳ ledger: N회`) 는 없어야.
+        for line in content.splitlines():
+            if line.startswith("  ↳ ledger:"):
+                raise AssertionError(f"unexpected bullet meta line: {line!r}")
+
+    def test_sort_by_ledger_peak_then_count(self, tmp_path: Path) -> None:
+        from synapse_memory.profile.ledger import (
+            LedgerEntry,
+            record_extraction,
+        )
+        import datetime as _dt
+
+        f_strong = ProfileFact(category="tech", statement="강한 신호",
+                               confidence=0.7, extracted_at="2026-05-18")
+        f_weak = ProfileFact(category="tech", statement="약한 신호",
+                             confidence=0.7, extracted_at="2026-05-18")
+        ledger: dict[str, LedgerEntry] = {}
+        # 강한 신호: 5번 등장, peak 0.95
+        for day, conf in [(14, 0.7), (15, 0.8), (16, 0.85), (17, 0.9), (18, 0.95)]:
+            record_extraction(
+                ledger,
+                [ProfileFact(category="tech", statement="강한 신호",
+                             confidence=conf, extracted_at="2026-05-18")],
+                [],
+                today=_dt.date(2026, 5, day),
+            )
+        # 약한 신호: 2번 등장, peak 0.7
+        for day in (17, 18):
+            record_extraction(
+                ledger,
+                [ProfileFact(category="tech", statement="약한 신호",
+                             confidence=0.7, extracted_at="2026-05-18")],
+                [],
+                today=_dt.date(2026, 5, day),
+            )
+
+        path = save_profile_update(
+            [f_weak, f_strong], [], vault_path=tmp_path, ledger=ledger
+        )
+        content = path.read_text(encoding="utf-8")
+        idx_strong = content.index("강한 신호")
+        idx_weak = content.index("약한 신호")
+        assert idx_strong < idx_weak  # 강한 신호가 먼저 노출
 
 
 def test_profile_categories_sanity() -> None:

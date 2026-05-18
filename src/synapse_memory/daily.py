@@ -112,6 +112,11 @@ class DailyResult:
     resume_from: str | None = None
     report_path: Path | None = None
     report_error: str = ""
+    # update_profile stage 의 구조화 결과 — DailyReport 의 "Profile Pipeline"
+    # 섹션 렌더에 사용. 값 키: raw_facts, raw_patterns, promoted_facts,
+    # promoted_patterns, awaiting_facts, awaiting_patterns, vault_dropped,
+    # dismissed_total, dismissed_expired, dismissed_reason_counts.
+    profile_meta: dict[str, object] = field(default_factory=dict)
 
     @property
     def errors(self) -> int:
@@ -216,8 +221,14 @@ def _build_stage_actions(
     status_sink: StatusSink | None = None,
     quick_since_days: int | None = None,
     quick_max_new_clusters: int | None = None,
+    result: DailyResult | None = None,
 ) -> dict[str, StageAction]:
-    """stage 별 action 사전. ``quick_*`` 인자는 ``--quick`` 모드 cutoff 를 활성화."""
+    """stage 별 action 사전. ``quick_*`` 인자는 ``--quick`` 모드 cutoff 를 활성화.
+
+    ``result`` 가 주어지면 update_profile stage 의 구조화 통계가
+    ``result.profile_meta`` 에 채워져 DailyReport 의 Profile Pipeline 섹션 렌더에
+    사용된다.
+    """
     obsidian_action: StageAction = (
         _build_collect_obsidian_action(since_days=quick_since_days)
         if quick_since_days is not None
@@ -239,6 +250,7 @@ def _build_stage_actions(
             profile_model=profile_model,
             profile_sample_lines=profile_sample_lines,
             profile_facts_only=profile_facts_only,
+            result=result,
         ),
         "report": lambda: "",
     }
@@ -458,12 +470,17 @@ def _build_update_profile_action(
     profile_model: str,
     profile_sample_lines: int,
     profile_facts_only: bool,
+    result: DailyResult | None = None,
 ) -> StageAction:
     def step() -> str:
         from synapse_memory.collectors.obsidian.mirror import get_vault_path
         from synapse_memory.config import get_config
         from synapse_memory.llm import detect_ai_environment
-        from synapse_memory.profile.dedupe import dedupe_against_vault
+        from synapse_memory.profile.dedupe import (
+            dedupe_against_vault,
+            parse_decision_pattern_triggers,
+            parse_profile_facts,
+        )
         from synapse_memory.profile.dismissed import (
             dismissed_path,
             load_dismissed,
@@ -473,35 +490,124 @@ def _build_update_profile_action(
             extract_profile_facts,
             save_profile_update,
         )
+        from synapse_memory.profile.ledger import (
+            enrich_promoted_patterns,
+            load_ledger,
+            mark_promoted,
+            promote_candidates,
+            record_extraction,
+            save_ledger,
+        )
 
         env = detect_ai_environment(model=profile_model)
         if not env.ready:
             raise RuntimeError("AI provider 미설치")
-        facts = extract_profile_facts(
+
+        cfg = get_config()
+        vault = get_vault_path()
+        ai_folders = cfg.vault_folders.system.ai
+        profile_path = vault / ai_folders.profile
+        dp_path = vault / ai_folders.decision_patterns
+        existing_facts = parse_profile_facts(profile_path)
+        existing_triggers = parse_decision_pattern_triggers(dp_path)
+        dismissed = load_dismissed(dismissed_path(vault))
+        # strong (misclassified+irrelevant) 는 별도 섹션으로 LLM 에 강한 차단 신호.
+        strong_facts = sorted(dismissed.strong_facts())
+        strong_patterns = sorted(dismissed.strong_patterns())
+        # normal 제외 = vault + dismissed 전체. strong 항목이 두 섹션에 중복돼도
+        # LLM 측 무해 (차단 효과만 강화) — 단순성 우선.
+        excluded_facts = existing_facts + sorted(dismissed.facts)
+        excluded_triggers = existing_triggers + sorted(dismissed.patterns)
+
+        # 1) 추출 — claude-code + codex history, negative example 주입.
+        raw_facts = extract_profile_facts(
             sample_lines=profile_sample_lines,
             model=profile_model,
             ai_env=env,
+            excluded_statements=excluded_facts,
+            excluded_statements_strong=strong_facts,
         )
-        patterns = []
+        from synapse_memory.profile.schema import DecisionPattern as _DP
+        raw_patterns: list[_DP] = []
         if not profile_facts_only:
-            patterns = extract_decision_patterns(
+            raw_patterns = extract_decision_patterns(
                 sample_lines=profile_sample_lines,
                 model=profile_model,
                 ai_env=env,
+                excluded_triggers=excluded_triggers,
+                excluded_triggers_strong=strong_patterns,
             )
 
-        # vault 진실원본 + dismissed 인덱스 기준으로 신규만 남김.
-        vault = get_vault_path()
-        ai_folders = get_config().vault_folders.system.ai
-        dismissed = load_dismissed(dismissed_path(vault))
+        # 2) ledger 누적 + promotion — multi-day cross-validation.
+        ledger = load_ledger()
+        record_extraction(ledger, raw_facts, raw_patterns)
+        promoted_facts, promoted_patterns, promo_report = promote_candidates(
+            ledger,
+            facts_input=raw_facts,
+            patterns_input=raw_patterns,
+            min_count=cfg.profile.promotion_min_count,
+            window_days=cfg.profile.promotion_window_days,
+            fast_path_confidence=cfg.profile.fast_path_confidence,
+        )
+        # pattern 의 action/rationale 은 ledger 가 안 저장 — 오늘 호출 결과로 보강.
+        promoted_patterns = enrich_promoted_patterns(promoted_patterns, raw_patterns)
+
+        # 3) 후처리 dedupe — vault/dismissed 와 비교 안전망.
         facts, patterns, report = dedupe_against_vault(
-            facts,
-            patterns,
-            profile_path=vault / ai_folders.profile,
-            decision_patterns_path=vault / ai_folders.decision_patterns,
+            promoted_facts,
+            promoted_patterns,
+            profile_path=profile_path,
+            decision_patterns_path=dp_path,
             dismissed_facts=dismissed.facts,
             dismissed_patterns=dismissed.patterns,
         )
+
+        # 4) ledger 마크 + persist — promoted 만 마크 (dedupe 로 drop 된 건 다음 호출에서 다시).
+        mark_promoted(ledger, facts, patterns)
+        save_ledger(ledger)
+
+        # 관찰성: DailyReport 의 Profile Pipeline 섹션 렌더용 구조화 메타.
+        if result is not None:
+            from collections import Counter as _Counter
+
+            reason_counts: dict[str, int] = {}
+            try:
+                dpath = dismissed_path(vault)
+                if dpath.is_file():
+                    import json as _json
+
+                    reasons: list[str] = []
+                    for raw_line in dpath.read_text(encoding="utf-8").splitlines():
+                        line = raw_line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        try:
+                            obj = _json.loads(line)
+                        except _json.JSONDecodeError:
+                            continue
+                        if not isinstance(obj, dict):
+                            continue
+                        r = obj.get("reason", "")
+                        if isinstance(r, str):
+                            reasons.append(r)
+                    reason_counts = dict(_Counter(reasons))
+            except OSError:
+                reason_counts = {}
+
+            result.profile_meta = {
+                "raw_facts": len(raw_facts),
+                "raw_patterns": len(raw_patterns),
+                "promoted_facts": promo_report.promoted_fact_count,
+                "promoted_patterns": promo_report.promoted_pattern_count,
+                "awaiting_facts": promo_report.awaiting_fact_count,
+                "awaiting_patterns": promo_report.awaiting_pattern_count,
+                "vault_dropped": report.total_dropped,
+                "dismissed_total": dismissed.total,
+                "dismissed_expired": dismissed.expired_count,
+                "dismissed_reason_counts": reason_counts,
+                "candidate_facts": len(facts),
+                "candidate_patterns": len(patterns),
+            }
 
         dismiss_note = (
             f" dismissed_idx={dismissed.total}"
@@ -513,18 +619,22 @@ def _build_update_profile_action(
             if dismissed.total or dismissed.expired_count
             else ""
         )
+        ledger_note = (
+            f" [ledger {promo_report.summary()}]"
+        )
 
         if not facts and not patterns:
             return (
-                "신규 fact/pattern 없음 — vault dedupe 으로 "
-                f"{report.total_dropped}개 제거 (candidate 미생성)"
-                f"{dismiss_note}"
+                f"신규 fact/pattern 없음 — raw {len(raw_facts)}/{len(raw_patterns)} "
+                f"→ promotion 대기"
+                f"{ledger_note}{dismiss_note}"
             )
 
-        path = save_profile_update(facts, patterns)
+        path = save_profile_update(facts, patterns, ledger=ledger)
         return (
             f"fact={len(facts)} pattern={len(patterns)} "
-            f"(vault dedupe -{report.total_dropped}{dismiss_note}) → {path.name}"
+            f"(vault dedupe -{report.total_dropped}{dismiss_note}{ledger_note}) "
+            f"→ {path.name}"
         )
 
     return step
@@ -622,6 +732,10 @@ def render_daily_report(
     else:
         lines.append("- 없음")
 
+    # Profile Pipeline 통계 — update_profile stage 가 실행됐을 때만.
+    if result.profile_meta:
+        lines.extend(_render_profile_pipeline_section(result.profile_meta))
+
     lines.extend(["", "## Resume", ""])
     if failures:
         first_failure = failures[0].name
@@ -639,6 +753,45 @@ def render_daily_report(
     else:
         lines.append("Resume not needed.")
     return "\n".join(lines) + "\n"
+
+
+def _render_profile_pipeline_section(meta: dict[str, object]) -> list[str]:
+    """Profile Pipeline 섹션 markdown 라인 (앞 빈 줄 포함).
+
+    update_profile stage 가 실행됐을 때만 호출. promotion/dedupe/dismissed 지표를
+    한 화면에서 확인하기 위한 관찰성 블록.
+    """
+    def _i(key: str) -> int:
+        v = meta.get(key, 0)
+        return int(v) if isinstance(v, int) else 0
+
+    lines = [
+        "",
+        "## Profile Pipeline",
+        "",
+        f"- raw 추출: fact {_i('raw_facts')} · pattern {_i('raw_patterns')}",
+        f"- promoted (ledger 통과): fact {_i('promoted_facts')} · "
+        f"pattern {_i('promoted_patterns')}",
+        f"- awaiting (ledger 대기): fact {_i('awaiting_facts')} · "
+        f"pattern {_i('awaiting_patterns')}",
+        f"- vault dedupe 제거: {_i('vault_dropped')}",
+        f"- dismissed index: 활성 {_i('dismissed_total')}, "
+        f"만료 재노출 {_i('dismissed_expired')}",
+        f"- candidate 저장: fact {_i('candidate_facts')} · "
+        f"pattern {_i('candidate_patterns')}",
+    ]
+    reason_counts_raw = meta.get("dismissed_reason_counts", {})
+    if isinstance(reason_counts_raw, dict) and reason_counts_raw:
+        lines.extend(["", "### dismissed reason 분포", ""])
+        items = sorted(
+            ((str(k), int(v) if isinstance(v, int) else 0)
+             for k, v in reason_counts_raw.items()),
+            key=lambda x: (-x[1], x[0]),
+        )
+        for reason, count in items:
+            label = reason or "(미상)"
+            lines.append(f"- {label}: {count}")
+    return lines
 
 
 def _clean_cell(value: str) -> str:
@@ -860,6 +1013,7 @@ def run_daily(
         status_sink=status_sink,
         quick_since_days=quick_days if quick else None,
         quick_max_new_clusters=quick_max_clusters if quick else None,
+        result=result,
     )
     if stage_actions:
         actions.update(stage_actions)
