@@ -1,6 +1,6 @@
 # Implementation Plan: 외부 데이터 수집기 확장 (Collectors v2)
 
-**Branch**: `release/1.14.0` | **Date**: 2026-05-18 | **Spec**: [spec.md](./spec.md)
+**Branch**: `release/0.15.0` | **Date**: 2026-05-18 | **Spec**: [spec.md](./spec.md)
 
 ## Summary
 
