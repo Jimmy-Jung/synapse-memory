@@ -2,6 +2,24 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.2] — 2026-05-18
+
+### Fixed — daily 브라우저 History lock 대기 상한
+
+- `collect_browser_history` stage 가 Chrome / Safari / Arc History SQLite lock 에서
+  오래 대기하지 않도록 backup 을 별도 Python subprocess 로 실행하고 10초 상한을
+  적용한다.
+- 상한 초과 시 해당 브라우저만 `errors` 로 기록하고 daily 는 다음 stage 로 계속
+  진행한다. 남은 `.tmp` mirror 파일은 즉시 정리한다.
+- `daily` 실행 중복 방지 lock, `--only` / `--skip` stage 이름 검증, 부분 실행
+  dependency guard 를 추가했다.
+- DailyReport 를 최종 elapsed / report stage row 가 반영된 상태로 다시 쓰고,
+  collector 내부 `errors=N` 은 `warnings_count` 로 노출한다.
+- `synapse-memory daily --watch-status` 를 추가해 실행 중 status 진행률을 같은
+  터미널에 한 줄씩 표시한다.
+- `daily` skill / command 문서에 `synapse-memory daily-status --watch` 와
+  `--skip collect_browser_history` 우회 명령을 추가했다.
+
 ## [0.15.1] — 2026-05-18
 
 ### Changed — slash 가이드 v0.15 컬렉터 반영
