@@ -2,14 +2,19 @@
 
 Steps (incremental — 이미 처리된 건 자동 skip)::
 
-    1. collect claude-code           (mirror 새 줄만)
-    2. collect codex                 (~/.codex 새 줄만)
-    3. collect obsidian              (변경 .md만)
-    4. cluster classify --resume     (새 cluster만)
-    5. card generate (--force=False) (새 cluster만 Card 생성)
-    6. rag index                     (Card upsert)
-    7. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
-    8. report                        (DailyReport 작성)
+    1.  collect claude-code           (mirror 새 줄만)
+    2.  collect codex                 (~/.codex 새 줄만)
+    3.  collect shell-history         (~/.zsh_history, ~/.bash_history)
+    4.  collect cursor                (Cursor IDE SQLite snapshot)
+    5.  collect continue.dev          (~/.continue 세션 JSON)
+    6.  collect aider                 (~/.aider.* append-only)
+    7.  collect git-self              (본인 commit JSONL — opt-in env 기반)
+    8.  collect obsidian              (변경 .md만)
+    9.  cluster classify --resume     (새 cluster만)
+    10. card generate (--force=False) (새 cluster만 Card 생성)
+    11. rag index                     (Card upsert)
+    12. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
+    13. report                        (DailyReport 작성)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -48,6 +53,11 @@ class DailyStage:
 DAILY_STAGES = (
     DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
     DailyStage("collect_codex", "Codex CLI 로그 mirror"),
+    DailyStage("collect_shell_history", "Shell history mirror"),
+    DailyStage("collect_cursor", "Cursor IDE 로그 mirror"),
+    DailyStage("collect_continue", "Continue.dev 세션 mirror"),
+    DailyStage("collect_aider", "Aider 대화 mirror"),
+    DailyStage("collect_git_self", "본인 Git commit mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -237,6 +247,11 @@ def _build_stage_actions(
     return {
         "collect_claude_code": _collect_claude_code_action,
         "collect_codex": _collect_codex_action,
+        "collect_shell_history": _collect_shell_history_action,
+        "collect_cursor": _collect_cursor_action,
+        "collect_continue": _collect_continue_action,
+        "collect_aider": _collect_aider_action,
+        "collect_git_self": _collect_git_self_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -267,6 +282,41 @@ def _collect_codex_action() -> str:
     from synapse_memory.collectors.codex import collect_codex
 
     stats = collect_codex()
+    return stats.summary()
+
+
+def _collect_shell_history_action() -> str:
+    from synapse_memory.collectors.shell_history import collect_shell_history
+
+    stats = collect_shell_history()
+    return stats.summary()
+
+
+def _collect_cursor_action() -> str:
+    from synapse_memory.collectors.cursor import collect_cursor
+
+    stats = collect_cursor()
+    return stats.summary()
+
+
+def _collect_continue_action() -> str:
+    from synapse_memory.collectors.continue_dev import collect_continue
+
+    stats = collect_continue()
+    return stats.summary()
+
+
+def _collect_aider_action() -> str:
+    from synapse_memory.collectors.aider import collect_aider
+
+    stats = collect_aider()
+    return stats.summary()
+
+
+def _collect_git_self_action() -> str:
+    from synapse_memory.collectors.git_self import collect_git_self
+
+    stats = collect_git_self()
     return stats.summary()
 
 
@@ -845,8 +895,19 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
     """Stage 별 raw summary → 사람 친화 문장. 알 수 없으면 raw 그대로."""
     if not raw:
         return raw
-    if stage in ("collect_claude_code", "collect_codex"):
-        label = "Claude 활동 로그" if stage == "collect_claude_code" else "Codex 활동 로그"
+    if stage in (
+        "collect_claude_code",
+        "collect_codex",
+        "collect_shell_history",
+        "collect_aider",
+    ):
+        labels = {
+            "collect_claude_code": "Claude 활동 로그",
+            "collect_codex": "Codex 활동 로그",
+            "collect_shell_history": "Shell 명령",
+            "collect_aider": "Aider 대화",
+        }
+        label = labels[stage]
         kv = _parse_kv(raw)
         if "mirrored" in kv:
             parts = [f"{label} {kv['mirrored']}개 mirror"]
@@ -861,6 +922,33 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
                 extras.append(f"에러 {kv['errors']}")
             if extras:
                 parts.append("· " + ", ".join(extras))
+            return " ".join(parts)
+    elif stage in ("collect_cursor", "collect_continue"):
+        label = "Cursor DB" if stage == "collect_cursor" else "Continue.dev 세션"
+        kv = _parse_kv(raw)
+        if "mirrored" in kv:
+            parts = [f"{label} {kv['mirrored']}개 mirror"]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            extras = []
+            if kv.get("unchanged", 0):
+                extras.append(f"변경 없음 {kv['unchanged']}")
+            if kv.get("errors", 0):
+                extras.append(f"에러 {kv['errors']}")
+            if extras:
+                parts.append("· " + ", ".join(extras))
+            return " ".join(parts)
+    elif stage == "collect_git_self":
+        kv = _parse_kv(raw)
+        if "scanned" in kv:
+            parts = [
+                f"본인 commit {kv.get('commits', 0)}개 mirror "
+                f"(repo {kv.get('mirrored', 0)}/{kv.get('scanned', 0)})"
+            ]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("errors", 0):
+                parts.append(f"· 에러 {kv['errors']}")
             return " ".join(parts)
     elif stage == "collect_obsidian":
         kv = _parse_kv(raw)

@@ -461,6 +461,41 @@ synapse-memory config show
 synapse-memory doctor --fix-config
 ```
 
+## 외부 데이터 수집기 (Collectors v2)
+
+`/sm:daily` 가 매번 호출하는 입력 mirror 단계. 모든 데이터는 로컬
+``~/.synapse/private/raw/`` 에만 저장되고 외부로 나가지 않습니다.
+
+| 수집기 | 소스 | 기본 켜짐 | 비고 |
+|---|---|:---:|---|
+| `collect_claude_code` | `~/.claude/projects/<slug>/<id>.jsonl` | ✅ | Claude Code 세션 |
+| `collect_codex` | `~/.codex/sessions/.../*.jsonl` + `history.jsonl` | ✅ | Codex CLI |
+| `collect_shell_history` | `~/.zsh_history`, `~/.bash_history` | ✅ | 셸 명령 기록 |
+| `collect_cursor` | Cursor IDE `state.vscdb` (SQLite) | ✅ | macOS 표준 경로 |
+| `collect_continue` | `~/.continue/sessions/*.json` | ✅ | Continue.dev VS Code 확장 |
+| `collect_aider` | `~/.aider.chat.history.md`, `.input.history` | ✅ | terminal AI pair |
+| `collect_git_self` | `SYNAPSE_GIT_SELF_ROOTS` 안의 본인 commit | ⛔ opt-in | 환경변수로 root 지정 시만 동작 |
+| `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
+
+### `collect_git_self` 켜기
+
+본인 commit log 만 JSONL 로 mirror 합니다. (diff 본문은 미저장 — 후속 단계에서
+필요 시 lazy fetch.)
+
+```bash
+# 1. root 디렉토리 지정 (콜론 구분, 직계 자식까지만 탐색)
+export SYNAPSE_GIT_SELF_ROOTS="$HOME/Documents/GitHub:$HOME/work"
+
+# 2. (옵션) 본인 이메일 명시 — 미지정 시 repo 의 git config user.email
+export SYNAPSE_GIT_SELF_EMAIL="you@example.com"
+
+# 3. 다음 daily 실행부터 자동으로 mirror
+/sm:daily
+```
+
+각 repo 마다 마지막 처리한 commit SHA 가 `.offsets/<repo>.sha` 에 저장돼 다음
+호출 때 그 이후만 mirror — incremental 입니다.
+
 ## 완전히 지우고 싶을 때
 
 처리 데이터 삭제와 개인정보 경계는 [개인정보, 비용, 삭제](privacy-and-cost.md)를
