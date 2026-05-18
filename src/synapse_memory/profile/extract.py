@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
@@ -34,6 +35,10 @@ DEFAULT_SAMPLE_LINES = 200       # history.jsonl 마지막 N 줄
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TIMEOUT = 240
 MEMORY_INBOX_SUBPATH = Path("90_System") / "AI" / "MemoryInbox"
+
+# negative example 섹션에 포함할 최대 항목 수 — 토큰 비용 vs 품질 트레이드오프.
+# 100개면 평균 ~50자 * 100 = 약 2000 tokens 추가.
+_EXCLUDED_MAX_ITEMS = 100
 
 PROFILE_SYSTEM = """당신은 사용자의 raw 활동 데이터에서 **안정적 성향 사실**을 추출하는 분석가입니다.
 
@@ -81,12 +86,79 @@ raw 활동에서 **"트리거 → 행동 → 이유"** 패턴 추출.
 
 
 # ---------------------------------------------------------------------------
+# 프롬프트 negative example (LLM 추출 단계 dedupe)
+# ---------------------------------------------------------------------------
+
+
+def _dedupe_excluded(items: list[str]) -> list[str]:
+    """대소문자/공백 기준 중복 제거 + ``_EXCLUDED_MAX_ITEMS`` cap."""
+    seen: set[str] = set()
+    unique: list[str] = []
+    for s in items:
+        s = (s or "").strip()
+        if not s:
+            continue
+        key = s.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(s)
+        if len(unique) >= _EXCLUDED_MAX_ITEMS:
+            break
+    return unique
+
+
+def _build_excluded_section(label: str, items: list[str]) -> str:
+    """user_prompt 에 붙일 일반 ``# 제외`` 섹션. 빈 리스트면 빈 문자열.
+
+    중복 statement 제거 + 100개 cap. system 프롬프트는 건드리지 않아 prompt
+    cache 유효성이 보존된다.
+    """
+    unique = _dedupe_excluded(items)
+    if not unique:
+        return ""
+    bullets = "\n".join(f"- {s}" for s in unique)
+    note = (
+        f"\n(원본 {len(items)}개 중 상위 {_EXCLUDED_MAX_ITEMS}개)"
+        if len(items) > _EXCLUDED_MAX_ITEMS
+        else ""
+    )
+    return (
+        "\n\n# 제외 — 이미 알고 있거나 사용자가 거부한 항목\n"
+        "아래 목록과 동일하거나 단순 재진술인 항목은 절대 출력하지 마세요. "
+        f"신규 신호만 추출하세요.{note}\n\n{bullets}\n"
+    )
+
+
+def _build_strong_excluded_section(label: str, items: list[str]) -> str:
+    """강한 제외 섹션 — 사용자가 misclassified/irrelevant 로 명시한 항목.
+
+    LLM 이 이 카테고리를 다시 출력하면 명시적 실패. 일반 제외보다 강한 어조 +
+    한 화면에서 먼저 보이도록 sections 앞쪽에 배치한다.
+    """
+    unique = _dedupe_excluded(items)
+    if not unique:
+        return ""
+    bullets = "\n".join(f"- {s}" for s in unique)
+    note = (
+        f"\n(원본 {len(items)}개 중 상위 {_EXCLUDED_MAX_ITEMS}개)"
+        if len(items) > _EXCLUDED_MAX_ITEMS
+        else ""
+    )
+    return (
+        "\n\n# 제외 (강한 차단) — 사용자가 LLM 오추출 또는 noise 로 분류함\n"
+        "**아래 항목은 사실 자체가 틀리거나 추출 가치가 전혀 없습니다. "
+        f"같거나 유사한 항목을 출력하면 명백한 실패입니다.**{note}\n\n{bullets}\n"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Sample 가져오기
 # ---------------------------------------------------------------------------
 
 
 def _read_history_tail(path: Path, n: int) -> str:
-    """history.jsonl 마지막 N 줄 → display 필드만 합쳐 단일 텍스트."""
+    """claude-code history.jsonl 마지막 N 줄 → display 필드만 합쳐 단일 텍스트."""
     if not path.is_file():
         return ""
     lines: list[str] = []
@@ -110,6 +182,40 @@ def _read_history_tail(path: Path, n: int) -> str:
     return "\n".join(lines[-n:])
 
 
+def _read_codex_history_tail(path: Path, n: int, *, max_chars_per_line: int = 400) -> str:
+    """codex history.jsonl 마지막 N 줄 → text 필드만 합쳐 단일 텍스트.
+
+    claude-code 와 포맷이 다르므로 (``text`` 필드, project 없음) 별도 reader.
+    줄 하나가 너무 길면 context 가 한쪽으로 편향되므로 ``max_chars_per_line`` 으로 컷.
+    """
+    if not path.is_file():
+        return ""
+    lines: list[str] = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    ev = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(ev, dict):
+                    continue
+                text = ev.get("text")
+                if not isinstance(text, str) or not text:
+                    continue
+                # 개행을 공백으로 펴서 1줄 1입력 보장.
+                flat = " ".join(text.split())
+                if len(flat) > max_chars_per_line:
+                    flat = flat[:max_chars_per_line] + "…"
+                lines.append(f"[codex] {flat}")
+    except OSError:
+        return ""
+    return "\n".join(lines[-n:])
+
+
 # ---------------------------------------------------------------------------
 # 추출
 # ---------------------------------------------------------------------------
@@ -122,22 +228,29 @@ def extract_profile_facts(
     ai_env: AIEnvironment | None = None,
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
+    codex_history_path: Path | None = None,
     extra_text: str | None = None,
+    excluded_statements: list[str] | None = None,
+    excluded_statements_strong: list[str] | None = None,
 ) -> list[ProfileFact]:
-    """Claude Code history (+ 선택적 외부 자료) → ProfileFact 후보.
+    """Claude Code + Codex history (+ 선택적 외부 자료) → ProfileFact 후보.
 
     Args:
-        sample_lines: history.jsonl 마지막 N줄. 0 이면 history 무시.
-        extra_text: 이미 redacted 된 외부 자료 (예: ``ingest_files`` 의
-            ``combined_redacted``). history 와 함께 사용 가능하며, history 없이
-            extra_text 만으로도 호출 가능.
+        sample_lines: 각 source 의 history.jsonl 마지막 N줄. 0 이면 history 무시.
+        history_path: claude-code history override.
+        codex_history_path: codex history override. 기본 ``<l0>/raw/codex/history.jsonl``.
+            파일 없으면 silent skip — codex 미사용 환경도 정상 동작.
+        extra_text: 이미 redacted 된 외부 자료. history 와 함께 사용 가능.
 
     Raises:
         AIError: AI provider 호출 실패.
-        FileNotFoundError: history 와 extra_text 모두 비어있음.
+        FileNotFoundError: 어떤 source 도 자료를 못 찾음.
     """
     history = history_path or (
         l0_root() / "raw" / "claude-code" / "history.jsonl"
+    )
+    codex_history = codex_history_path or (
+        l0_root() / "raw" / "codex" / "history.jsonl"
     )
 
     sections: list[str] = []
@@ -149,10 +262,19 @@ def extract_profile_facts(
             redacted_history = redact_full(raw_history, env=apfel_env).redacted
             if redacted_history:
                 sections.append(
-                    f"## 사용자 명령 history (최근 {sample_lines}건, redacted)\n\n"
+                    f"## claude-code history (최근 {sample_lines}건, redacted)\n\n"
                     f"{redacted_history}"
                 )
                 source_ids.append("claude-code/history.jsonl")
+        raw_codex = _read_codex_history_tail(codex_history, sample_lines)
+        if raw_codex:
+            redacted_codex = redact_full(raw_codex, env=apfel_env).redacted
+            if redacted_codex:
+                sections.append(
+                    f"## codex history (최근 {sample_lines}건, redacted)\n\n"
+                    f"{redacted_codex}"
+                )
+                source_ids.append("codex/history.jsonl")
 
     if extra_text:
         sections.append(f"## 외부 첨부 자료 (redacted)\n\n{extra_text}")
@@ -160,14 +282,23 @@ def extract_profile_facts(
 
     if not sections:
         raise FileNotFoundError(
-            f"수집할 자료 없음: history={history} sample_lines={sample_lines} "
-            f"extra_text=None — `synapse-memory collect claude-code` 또는 "
-            f"`persona ingest --file ...` 먼저"
+            f"수집할 자료 없음: claude-code={history} codex={codex_history} "
+            f"sample_lines={sample_lines} extra_text=None — "
+            "`synapse-memory collect claude-code` / `daily --only collect_codex` "
+            "또는 `persona ingest --file ...` 먼저"
         )
 
     combined = "\n\n---\n\n".join(sections)
+    strong_section = _build_strong_excluded_section(
+        "프로필 사실", excluded_statements_strong or []
+    )
+    excluded_section = _build_excluded_section(
+        "프로필 사실", excluded_statements or []
+    )
     user_prompt = (
-        f"# 사용자 자료\n\n{combined}\n\n"
+        f"# 사용자 자료\n\n{combined}"
+        f"{strong_section}"
+        f"{excluded_section}\n"
         f"# 지시\n위에서 반복 패턴으로 드러나는 사용자 성향 사실을 JSON으로 추출."
     )
 
@@ -219,19 +350,55 @@ def extract_decision_patterns(
     ai_env: AIEnvironment | None = None,
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
+    codex_history_path: Path | None = None,
+    excluded_triggers: list[str] | None = None,
+    excluded_triggers_strong: list[str] | None = None,
 ) -> list[DecisionPattern]:
     history = history_path or (
         l0_root() / "raw" / "claude-code" / "history.jsonl"
     )
-    raw_text = _read_history_tail(history, sample_lines)
-    if not raw_text:
-        raise FileNotFoundError(f"history 비어있음: {history}")
+    codex_history = codex_history_path or (
+        l0_root() / "raw" / "codex" / "history.jsonl"
+    )
 
-    redacted = redact_full(raw_text, env=apfel_env).redacted
+    sections: list[str] = []
+    examples: list[str] = []
+    cc_text = _read_history_tail(history, sample_lines)
+    if cc_text:
+        redacted = redact_full(cc_text, env=apfel_env).redacted
+        if redacted:
+            sections.append(
+                f"## claude-code history (최근 {sample_lines}건, redacted)\n\n"
+                f"{redacted}"
+            )
+            examples.append("claude-code/history.jsonl")
+    codex_text = _read_codex_history_tail(codex_history, sample_lines)
+    if codex_text:
+        redacted_cx = redact_full(codex_text, env=apfel_env).redacted
+        if redacted_cx:
+            sections.append(
+                f"## codex history (최근 {sample_lines}건, redacted)\n\n"
+                f"{redacted_cx}"
+            )
+            examples.append("codex/history.jsonl")
 
+    if not sections:
+        raise FileNotFoundError(
+            f"history 비어있음: claude-code={history} codex={codex_history}"
+        )
+
+    combined = "\n\n---\n\n".join(sections)
+    strong_section = _build_strong_excluded_section(
+        "결정 패턴 trigger", excluded_triggers_strong or []
+    )
+    excluded_section = _build_excluded_section(
+        "결정 패턴 trigger", excluded_triggers or []
+    )
     user_prompt = (
-        f"# 사용자 명령 history (최근 {sample_lines}건, redacted)\n\n"
-        f"{redacted}\n\n"
+        f"# 사용자 명령 history\n\n"
+        f"{combined}"
+        f"{strong_section}"
+        f"{excluded_section}\n"
         f"# 지시\n위에서 의사결정 패턴(트리거→행동→이유)을 JSON으로 추출."
     )
 
@@ -269,7 +436,7 @@ def extract_decision_patterns(
                 action=action,
                 rationale=rationale,
                 confidence=max(0.0, min(1.0, conf)),
-                examples=["claude-code/history.jsonl"],
+                examples=list(examples),
                 extracted_at=today,
             )
         )
@@ -281,15 +448,66 @@ def extract_decision_patterns(
 # ---------------------------------------------------------------------------
 
 
+def _fact_score(fact: ProfileFact, entry: object | None) -> tuple[float, int]:
+    """정렬 키 — (peak confidence, seen_count) 내림차순.
+
+    ledger entry 가 있으면 누적 신호를 우선, 없으면 단일 호출 confidence 만 사용.
+    """
+    from synapse_memory.profile.ledger import LedgerEntry
+
+    if isinstance(entry, LedgerEntry):
+        return (entry.peak_confidence(), entry.seen_count)
+    return (fact.confidence, 0)
+
+
+def _pattern_score(pattern: DecisionPattern, entry: object | None) -> tuple[float, int]:
+    from synapse_memory.profile.ledger import LedgerEntry
+
+    if isinstance(entry, LedgerEntry):
+        return (entry.peak_confidence(), entry.seen_count)
+    return (pattern.confidence, 0)
+
+
+def _meta_suffix(entry: object | None) -> str:
+    """``- [0.92] 문장`` 뒤에 붙는 ledger 메타 한 줄. entry 없으면 빈 문자열."""
+    from synapse_memory.profile.ledger import LedgerEntry
+
+    if not isinstance(entry, LedgerEntry):
+        return ""
+    span_days = 0
+    if entry.first_seen and entry.last_seen:
+        try:
+            d0 = datetime.date.fromisoformat(entry.first_seen)
+            d1 = datetime.date.fromisoformat(entry.last_seen)
+            span_days = (d1 - d0).days
+        except ValueError:
+            span_days = 0
+    avg = entry.aggregated_confidence()
+    peak = entry.peak_confidence()
+    span_note = f", {span_days}일 간격" if span_days else ""
+    return (
+        f"  ↳ ledger: {entry.seen_count}회 등장{span_note} "
+        f"(peak {peak:.2f} · avg {avg:.2f}, 첫 {entry.first_seen})"
+    )
+
+
 def save_profile_update(
     facts: list[ProfileFact],
     patterns: list[DecisionPattern] | None = None,
     *,
     vault_path: Path | None = None,
     date: datetime.date | None = None,
+    ledger: Mapping[str, object] | None = None,
 ) -> Path:
-    """후보 → vault MemoryInbox에 markdown PR. 사용자 검토 후 진실원본 반영."""
+    """후보 → vault MemoryInbox에 markdown PR. 사용자 검토 후 진실원본 반영.
+
+    Args:
+        ledger: ``profile/ledger.py`` 의 ``load_ledger`` 결과. 있으면 각 fact/pattern
+            아래에 누적 메타(``seen_count`` / peak conf / 첫 등장)를 출력하고
+            ledger 기반으로 정렬 — apply 단계 판단 보조.
+    """
     from synapse_memory.folders import year_month_path
+    from synapse_memory.profile.ledger import LedgerEntry, _ledger_key
 
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     inbox_base = vault / get_config().vault_folders.system.ai.memory_inbox
@@ -300,12 +518,30 @@ def save_profile_update(
     today = today_date.isoformat()
     path = inbox / f"Profile-{today}.md"
 
+    # ledger lookup helper — fact/pattern fingerprint 기준.
+    from synapse_memory.profile.dedupe import _normalize
+
+    def _lookup(kind: str, text: str) -> LedgerEntry | None:
+        if not ledger:
+            return None
+        entry = ledger.get(_ledger_key(kind, _normalize(text)))
+        return entry if isinstance(entry, LedgerEntry) else None
+
+    # 평균 confidence 한 줄 — apply 스킬의 bulk 화면 요약용.
+    def _avg(items: list[float]) -> float:
+        return sum(items) / len(items) if items else 0.0
+
+    fact_confs = [f.confidence for f in facts]
+    pattern_confs = [p.confidence for p in (patterns or [])]
+
     lines: list[str] = [
         "---",
         "type: profile_update",
         f"generated: {today}",
         f"fact_count: {len(facts)}",
         f"pattern_count: {len(patterns) if patterns else 0}",
+        f"fact_avg_confidence: {_avg(fact_confs):.2f}",
+        f"pattern_avg_confidence: {_avg(pattern_confs):.2f}",
         "status: pending_review",
         "tags:",
         "  - node/profile-update",
@@ -314,6 +550,7 @@ def save_profile_update(
         f"# Profile 갱신 후보 ({today})",
         "",
         "검토 후 `90_System/AI/Profile.md` / `DecisionPatterns.md`에 반영.",
+        "각 항목의 `↳ ledger:` 라인은 multi-day 누적 신호 — 등장 횟수가 많고 peak 가 높을수록 안정 신호.",
         "",
     ]
 
@@ -326,19 +563,37 @@ def save_profile_update(
         for cat in sorted(by_cat.keys()):
             lines.append(f"### {cat}")
             lines.append("")
-            for f in sorted(by_cat[cat], key=lambda x: -x.confidence):
+            ordered = sorted(
+                by_cat[cat],
+                key=lambda x: _fact_score(x, _lookup("fact", x.statement)),
+                reverse=True,
+            )
+            for f in ordered:
+                entry = _lookup("fact", f.statement)
                 lines.append(f"- [{f.confidence:.2f}] {f.statement}")
+                meta = _meta_suffix(entry)
+                if meta:
+                    lines.append(meta)
             lines.append("")
 
     if patterns:
         lines.append("## DecisionPattern 후보")
         lines.append("")
-        for p in sorted(patterns, key=lambda x: -x.confidence):
+        ordered_p = sorted(
+            patterns,
+            key=lambda p: _pattern_score(p, _lookup("pattern", p.trigger)),
+            reverse=True,
+        )
+        for p in ordered_p:
+            entry = _lookup("pattern", p.trigger)
             lines.append(f"### {p.trigger}")
             lines.append("")
             lines.append(f"- 행동: {p.action}")
             lines.append(f"- 이유: {p.rationale}")
             lines.append(f"- 신뢰도: {p.confidence:.2f}")
+            meta = _meta_suffix(entry)
+            if meta:
+                lines.append(meta)
             lines.append("")
 
     path.write_text("\n".join(lines), encoding="utf-8")

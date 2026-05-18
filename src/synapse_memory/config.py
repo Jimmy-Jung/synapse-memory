@@ -139,6 +139,22 @@ class VaultFoldersConfig:
 @dataclass
 class ProfileConfig:
     sample_lines: int = 200
+    # 사용자가 /sm:apply-profile 에서 No 한 fact/pattern 을 _dismissed.jsonl 에
+    # 기록하고, TTL 일수가 지나면 다시 후보로 노출. 0 이면 영구 dismiss.
+    # 아래 reason 별 override 가 우선; reason="" / "other" 는 이 기본값 사용.
+    dismissed_ttl_days: int = 90
+    # reason 별 TTL 차등 — 의미별 적절한 차단 기간 (의미는 dismissed.py 참고).
+    # 사용자 성향 변경은 짧게(빠른 재확인), 단순 noise 는 길게(불필요 재질문 차단).
+    dismissed_ttl_user_changed: int = 30
+    dismissed_ttl_misclassified: int = 90
+    dismissed_ttl_one_time: int = 180
+    dismissed_ttl_irrelevant: int = 365
+    # 추출 ledger 기반 multi-day cross-validation — 같은 fact 가 K일 중 M번
+    # 이상 추출돼야 candidate. 일시 변덕 / LLM noise 제거.
+    promotion_min_count: int = 3
+    promotion_window_days: int = 14
+    # 단일 호출 confidence 가 이 값 이상이면 즉시 promote (fast path).
+    fast_path_confidence: float = 0.95
 
 
 @dataclass
@@ -391,6 +407,49 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
 
     if not isinstance(cfg.profile.sample_lines, int) or cfg.profile.sample_lines < 10:
         errors.append(f"profile.sample_lines는 10 이상 — 현재: {cfg.profile.sample_lines!r}")
+    if (
+        not isinstance(cfg.profile.dismissed_ttl_days, int)
+        or cfg.profile.dismissed_ttl_days < 0
+    ):
+        errors.append(
+            "profile.dismissed_ttl_days는 0 이상 정수 — "
+            f"현재: {cfg.profile.dismissed_ttl_days!r}"
+        )
+    for ttl_field in (
+        "dismissed_ttl_user_changed",
+        "dismissed_ttl_misclassified",
+        "dismissed_ttl_one_time",
+        "dismissed_ttl_irrelevant",
+    ):
+        v = getattr(cfg.profile, ttl_field)
+        if not isinstance(v, int) or v < 0:
+            errors.append(
+                f"profile.{ttl_field}는 0 이상 정수 (0=영구 dismiss) — 현재: {v!r}"
+            )
+    if (
+        not isinstance(cfg.profile.promotion_min_count, int)
+        or cfg.profile.promotion_min_count < 1
+    ):
+        errors.append(
+            "profile.promotion_min_count는 1 이상 정수 — "
+            f"현재: {cfg.profile.promotion_min_count!r}"
+        )
+    if (
+        not isinstance(cfg.profile.promotion_window_days, int)
+        or cfg.profile.promotion_window_days < 1
+    ):
+        errors.append(
+            "profile.promotion_window_days는 1 이상 정수 — "
+            f"현재: {cfg.profile.promotion_window_days!r}"
+        )
+    if (
+        not isinstance(cfg.profile.fast_path_confidence, (int, float))
+        or not 0.0 <= float(cfg.profile.fast_path_confidence) <= 1.0
+    ):
+        errors.append(
+            "profile.fast_path_confidence는 0.0~1.0 — "
+            f"현재: {cfg.profile.fast_path_confidence!r}"
+        )
 
     if cfg.interactive_guard.delay_seconds < 0:
         errors.append("interactive_guard.delay_seconds는 0 이상")

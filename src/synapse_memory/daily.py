@@ -3,12 +3,13 @@
 Steps (incremental — 이미 처리된 건 자동 skip)::
 
     1. collect claude-code           (mirror 새 줄만)
-    2. collect obsidian              (변경 .md만)
-    3. cluster classify --resume     (새 cluster만)
-    4. card generate (--force=False) (새 cluster만 Card 생성)
-    5. rag index                     (Card upsert)
-    6. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
-    7. report                        (DailyReport 작성)
+    2. collect codex                 (~/.codex 새 줄만)
+    3. collect obsidian              (변경 .md만)
+    4. cluster classify --resume     (새 cluster만)
+    5. card generate (--force=False) (새 cluster만 Card 생성)
+    6. rag index                     (Card upsert)
+    7. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
+    8. report                        (DailyReport 작성)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -46,6 +47,7 @@ class DailyStage:
 
 DAILY_STAGES = (
     DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
+    DailyStage("collect_codex", "Codex CLI 로그 mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -110,6 +112,11 @@ class DailyResult:
     resume_from: str | None = None
     report_path: Path | None = None
     report_error: str = ""
+    # update_profile stage 의 구조화 결과 — DailyReport 의 "Profile Pipeline"
+    # 섹션 렌더에 사용. 값 키: raw_facts, raw_patterns, promoted_facts,
+    # promoted_patterns, awaiting_facts, awaiting_patterns, vault_dropped,
+    # dismissed_total, dismissed_expired, dismissed_reason_counts.
+    profile_meta: dict[str, object] = field(default_factory=dict)
 
     @property
     def errors(self) -> int:
@@ -214,8 +221,14 @@ def _build_stage_actions(
     status_sink: StatusSink | None = None,
     quick_since_days: int | None = None,
     quick_max_new_clusters: int | None = None,
+    result: DailyResult | None = None,
 ) -> dict[str, StageAction]:
-    """stage 별 action 사전. ``quick_*`` 인자는 ``--quick`` 모드 cutoff 를 활성화."""
+    """stage 별 action 사전. ``quick_*`` 인자는 ``--quick`` 모드 cutoff 를 활성화.
+
+    ``result`` 가 주어지면 update_profile stage 의 구조화 통계가
+    ``result.profile_meta`` 에 채워져 DailyReport 의 Profile Pipeline 섹션 렌더에
+    사용된다.
+    """
     obsidian_action: StageAction = (
         _build_collect_obsidian_action(since_days=quick_since_days)
         if quick_since_days is not None
@@ -223,6 +236,7 @@ def _build_stage_actions(
     )
     return {
         "collect_claude_code": _collect_claude_code_action,
+        "collect_codex": _collect_codex_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -236,6 +250,7 @@ def _build_stage_actions(
             profile_model=profile_model,
             profile_sample_lines=profile_sample_lines,
             profile_facts_only=profile_facts_only,
+            result=result,
         ),
         "report": lambda: "",
     }
@@ -245,6 +260,13 @@ def _collect_claude_code_action() -> str:
     from synapse_memory.collectors.claude_code import collect_claude_code
 
     stats = collect_claude_code()
+    return stats.summary()
+
+
+def _collect_codex_action() -> str:
+    from synapse_memory.collectors.codex import collect_codex
+
+    stats = collect_codex()
     return stats.summary()
 
 
@@ -448,32 +470,172 @@ def _build_update_profile_action(
     profile_model: str,
     profile_sample_lines: int,
     profile_facts_only: bool,
+    result: DailyResult | None = None,
 ) -> StageAction:
     def step() -> str:
+        from synapse_memory.collectors.obsidian.mirror import get_vault_path
+        from synapse_memory.config import get_config
         from synapse_memory.llm import detect_ai_environment
+        from synapse_memory.profile.dedupe import (
+            dedupe_against_vault,
+            parse_decision_pattern_triggers,
+            parse_profile_facts,
+        )
+        from synapse_memory.profile.dismissed import (
+            dismissed_path,
+            load_dismissed,
+        )
         from synapse_memory.profile.extract import (
             extract_decision_patterns,
             extract_profile_facts,
             save_profile_update,
         )
+        from synapse_memory.profile.ledger import (
+            enrich_promoted_patterns,
+            load_ledger,
+            mark_promoted,
+            promote_candidates,
+            record_extraction,
+            save_ledger,
+        )
 
         env = detect_ai_environment(model=profile_model)
         if not env.ready:
             raise RuntimeError("AI provider 미설치")
-        facts = extract_profile_facts(
+
+        cfg = get_config()
+        vault = get_vault_path()
+        ai_folders = cfg.vault_folders.system.ai
+        profile_path = vault / ai_folders.profile
+        dp_path = vault / ai_folders.decision_patterns
+        existing_facts = parse_profile_facts(profile_path)
+        existing_triggers = parse_decision_pattern_triggers(dp_path)
+        dismissed = load_dismissed(dismissed_path(vault))
+        # strong (misclassified+irrelevant) 는 별도 섹션으로 LLM 에 강한 차단 신호.
+        strong_facts = sorted(dismissed.strong_facts())
+        strong_patterns = sorted(dismissed.strong_patterns())
+        # normal 제외 = vault + dismissed 전체. strong 항목이 두 섹션에 중복돼도
+        # LLM 측 무해 (차단 효과만 강화) — 단순성 우선.
+        excluded_facts = existing_facts + sorted(dismissed.facts)
+        excluded_triggers = existing_triggers + sorted(dismissed.patterns)
+
+        # 1) 추출 — claude-code + codex history, negative example 주입.
+        raw_facts = extract_profile_facts(
             sample_lines=profile_sample_lines,
             model=profile_model,
             ai_env=env,
+            excluded_statements=excluded_facts,
+            excluded_statements_strong=strong_facts,
         )
-        patterns = []
+        from synapse_memory.profile.schema import DecisionPattern as _DP
+        raw_patterns: list[_DP] = []
         if not profile_facts_only:
-            patterns = extract_decision_patterns(
+            raw_patterns = extract_decision_patterns(
                 sample_lines=profile_sample_lines,
                 model=profile_model,
                 ai_env=env,
+                excluded_triggers=excluded_triggers,
+                excluded_triggers_strong=strong_patterns,
             )
-        path = save_profile_update(facts, patterns)
-        return f"fact={len(facts)} pattern={len(patterns)} → {path.name}"
+
+        # 2) ledger 누적 + promotion — multi-day cross-validation.
+        ledger = load_ledger()
+        record_extraction(ledger, raw_facts, raw_patterns)
+        promoted_facts, promoted_patterns, promo_report = promote_candidates(
+            ledger,
+            facts_input=raw_facts,
+            patterns_input=raw_patterns,
+            min_count=cfg.profile.promotion_min_count,
+            window_days=cfg.profile.promotion_window_days,
+            fast_path_confidence=cfg.profile.fast_path_confidence,
+        )
+        # pattern 의 action/rationale 은 ledger 가 안 저장 — 오늘 호출 결과로 보강.
+        promoted_patterns = enrich_promoted_patterns(promoted_patterns, raw_patterns)
+
+        # 3) 후처리 dedupe — vault/dismissed 와 비교 안전망.
+        facts, patterns, report = dedupe_against_vault(
+            promoted_facts,
+            promoted_patterns,
+            profile_path=profile_path,
+            decision_patterns_path=dp_path,
+            dismissed_facts=dismissed.facts,
+            dismissed_patterns=dismissed.patterns,
+        )
+
+        # 4) ledger 마크 + persist — promoted 만 마크 (dedupe 로 drop 된 건 다음 호출에서 다시).
+        mark_promoted(ledger, facts, patterns)
+        save_ledger(ledger)
+
+        # 관찰성: DailyReport 의 Profile Pipeline 섹션 렌더용 구조화 메타.
+        if result is not None:
+            from collections import Counter as _Counter
+
+            reason_counts: dict[str, int] = {}
+            try:
+                dpath = dismissed_path(vault)
+                if dpath.is_file():
+                    import json as _json
+
+                    reasons: list[str] = []
+                    for raw_line in dpath.read_text(encoding="utf-8").splitlines():
+                        line = raw_line.strip()
+                        if not line or line.startswith("#"):
+                            continue
+                        try:
+                            obj = _json.loads(line)
+                        except _json.JSONDecodeError:
+                            continue
+                        if not isinstance(obj, dict):
+                            continue
+                        r = obj.get("reason", "")
+                        if isinstance(r, str):
+                            reasons.append(r)
+                    reason_counts = dict(_Counter(reasons))
+            except OSError:
+                reason_counts = {}
+
+            result.profile_meta = {
+                "raw_facts": len(raw_facts),
+                "raw_patterns": len(raw_patterns),
+                "promoted_facts": promo_report.promoted_fact_count,
+                "promoted_patterns": promo_report.promoted_pattern_count,
+                "awaiting_facts": promo_report.awaiting_fact_count,
+                "awaiting_patterns": promo_report.awaiting_pattern_count,
+                "vault_dropped": report.total_dropped,
+                "dismissed_total": dismissed.total,
+                "dismissed_expired": dismissed.expired_count,
+                "dismissed_reason_counts": reason_counts,
+                "candidate_facts": len(facts),
+                "candidate_patterns": len(patterns),
+            }
+
+        dismiss_note = (
+            f" dismissed_idx={dismissed.total}"
+            + (
+                f" (만료 {dismissed.expired_count} 재노출)"
+                if dismissed.expired_count
+                else ""
+            )
+            if dismissed.total or dismissed.expired_count
+            else ""
+        )
+        ledger_note = (
+            f" [ledger {promo_report.summary()}]"
+        )
+
+        if not facts and not patterns:
+            return (
+                f"신규 fact/pattern 없음 — raw {len(raw_facts)}/{len(raw_patterns)} "
+                f"→ promotion 대기"
+                f"{ledger_note}{dismiss_note}"
+            )
+
+        path = save_profile_update(facts, patterns, ledger=ledger)
+        return (
+            f"fact={len(facts)} pattern={len(patterns)} "
+            f"(vault dedupe -{report.total_dropped}{dismiss_note}{ledger_note}) "
+            f"→ {path.name}"
+        )
 
     return step
 
@@ -541,13 +703,27 @@ def render_daily_report(
         "| Stage | Status | Elapsed | Summary | Reason |",
         "|---|---:|---:|---|---|",
     ]
+    raw_rows: list[tuple[str, str]] = []
     for step in result.steps:
         reason = step.error or step.skip_reason
+        human = _humanize_stage_summary(step.name, step.summary)
         lines.append(
             "| "
             f"{step.name} | {step.status} | {step.elapsed:.1f}s | "
-            f"{_clean_cell(step.summary)} | {_clean_cell(reason)} |"
+            f"{_clean_cell(human)} | {_clean_cell(reason)} |"
         )
+        if (
+            step.summary
+            and human != step.summary
+            and _has_raw_counters(step.summary)
+        ):
+            raw_rows.append((step.name, step.summary))
+
+    if raw_rows:
+        lines.extend(["", "<details>", "<summary>Raw stage counters (디버깅용)</summary>", ""])
+        for name, raw in raw_rows:
+            lines.append(f"- `{name}`: {raw}")
+        lines.extend(["", "</details>"])
 
     failures = [step for step in result.steps if step.status == StageStatus.FAILED]
     lines.extend(["", "## Failures", ""])
@@ -555,6 +731,10 @@ def render_daily_report(
         lines.extend(f"- {step.name}: {step.error}" for step in failures)
     else:
         lines.append("- 없음")
+
+    # Profile Pipeline 통계 — update_profile stage 가 실행됐을 때만.
+    if result.profile_meta:
+        lines.extend(_render_profile_pipeline_section(result.profile_meta))
 
     lines.extend(["", "## Resume", ""])
     if failures:
@@ -575,6 +755,45 @@ def render_daily_report(
     return "\n".join(lines) + "\n"
 
 
+def _render_profile_pipeline_section(meta: dict[str, object]) -> list[str]:
+    """Profile Pipeline 섹션 markdown 라인 (앞 빈 줄 포함).
+
+    update_profile stage 가 실행됐을 때만 호출. promotion/dedupe/dismissed 지표를
+    한 화면에서 확인하기 위한 관찰성 블록.
+    """
+    def _i(key: str) -> int:
+        v = meta.get(key, 0)
+        return int(v) if isinstance(v, int) else 0
+
+    lines = [
+        "",
+        "## Profile Pipeline",
+        "",
+        f"- raw 추출: fact {_i('raw_facts')} · pattern {_i('raw_patterns')}",
+        f"- promoted (ledger 통과): fact {_i('promoted_facts')} · "
+        f"pattern {_i('promoted_patterns')}",
+        f"- awaiting (ledger 대기): fact {_i('awaiting_facts')} · "
+        f"pattern {_i('awaiting_patterns')}",
+        f"- vault dedupe 제거: {_i('vault_dropped')}",
+        f"- dismissed index: 활성 {_i('dismissed_total')}, "
+        f"만료 재노출 {_i('dismissed_expired')}",
+        f"- candidate 저장: fact {_i('candidate_facts')} · "
+        f"pattern {_i('candidate_patterns')}",
+    ]
+    reason_counts_raw = meta.get("dismissed_reason_counts", {})
+    if isinstance(reason_counts_raw, dict) and reason_counts_raw:
+        lines.extend(["", "### dismissed reason 분포", ""])
+        items = sorted(
+            ((str(k), int(v) if isinstance(v, int) else 0)
+             for k, v in reason_counts_raw.items()),
+            key=lambda x: (-x[1], x[0]),
+        )
+        for reason, count in items:
+            label = reason or "(미상)"
+            lines.append(f"- {label}: {count}")
+    return lines
+
+
 def _clean_cell(value: str) -> str:
     return value.replace("\n", " ").replace("|", "\\|")
 
@@ -590,6 +809,100 @@ def _extract_first_int(steps: list[StepResult], marker: str) -> int:
         if match:
             return int(match.group(0))
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Summary humanization
+# ---------------------------------------------------------------------------
+#
+# 각 stage 의 raw summary 문자열을 사람이 읽기 좋은 한 문장으로 변환한다.
+# 변환 실패하거나 알 수 없는 stage 면 raw 를 그대로 둔다 (회귀 시 디버깅 보전).
+
+
+def _format_bytes(num: int) -> str:
+    """바이트 수를 사람용 단위(B / KB / MB / GB)로 변환."""
+    n = float(num)
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            if unit == "B":
+                return f"{int(n)} B"
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{num} B"
+
+
+def _parse_kv(raw: str) -> dict[str, int]:
+    """`key=value` / `key+=value` 토큰을 dict 로 파싱. value 정수만."""
+    import re
+
+    out: dict[str, int] = {}
+    for m in re.finditer(r"(\w+)\+?=(\d+)", raw):
+        out[m.group(1)] = int(m.group(2))
+    return out
+
+
+def _humanize_stage_summary(stage: str, raw: str) -> str:
+    """Stage 별 raw summary → 사람 친화 문장. 알 수 없으면 raw 그대로."""
+    if not raw:
+        return raw
+    if stage in ("collect_claude_code", "collect_codex"):
+        label = "Claude 활동 로그" if stage == "collect_claude_code" else "Codex 활동 로그"
+        kv = _parse_kv(raw)
+        if "mirrored" in kv:
+            parts = [f"{label} {kv['mirrored']}개 mirror"]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            extras: list[str] = []
+            if kv.get("truncations", 0):
+                extras.append(f"잘림 {kv['truncations']}")
+            if kv.get("skipped_empty", 0):
+                extras.append(f"빈 파일 {kv['skipped_empty']}")
+            if kv.get("errors", 0):
+                extras.append(f"에러 {kv['errors']}")
+            if extras:
+                parts.append("· " + ", ".join(extras))
+            return " ".join(parts)
+    elif stage == "collect_obsidian":
+        kv = _parse_kv(raw)
+        if "mirrored" in kv:
+            parts = [f"vault 노트 {kv['mirrored']}개 mirror"]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            extras = []
+            if kv.get("unchanged", 0):
+                extras.append(f"변경 없음 {kv['unchanged']}")
+            if kv.get("cutoff_skip", 0):
+                extras.append(f"cutoff skip {kv['cutoff_skip']}")
+            if kv.get("errors", 0):
+                extras.append(f"에러 {kv['errors']}")
+            if extras:
+                parts.append("· " + ", ".join(extras))
+            return " ".join(parts)
+    elif stage == "index":
+        kv = _parse_kv(raw)
+        if "project" in kv or "company" in kv:
+            return (
+                f"Project Card {kv.get('project', 0)}개, "
+                f"Company Card {kv.get('company', 0)}개 인덱싱"
+            )
+    elif stage == "update_profile":
+        kv = _parse_kv(raw)
+        if "fact" in kv or "pattern" in kv:
+            parts = [
+                f"Fact {kv.get('fact', 0)}개, Pattern {kv.get('pattern', 0)}개"
+            ]
+            if "→" in raw:
+                tail = raw.split("→", 1)[1].strip()
+                if tail:
+                    parts.append(f"→ {tail}")
+            return " ".join(parts)
+    # classify / generate / report 는 이미 한국어 사람 친화 — 그대로
+    return raw
+
+
+def _has_raw_counters(raw: str) -> bool:
+    """raw 가 key=value 카운터를 포함하면 details 블록 가치 있음."""
+    return "=" in raw
 
 
 def _estimate_usd_today(date: datetime.date) -> float:
@@ -700,6 +1013,7 @@ def run_daily(
         status_sink=status_sink,
         quick_since_days=quick_days if quick else None,
         quick_max_new_clusters=quick_max_clusters if quick else None,
+        result=result,
     )
     if stage_actions:
         actions.update(stage_actions)

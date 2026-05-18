@@ -2487,6 +2487,318 @@ def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dismiss_profile(args: argparse.Namespace) -> int:
+    """ProfileFact/DecisionPattern 후보를 dismissed 목록에 append."""
+    from synapse_memory.collectors.obsidian import get_vault_path
+    from synapse_memory.profile.dismissed import append_dismissed, dismissed_path
+
+    vault = (
+        Path(args.vault).expanduser().resolve()
+        if args.vault
+        else get_vault_path()
+    )
+    if not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        return 2
+
+    target = dismissed_path(vault)
+    record = append_dismissed(
+        args.kind,
+        args.text,
+        reason=args.reason,
+        note=args.note,
+        path=target,
+    )
+
+    if record is None:
+        if not args.text.strip():
+            print(f"{FAIL} --text 가 비어 있습니다.", file=sys.stderr)
+            return 2
+        print(
+            f"{OK} 이미 dismissed 목록에 있음 (멱등): kind={args.kind} "
+            f"text={args.text!r}"
+        )
+        return 0
+
+    reason_note = f" reason={record.reason}" if record.reason else ""
+    print(
+        f"{OK} dismissed 추가: kind={record.kind} dismissed_at={record.dismissed_at}"
+        f"{reason_note}\n"
+        f"     fingerprint={record.fingerprint!r}\n"
+        f"     file={target}\n"
+        f"     해제하려면 위 파일에서 해당 라인을 삭제하거나, "
+        f"profile.dismissed_ttl_days 일 경과를 기다리면 자동 재노출됩니다."
+    )
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# dismiss-list / dismiss-purge-expired / ledger-show — 관찰성
+# ---------------------------------------------------------------------------
+
+
+def _resolve_vault_or_exit(args: argparse.Namespace) -> Path:
+    """공통 vault 인자 해석. 디렉토리 없으면 exit 2 (caller 에서 sys.exit 호출)."""
+    from synapse_memory.collectors.obsidian import get_vault_path
+
+    vault = (
+        Path(args.vault).expanduser().resolve() if args.vault else get_vault_path()
+    )
+    if not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        raise SystemExit(2)
+    return vault
+
+
+def cmd_dismiss_list(args: argparse.Namespace) -> int:
+    """dismissed.jsonl 조회 — kind/reason/active 필터링."""
+    import datetime as _dt
+    import json as _json
+
+    from synapse_memory.config import get_config
+    from synapse_memory.profile.dismissed import (
+        DismissedRecord,
+        _ttl_for,
+        dismissed_path,
+        profile_to_ttl_overrides,
+    )
+
+    vault = _resolve_vault_or_exit(args)
+    target = dismissed_path(vault)
+    if not target.is_file():
+        if args.json:
+            sys.stdout.write("[]")
+        else:
+            print("dismissed 목록이 비어 있습니다.")
+        return 0
+
+    cfg = get_config().profile
+    overrides = profile_to_ttl_overrides(cfg)
+    today = _dt.date.today()
+
+    rows: list[dict[str, object]] = []
+    for raw_line in target.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        try:
+            obj = _json.loads(line)
+        except _json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        rec = DismissedRecord.from_dict(obj)
+        if rec is None:
+            continue
+        if args.kind != "all" and rec.kind != args.kind:
+            continue
+        if args.reason is not None and rec.reason != args.reason:
+            continue
+        ttl = _ttl_for(rec.reason, cfg.dismissed_ttl_days, overrides)
+        age_days: int | None = None
+        expired = False
+        try:
+            d = _dt.date.fromisoformat(rec.dismissed_at)
+            age_days = (today - d).days
+            if ttl > 0 and age_days > ttl:
+                expired = True
+        except ValueError:
+            pass
+        if args.active_only and expired:
+            continue
+        rows.append(
+            {
+                "kind": rec.kind,
+                "fingerprint": rec.fingerprint,
+                "original": rec.original,
+                "dismissed_at": rec.dismissed_at,
+                "reason": rec.reason,
+                "note": rec.note,
+                "ttl_days": ttl,
+                "age_days": age_days,
+                "expired": expired,
+            }
+        )
+
+    if args.json:
+        sys.stdout.write(_json.dumps(rows, ensure_ascii=False))
+        return 0
+
+    if not rows:
+        print("조건에 맞는 dismissed 항목이 없습니다.")
+        return 0
+
+    print(f"총 {len(rows)}건 (vault: {vault}, file: {target.name})")
+    print("-" * 90)
+    for r in rows:
+        flag = " [만료]" if r["expired"] else ""
+        reason = r["reason"] or "—"
+        age = r["age_days"]
+        age_s = f"{age}일 전" if age is not None else "?"
+        original = str(r["original"])[:60]
+        if len(str(r["original"])) > 60:
+            original += "…"
+        print(
+            f"[{r['kind']}] reason={reason:<14} age={age_s:>8} "
+            f"ttl={r['ttl_days']}일{flag}\n"
+            f"     {original}"
+        )
+    return 0
+
+
+def cmd_dismiss_purge_expired(args: argparse.Namespace) -> int:
+    """TTL 만료된 dismissed 라인 물리 삭제 (백업 후). dry-run 기본."""
+    import datetime as _dt
+    import json as _json
+    import shutil as _shutil
+
+    from synapse_memory.config import get_config
+    from synapse_memory.profile.dismissed import (
+        DismissedRecord,
+        _ttl_for,
+        dismissed_path,
+        profile_to_ttl_overrides,
+    )
+
+    vault = _resolve_vault_or_exit(args)
+    target = dismissed_path(vault)
+    if not target.is_file():
+        print("dismissed.jsonl 파일이 없습니다.")
+        return 0
+
+    cfg = get_config().profile
+    overrides = profile_to_ttl_overrides(cfg)
+    today = _dt.date.today()
+
+    keep_lines: list[str] = []
+    expired_records: list[DismissedRecord] = []
+    invalid_kept = 0
+    for raw_line in target.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            keep_lines.append(line)
+            continue
+        try:
+            obj = _json.loads(line)
+        except _json.JSONDecodeError:
+            keep_lines.append(line)  # 깨진 라인은 보존 (사용자 검토용)
+            invalid_kept += 1
+            continue
+        rec = DismissedRecord.from_dict(obj) if isinstance(obj, dict) else None
+        if rec is None:
+            keep_lines.append(line)
+            invalid_kept += 1
+            continue
+        ttl = _ttl_for(rec.reason, cfg.dismissed_ttl_days, overrides)
+        try:
+            d = _dt.date.fromisoformat(rec.dismissed_at)
+            age = (today - d).days
+        except ValueError:
+            keep_lines.append(line)  # dismissed_at 깨졌으면 그대로 보존
+            continue
+        if ttl > 0 and age > ttl:
+            expired_records.append(rec)
+        else:
+            keep_lines.append(line)
+
+    if not expired_records:
+        print(
+            f"만료된 라인 없음 (총 {len(keep_lines)}건 유효, invalid {invalid_kept}건)"
+        )
+        return 0
+
+    print(f"만료 대상: {len(expired_records)}건 (유지 {len(keep_lines)}건)")
+    for rec in expired_records[:20]:
+        original = rec.original[:50] + ("…" if len(rec.original) > 50 else "")
+        print(
+            f"  [{rec.kind}] reason={rec.reason or '—'} "
+            f"dismissed_at={rec.dismissed_at} — {original}"
+        )
+    if len(expired_records) > 20:
+        print(f"  ... ({len(expired_records) - 20}건 더)")
+
+    if not args.apply:
+        print(
+            f"\n{OK} dry-run — 실제 삭제하려면 `--apply` 추가. "
+            "백업 파일이 자동 생성됩니다."
+        )
+        return 0
+
+    backup = target.with_suffix(
+        target.suffix + f".bak.{today.isoformat()}"
+    )
+    _shutil.copy2(target, backup)
+    new_content = "\n".join(keep_lines) + ("\n" if keep_lines else "")
+    target.write_text(new_content, encoding="utf-8")
+    print(
+        f"\n{OK} {len(expired_records)}건 삭제 완료. "
+        f"백업: {backup.name}"
+    )
+    return 0
+
+
+def cmd_ledger_show(args: argparse.Namespace) -> int:
+    """profile_ledger.jsonl 조회 — promotion 상태 + 통계."""
+    import json as _json
+
+    from synapse_memory.profile.ledger import LedgerEntry, ledger_path, load_ledger
+
+    target = ledger_path()
+    if not target.is_file():
+        if args.json:
+            sys.stdout.write("[]")
+        else:
+            print("ledger 파일 없음 — 아직 update_profile 호출이 없습니다.")
+        return 0
+
+    ledger = load_ledger()
+    entries: list[LedgerEntry] = list(ledger.values())
+    if args.kind != "all":
+        entries = [e for e in entries if e.kind == args.kind]
+    if args.status == "promoted":
+        entries = [e for e in entries if e.promoted]
+    elif args.status == "awaiting":
+        entries = [e for e in entries if not e.promoted]
+
+    entries.sort(key=lambda e: (-e.seen_count, -e.peak_confidence()))
+    if args.top and args.top > 0:
+        entries = entries[: args.top]
+
+    if args.json:
+        sys.stdout.write(
+            _json.dumps([e.to_dict() for e in entries], ensure_ascii=False)
+        )
+        return 0
+
+    if not entries:
+        print("조건에 맞는 ledger 항목이 없습니다.")
+        return 0
+
+    # 요약 stat
+    total = len(ledger)
+    promoted = sum(1 for e in ledger.values() if e.promoted)
+    awaiting = total - promoted
+    print(
+        f"ledger 총 {total}건 (promoted {promoted} / awaiting {awaiting}). "
+        f"표시: {len(entries)}건 (kind={args.kind}, status={args.status})"
+    )
+    print("-" * 90)
+    for e in entries:
+        flag = "✓ promoted" if e.promoted else "  awaiting"
+        snippet = e.best_statement()[:60]
+        if len(e.best_statement()) > 60:
+            snippet += "…"
+        print(
+            f"[{e.kind}] {flag}  seen={e.seen_count:>3}  "
+            f"peak={e.peak_confidence():.2f}  avg={e.aggregated_confidence():.2f}  "
+            f"({e.first_seen} → {e.last_seen})\n"
+            f"     {snippet}"
+        )
+    return 0
+
+
 def cmd_collect_obsidian(args: argparse.Namespace) -> int:
     """Obsidian vault → L0 mirror (incremental)."""
     vault: Path = args.vault.expanduser().resolve()
@@ -2690,6 +3002,127 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON 배열로 출력 (슬래시 prompt가 파싱하기 좋게)",
     )
     p_list_pending.set_defaults(func=cmd_list_pending_profiles)
+
+    p_dismiss = sub.add_parser(
+        "dismiss-profile",
+        help="ProfileFact/DecisionPattern 후보를 dismissed 목록에 추가 "
+        "(다음 daily 부터 재추출 차단; TTL 후 자동 해제)",
+    )
+    p_dismiss.add_argument(
+        "--kind",
+        choices=("fact", "pattern"),
+        required=True,
+        help="fact: ProfileFact, pattern: DecisionPattern",
+    )
+    p_dismiss.add_argument(
+        "--text",
+        required=True,
+        help="dismiss 할 원문 (fact statement 또는 pattern trigger)",
+    )
+    p_dismiss.add_argument(
+        "--reason",
+        default="",
+        choices=("", "one_time", "misclassified", "user_changed", "irrelevant", "other"),
+        help=(
+            "dismiss 이유 — 미지정 시 빈 문자열. "
+            "one_time: 1회성 작업, misclassified: LLM 오추출, "
+            "user_changed: 사용자 성향 변경, irrelevant: 관련 없음, other: 기타"
+        ),
+    )
+    p_dismiss.add_argument(
+        "--note",
+        default="",
+        help="reason=other 일 때 자유 텍스트 메모 (선택)",
+    )
+    p_dismiss.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_dismiss.set_defaults(func=cmd_dismiss_profile)
+
+    p_dismiss_list = sub.add_parser(
+        "dismiss-list",
+        help="dismissed 목록 조회 (reason / kind / 만료 필터)",
+    )
+    p_dismiss_list.add_argument(
+        "--kind",
+        choices=("fact", "pattern", "all"),
+        default="all",
+        help="필터 (기본 all)",
+    )
+    p_dismiss_list.add_argument(
+        "--reason",
+        default=None,
+        choices=("", "one_time", "misclassified", "user_changed",
+                 "irrelevant", "other"),
+        help="reason 필터 (미지정 시 전체; 빈 문자열은 '미상' 라인만)",
+    )
+    p_dismiss_list.add_argument(
+        "--active-only",
+        action="store_true",
+        help="만료되지 않은 라인만 (TTL 정책 적용)",
+    )
+    p_dismiss_list.add_argument(
+        "--json",
+        action="store_true",
+        help="JSON 배열로 출력 (스킬/스크립트용)",
+    )
+    p_dismiss_list.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_dismiss_list.set_defaults(func=cmd_dismiss_list)
+
+    p_dismiss_purge = sub.add_parser(
+        "dismiss-purge-expired",
+        help="TTL 만료된 dismissed 라인을 물리적으로 제거 (백업 후)",
+    )
+    p_dismiss_purge.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="삭제 대상만 출력하고 파일은 건드리지 않음 (default)",
+    )
+    p_dismiss_purge.add_argument(
+        "--apply",
+        action="store_true",
+        help="실제 삭제 수행 (--dry-run 우선)",
+    )
+    p_dismiss_purge.add_argument(
+        "--vault",
+        default=None,
+        help="vault 경로 override (기본: config)",
+    )
+    p_dismiss_purge.set_defaults(func=cmd_dismiss_purge_expired)
+
+    p_ledger_show = sub.add_parser(
+        "ledger-show",
+        help="profile_ledger.jsonl 조회 (promotion 대기/완료 + reason 통계)",
+    )
+    p_ledger_show.add_argument(
+        "--kind",
+        choices=("fact", "pattern", "all"),
+        default="all",
+    )
+    p_ledger_show.add_argument(
+        "--status",
+        choices=("all", "promoted", "awaiting"),
+        default="all",
+        help="promoted 만 / awaiting 만 / 전체",
+    )
+    p_ledger_show.add_argument(
+        "--top",
+        type=int,
+        default=20,
+        help="seen_count 내림차순 상위 N (기본 20). 0=전체",
+    )
+    p_ledger_show.add_argument(
+        "--json",
+        action="store_true",
+        help="JSON 배열로 출력",
+    )
+    p_ledger_show.set_defaults(func=cmd_ledger_show)
 
     p_eval = sub.add_parser("eval", help="평가/측정")
     eval_sub = p_eval.add_subparsers(dest="kind", required=True, metavar="KIND")

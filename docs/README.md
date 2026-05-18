@@ -30,6 +30,12 @@
    - Profile 후보 GUI 승인 (`/sm:apply-profile`, v0.12.0)
    - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
 
+4. [로컬 LLM (apfel) 동작 원리와 설계](local-llm.md)
+
+   Apple FoundationModels을 감싼 로컬 LLM 계층의 mermaid 다이어그램, 호출 흐름,
+   설계 이유를 정리했습니다. "왜 외부 LLM에 raw 데이터가 절대 안 나가는가" 가
+   궁금하다면 이 문서가 출발점입니다.
+
 ## 한 문장으로 이해하기
 
 Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 정리해 요약 카드를 만들고,
