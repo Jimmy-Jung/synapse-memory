@@ -868,7 +868,7 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             parts = [f"vault 노트 {kv['mirrored']}개 mirror"]
             if kv.get("bytes", 0) > 0:
                 parts.append(f"({_format_bytes(kv['bytes'])})")
-            extras: list[str] = []
+            extras = []
             if kv.get("unchanged", 0):
                 extras.append(f"변경 없음 {kv['unchanged']}")
             if kv.get("cutoff_skip", 0):
