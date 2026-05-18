@@ -2,7 +2,7 @@
 
 All notable changes to Synapse Memory are documented here.
 
-## [1.14.0] — 2026-05-18
+## [0.14.0] — 2026-05-18
 
 ### Added — 로컬 LLM 동작 원리 문서
 
