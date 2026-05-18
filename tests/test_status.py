@@ -12,6 +12,8 @@ import json
 import pytest
 
 from synapse_memory.status import (
+    DailyAlreadyRunningError,
+    DailyRunLock,
     DailyStatus,
     StatusSink,
     StatusWriter,
@@ -155,6 +157,20 @@ def test_status_sink_is_noop():
     sink.update_item(index=1, total=1, label="y")
     sink.end_stage("x", failed=False)
     sink.finish(errors=0)
+
+
+def test_daily_run_lock_rejects_second_owner(tmp_path):
+    path = tmp_path / "daily.lock"
+
+    with DailyRunLock(path=path, pid=101):
+        assert path.read_text(encoding="utf-8").strip() == "101"
+        with pytest.raises(DailyAlreadyRunningError, match="pid 101"), DailyRunLock(
+            path=path,
+            pid=202,
+        ):
+            pass
+
+    assert not path.exists()
 
 
 def test_run_daily_writes_status_via_default_sink(tmp_path, monkeypatch):

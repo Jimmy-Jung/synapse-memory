@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -88,6 +89,22 @@ class TestRunDaily:
         assert StepResult.failed("classify", 1.2, "boom").status == "failed"
         assert StepResult.success("index", 0.5, "cards=1").ok is True
 
+    def test_successful_collector_errors_are_counted_as_warnings(self) -> None:
+        result = run_daily(
+            only={"collect_browser_history"},
+            stage_actions={
+                "collect_browser_history": _ok(
+                    "scanned=2 mirrored=0 unchanged=0 bytes+=0 errors=2"
+                )
+            },
+            on_log=lambda _line: None,
+        )
+
+        assert result.errors == 0
+        assert result.warnings == 2
+        text = render_daily_report(result, date="2026-05-18", est_usd=0.0)
+        assert "warnings_count: 2" in text
+
     def test_dependency_failure_skips_downstream(self) -> None:
         calls: list[str] = []
 
@@ -164,6 +181,32 @@ class TestRunDaily:
 
         assert called is False
 
+    def test_unknown_only_stage_raises_before_execution(self) -> None:
+        with pytest.raises(ValueError, match="unknown daily stage in only"):
+            run_daily(only={"nope"}, dry_run=True)
+
+    def test_unknown_skip_stage_raises_before_execution(self) -> None:
+        with pytest.raises(ValueError, match="unknown daily stage in skip"):
+            run_daily(skip={"nope"}, dry_run=True)
+
+    def test_only_stage_without_dependency_is_skipped(self) -> None:
+        calls: list[str] = []
+
+        def generate() -> str:
+            calls.append("generate")
+            return "generated"
+
+        result = run_daily(
+            only={"generate"},
+            stage_actions={"generate": generate},
+            on_log=lambda _line: None,
+        )
+
+        assert calls == []
+        assert [(s.name, s.status, s.skip_reason) for s in result.steps] == [
+            ("generate", StageStatus.SKIPPED, "requires classify")
+        ]
+
     def test_dry_run_with_resume_from(self, capsys: pytest.CaptureFixture[str]) -> None:
         run_daily(resume_from="classify", dry_run=True)
         out = capsys.readouterr().out
@@ -233,6 +276,29 @@ class TestRunDaily:
         assert "response" not in text.lower()
         assert "classify" in text
         assert "requires classify" in text
+
+    def test_default_report_includes_final_elapsed_and_report_row(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import synapse_memory.collectors.obsidian as obsidian_mod
+
+        monkeypatch.setattr(obsidian_mod, "get_vault_path", lambda: tmp_path)
+
+        def slow_collect() -> str:
+            time.sleep(0.11)
+            return "mirrored=0"
+
+        result = run_daily(
+            only={"collect_claude_code", "report"},
+            stage_actions={"collect_claude_code": slow_collect},
+            on_log=lambda _line: None,
+        )
+
+        assert result.report_path is not None
+        text = result.report_path.read_text(encoding="utf-8")
+        assert "total_elapsed_s: 0.0" not in text
+        assert "| report | success |" in text
+        assert result.total_elapsed >= 0.1
 
 
 # ---------------------------------------------------------------------------
@@ -386,8 +452,8 @@ class TestQuickMode:
         # update_profile 은 `selected -= update_profile` 효과로 result.steps 에 없음
         assert "update_profile" not in by_name
 
-    def test_quick_with_explicit_only_runs_update_profile(self) -> None:
-        """only= 로 명시적 요청 시 quick auto-skip 우선순위 무시 — 사용자 의도 우선."""
+    def test_quick_with_explicit_only_respects_dependencies(self) -> None:
+        """only= 로 명시해도 resume 없이 dependency 를 우회하지 않는다."""
         calls: list[str] = []
 
         def track(name: str):
@@ -397,13 +463,38 @@ class TestQuickMode:
 
             return step
 
-        run_daily(
+        result = run_daily(
             quick=True,
             only={"update_profile"},
             stage_actions={"update_profile": track("update_profile")},
             on_log=lambda _line: None,
         )
+        assert calls == []
+        assert [(s.name, s.status, s.skip_reason) for s in result.steps] == [
+            ("update_profile", StageStatus.SKIPPED, "requires collect_claude_code")
+        ]
+
+    def test_resume_from_update_profile_runs_explicit_stage(self) -> None:
+        calls: list[str] = []
+
+        def track(name: str):
+            def step() -> str:
+                calls.append(name)
+                return f"{name}=ok"
+
+            return step
+
+        result = run_daily(
+            quick=True,
+            only={"update_profile"},
+            resume_from="update_profile",
+            stage_actions={"update_profile": track("update_profile")},
+            on_log=lambda _line: None,
+        )
+
         assert calls == ["update_profile"]
+        assert result.steps[-1].name == "update_profile"
+        assert result.steps[-1].status == StageStatus.SUCCESS
 
     def test_quick_false_preserves_full_behavior(self) -> None:
         """quick=False (기본) 시 모든 stage 실행 — 회귀 가드."""
