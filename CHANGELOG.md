@@ -2,6 +2,19 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.3] — 2026-05-18
+
+### Fixed — doctor `expanduser` 회귀
+
+- `diagnose_private_folder_deny` / `diagnose_dataview_plugin` 가 `Config.vault`
+  (`str | None`) 를 그대로 받아 `'str' object has no attribute 'expanduser'`
+  로 실패하던 회귀를 수정한다. 두 함수 모두 입력 시그니처를 `Path | str` 로
+  넓히고 내부에서 `Path(vault).expanduser()` 로 강제 변환한다.
+- 영향: `synapse-memory doctor` 의 "Private 폴더 deny 진단" / "Dataview 플러그인
+  진단" 두 단계가 ⚠ 로 실패하지 않고 정상 ✓/⚠ 결과를 반환한다. 기존 테스트
+  (`test_doctor_private_check.py`, `test_doctor_dataview_check.py`) 는 `tmp_path`
+  를 사용해 영향 없음.
+
 ## [0.15.2] — 2026-05-18
 
 ### Fixed — daily 브라우저 History lock 대기 상한

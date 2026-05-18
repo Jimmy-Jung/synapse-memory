@@ -83,9 +83,9 @@ _PRIVATE_FOLDER_DENY_REQUIRED = (
 )
 
 
-def diagnose_private_folder_deny(vault: Path) -> DiagnosticResult:
+def diagnose_private_folder_deny(vault: Path | str) -> DiagnosticResult:
     """vault `90_System/Private/`가 있으면 `.claude/settings.json`의 permissions.deny 검사."""
-    vault_root = vault.expanduser()
+    vault_root = Path(vault).expanduser()
     private = vault_root / "90_System" / "Private"
     if not private.is_dir():
         return DiagnosticResult(
@@ -135,9 +135,9 @@ def diagnose_private_folder_deny(vault: Path) -> DiagnosticResult:
     )
 
 
-def diagnose_dataview_plugin(vault: Path) -> DiagnosticResult:
+def diagnose_dataview_plugin(vault: Path | str) -> DiagnosticResult:
     """vault `.obsidian/community-plugins.json`에서 Dataview 플러그인 활성 여부 검사."""
-    vault_root = vault.expanduser()
+    vault_root = Path(vault).expanduser()
     obsidian = vault_root / ".obsidian"
     plugins_file = obsidian / "community-plugins.json"
 
