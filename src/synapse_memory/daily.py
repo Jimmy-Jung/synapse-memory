@@ -58,6 +58,17 @@ DAILY_STAGES = (
     DailyStage("collect_continue", "Continue.dev 세션 mirror"),
     DailyStage("collect_aider", "Aider 대화 mirror"),
     DailyStage("collect_git_self", "본인 Git commit mirror"),
+    DailyStage("collect_apple_notes", "Apple Notes mirror"),
+    DailyStage("collect_day_one", "Day One journal mirror"),
+    DailyStage(
+        "collect_vscode_local_history", "VS Code Local History mirror"
+    ),
+    DailyStage("collect_imessage", "iMessage chat.db mirror"),
+    DailyStage("collect_gmail_sent", "Gmail Sent mirror (opt-in)"),
+    DailyStage("collect_calendar", "Calendar ICS mirror"),
+    DailyStage("collect_browser_history", "브라우저 history mirror"),
+    DailyStage("collect_screen_time", "Screen Time (knowledgeC) mirror"),
+    DailyStage("collect_apple_health", "Apple Health export mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -252,6 +263,15 @@ def _build_stage_actions(
         "collect_continue": _collect_continue_action,
         "collect_aider": _collect_aider_action,
         "collect_git_self": _collect_git_self_action,
+        "collect_apple_notes": _collect_apple_notes_action,
+        "collect_day_one": _collect_day_one_action,
+        "collect_vscode_local_history": _collect_vscode_local_history_action,
+        "collect_imessage": _collect_imessage_action,
+        "collect_gmail_sent": _collect_gmail_sent_action,
+        "collect_calendar": _collect_calendar_action,
+        "collect_browser_history": _collect_browser_history_action,
+        "collect_screen_time": _collect_screen_time_action,
+        "collect_apple_health": _collect_apple_health_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -317,6 +337,71 @@ def _collect_git_self_action() -> str:
     from synapse_memory.collectors.git_self import collect_git_self
 
     stats = collect_git_self()
+    return stats.summary()
+
+
+def _collect_apple_notes_action() -> str:
+    from synapse_memory.collectors.apple_notes import collect_apple_notes
+
+    stats = collect_apple_notes()
+    return stats.summary()
+
+
+def _collect_day_one_action() -> str:
+    from synapse_memory.collectors.day_one import collect_day_one
+
+    stats = collect_day_one()
+    return stats.summary()
+
+
+def _collect_vscode_local_history_action() -> str:
+    from synapse_memory.collectors.vscode_local_history import (
+        collect_vscode_local_history,
+    )
+
+    stats = collect_vscode_local_history()
+    return stats.summary()
+
+
+def _collect_imessage_action() -> str:
+    from synapse_memory.collectors.imessage import collect_imessage
+
+    stats = collect_imessage()
+    return stats.summary()
+
+
+def _collect_gmail_sent_action() -> str:
+    from synapse_memory.collectors.gmail_sent import collect_gmail_sent
+
+    stats = collect_gmail_sent()
+    return stats.summary()
+
+
+def _collect_calendar_action() -> str:
+    from synapse_memory.collectors.calendar import collect_calendar
+
+    stats = collect_calendar()
+    return stats.summary()
+
+
+def _collect_browser_history_action() -> str:
+    from synapse_memory.collectors.browser_history import collect_browser_history
+
+    stats = collect_browser_history()
+    return stats.summary()
+
+
+def _collect_screen_time_action() -> str:
+    from synapse_memory.collectors.screen_time import collect_screen_time
+
+    stats = collect_screen_time()
+    return stats.summary()
+
+
+def _collect_apple_health_action() -> str:
+    from synapse_memory.collectors.apple_health import collect_apple_health
+
+    stats = collect_apple_health()
     return stats.summary()
 
 
@@ -923,8 +1008,29 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             if extras:
                 parts.append("· " + ", ".join(extras))
             return " ".join(parts)
-    elif stage in ("collect_cursor", "collect_continue"):
-        label = "Cursor DB" if stage == "collect_cursor" else "Continue.dev 세션"
+    elif stage in (
+        "collect_cursor",
+        "collect_continue",
+        "collect_apple_notes",
+        "collect_day_one",
+        "collect_vscode_local_history",
+        "collect_imessage",
+        "collect_calendar",
+        "collect_screen_time",
+        "collect_apple_health",
+    ):
+        labels = {
+            "collect_cursor": "Cursor DB",
+            "collect_continue": "Continue.dev 세션",
+            "collect_apple_notes": "Apple Notes DB",
+            "collect_day_one": "Day One DB",
+            "collect_vscode_local_history": "VS Code 히스토리",
+            "collect_imessage": "iMessage DB",
+            "collect_calendar": "Calendar ICS",
+            "collect_screen_time": "Screen Time DB",
+            "collect_apple_health": "Apple Health export",
+        }
+        label = labels[stage]
         kv = _parse_kv(raw)
         if "mirrored" in kv:
             parts = [f"{label} {kv['mirrored']}개 mirror"]
@@ -947,6 +1053,33 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             ]
             if kv.get("bytes", 0) > 0:
                 parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("errors", 0):
+                parts.append(f"· 에러 {kv['errors']}")
+            return " ".join(parts)
+    elif stage == "collect_gmail_sent":
+        if raw.strip() == "disabled":
+            return "Gmail Sent — opt-out (SYNAPSE_GMAIL_ENABLE 미설정)"
+        kv = _parse_kv(raw)
+        if "added" in kv:
+            parts = [
+                f"Gmail Sent {kv.get('added', 0)}개 mirror "
+                f"(목록 {kv.get('listed', 0)}개)"
+            ]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("errors", 0):
+                parts.append(f"· 에러 {kv['errors']}")
+            return " ".join(parts)
+    elif stage == "collect_browser_history":
+        kv = _parse_kv(raw)
+        if "scanned" in kv:
+            parts = [
+                f"브라우저 history {kv.get('mirrored', 0)}/{kv.get('scanned', 0)} mirror"
+            ]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("unchanged", 0):
+                parts.append(f"· 변경 없음 {kv['unchanged']}")
             if kv.get("errors", 0):
                 parts.append(f"· 에러 {kv['errors']}")
             return " ".join(parts)
