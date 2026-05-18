@@ -2,6 +2,35 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.1] — 2026-05-18
+
+### Changed — slash 가이드 v0.15 컬렉터 반영
+
+v0.15.0 에서 13종 외부 데이터 수집기를 추가했지만 slash command prompt 들이
+구버전 흐름 그대로였다. 사용자가 처음 실행할 때 *어떤 데이터가 mirror 되는지* /
+*어떤 권한 / 환경변수가 opt-in 인지* 가이드가 없어 보강한다.
+
+- `commands/onboard.md` — 환경 점검 직후 "1.5단계 — 데이터 수집 범위 안내"
+  추가. iMessage(FDA), Gmail(`SYNAPSE_GMAIL_ENABLE`), git_self(`SYNAPSE_GIT_SELF_ROOTS`),
+  Apple Health(드롭인) 한 줄 안내. 첫 세션은 한 줄로만, 사용자가 명시적으로 물어볼 때만 자세히.
+- `commands/assistant.md` — 우선순위 규칙 9개로 확장. 8번 신설:
+  *우선순위 1~7 이 모두 OK 일 때만* Tier 3/4 opt-in 컬렉터 활성화 검토 안내.
+- `commands/daily.md` — 파이프라인 흐름 stage 목록을 17종 컬렉터로 갱신.
+  컬렉터별 source 미존재 / 권한 부재가 실패가 아니라는 점 명시.
+
+### Changed — 사용자 문서 최신화
+
+- `docs/README.md` — 추가 흐름 표에 v0.14.0 / v0.15.0 항목 보강.
+- `docs/start-here.md` — "어떤 데이터를 수집하나요?" 신규 섹션 추가 (자동 / opt-in
+  / 권한 필요 컬렉터 표). 이후 헤더 번호 일괄 +1.
+- `docs/privacy-and-cost.md` — 저장 위치 표에 신규 컬렉터 9 행 추가.
+  "자동 수집 vs opt-in 컬렉터" 신규 섹션 — 활성화 / 비활성화 방법 표.
+
+### Internal
+
+- pyproject / `__init__.py` / Claude·Codex plugin manifest / README installer URL
+  0.15.0 → 0.15.1 동기 bump.
+
 ## [0.15.0] — 2026-05-18
 
 ### Added — 외부 데이터 수집기 13종 확장 (spec 016)

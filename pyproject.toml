@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "synapse-memory"
-version = "0.15.0"
+version = "0.15.1"
 description = "Personal knowledge memory & RAG layer using Apple FoundationModels"
 requires-python = ">=3.11"
 license = { text = "MIT" }

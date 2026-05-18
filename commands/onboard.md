@@ -17,6 +17,21 @@ argument-hint: (인자 없음)
 - `vault_path: null`이면: Obsidian vault 경로 설정 안내 후 종료. 다음 단계 진행 불가.
 - 둘 다 OK이면: "환경 준비 완료. 이제 시작해도 됩니다." 한 줄만 보고하고 다음 단계로.
 
+## 1.5단계 — 데이터 수집 범위 안내 (10초, 한 줄)
+
+다음 한 줄만 사용자에게 알려주세요 (사용자 응답 대기 불필요).
+
+> Synapse Memory는 기본적으로 Claude Code · Codex 로그, shell history, Cursor /
+> Continue / Aider 세션, Obsidian vault, Apple Notes, Day One, VS Code Local
+> History, macOS Calendar, 브라우저 history, Screen Time을 자동으로 수집합니다.
+> iMessage(Full Disk Access), Gmail(`SYNAPSE_GMAIL_ENABLE=1`), 본인 git
+> commit(`SYNAPSE_GIT_SELF_ROOTS=...`), Apple Health(`~/Downloads/export*.zip`)는
+> 본인이 명시적으로 권한 부여 / 환경변수 / 파일 드롭한 경우에만 수집됩니다.
+> 모든 raw 데이터는 `~/.synapse/private/`(0700) 격리 저장.
+
+상세한 컬렉터별 권한 / opt-in 절차는 사용자가 명시적으로 물어볼 때만 답변하세요.
+첫 세션에서는 위 한 줄만으로 충분합니다.
+
 ## 2단계 — 답답함 선택 (사용자 응답 대기)
 
 사용자에게 *정확히 이 형식*으로 질문하세요.
