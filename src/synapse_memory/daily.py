@@ -26,13 +26,14 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from synapse_memory.status import StatusSink, StatusWriter
+from synapse_memory.status import DailyRunLock, StatusSink, StatusWriter
 
 StageAction = Callable[[], Any]
 
@@ -147,6 +148,10 @@ class DailyResult:
     def skipped(self) -> int:
         return sum(1 for s in self.steps if s.status == StageStatus.SKIPPED)
 
+    @property
+    def warnings(self) -> int:
+        return sum(_summary_error_count(s.summary) for s in self.steps if s.ok)
+
 
 def validate_daily_stages(stages: tuple[DailyStage, ...] = DAILY_STAGES) -> None:
     seen: set[str] = set()
@@ -160,6 +165,22 @@ def validate_daily_stages(stages: tuple[DailyStage, ...] = DAILY_STAGES) -> None
                 raise ValueError(
                     f"unknown dependency for {stage.name}: {dependency}"
                 )
+
+
+def _validate_stage_names(kind: str, names: set[str] | None) -> None:
+    if not names:
+        return
+    unknown = sorted(names - set(STEPS))
+    if unknown:
+        raise ValueError(
+            f"unknown daily stage in {kind}: {', '.join(unknown)}\n"
+            f"valid stages: {', '.join(STEPS)}"
+        )
+
+
+def _summary_error_count(summary: str) -> int:
+    match = re.search(r"\berrors=(\d+)\b", summary)
+    return int(match.group(1)) if match else 0
 
 
 def _run_step(
@@ -223,7 +244,7 @@ def _blocking_dependency(
     for dependency in stage.requires:
         upstream = results_by_name.get(dependency)
         if upstream is None:
-            continue
+            return dependency
         if upstream.status == StageStatus.FAILED:
             return dependency
         if upstream.status == StageStatus.SKIPPED and not _is_resume_skip(upstream):
@@ -784,6 +805,42 @@ def _build_report_action(result: DailyResult) -> StageAction:
     return step
 
 
+def _run_report_step(
+    result: DailyResult,
+    *,
+    t_start: float,
+    on_log: Callable[[str], None] = print,
+) -> StepResult:
+    name = "report"
+    on_log(f"\n=== [{name}] ===")
+    t0 = time.monotonic()
+    appended = False
+    step_result: StepResult | None = None
+    try:
+        result.total_elapsed = time.monotonic() - t_start
+        path = write_daily_report(result)
+        result.report_path = path
+        elapsed = time.monotonic() - t0
+        step_result = StepResult.success(
+            name,
+            elapsed,
+            f"DailyReports/{path.name}",
+        )
+        result.steps.append(step_result)
+        appended = True
+        result.total_elapsed = time.monotonic() - t_start
+        write_daily_report(result)
+        on_log(f"  ({elapsed:.1f}s) {step_result.summary}")
+        return step_result
+    except Exception as exc:
+        elapsed = time.monotonic() - t0
+        on_log(f"  실패: {exc}")
+        return StepResult.failed(name, elapsed, str(exc))
+    finally:
+        if appended and result.steps and result.steps[-1] is step_result:
+            result.steps.pop()
+
+
 def write_daily_report(
     result: DailyResult,
     *,
@@ -822,6 +879,7 @@ def render_daily_report(
         f"date: {date}",
         f"total_elapsed_s: {result.total_elapsed:.1f}",
         f"errors_count: {result.errors}",
+        f"warnings_count: {result.warnings}",
         f"skipped_count: {result.skipped}",
         f"new_cards: {_extract_first_int(result.steps, '신규 Card')}",
         f"new_facts: {_extract_first_int(result.steps, 'fact=')}",
@@ -1161,6 +1219,7 @@ def run_daily(
     stage_actions: Mapping[str, StageAction] | None = None,
     on_log: Callable[[str], None] = print,
     status_sink: StatusSink | None = None,
+    acquire_lock: bool = True,
 ) -> DailyResult:
     """일일 파이프라인 실행.
 
@@ -1183,6 +1242,8 @@ def run_daily(
         on_log: print 대체 (테스트용).
     """
     validate_daily_stages()
+    _validate_stage_names("only", only)
+    _validate_stage_names("skip", skip)
     if resume_from is not None and resume_from not in STEPS:
         raise ValueError(
             f"unknown daily stage: {resume_from}\n"
@@ -1218,6 +1279,50 @@ def run_daily(
             on_log(f"{mark} {s}{suffix}")
         return result
 
+    lock_context = (
+        DailyRunLock()
+        if acquire_lock and status_sink is None
+        else contextlib.nullcontext()
+    )
+
+    with lock_context:
+        return _run_daily_unlocked(
+            result=result,
+            selected=selected,
+            resume_from=resume_from,
+            classify_model=classify_model,
+            generate_model=generate_model,
+            profile_model=profile_model,
+            profile_sample_lines=profile_sample_lines,
+            profile_facts_only=profile_facts_only,
+            quick=quick,
+            quick_days=quick_days,
+            quick_max_clusters=quick_max_clusters,
+            stage_actions=stage_actions,
+            on_log=on_log,
+            status_sink=status_sink,
+            t_start=t_start,
+        )
+
+
+def _run_daily_unlocked(
+    *,
+    result: DailyResult,
+    selected: set[str],
+    resume_from: str | None,
+    classify_model: str,
+    generate_model: str,
+    profile_model: str,
+    profile_sample_lines: int,
+    profile_facts_only: bool,
+    quick: bool,
+    quick_days: int,
+    quick_max_clusters: int,
+    stage_actions: Mapping[str, StageAction] | None,
+    on_log: Callable[[str], None],
+    status_sink: StatusSink | None,
+    t_start: float,
+) -> DailyResult:
     if status_sink is None:
         try:
             status_sink = StatusWriter(total_stages=len(STEPS))
@@ -1257,8 +1362,9 @@ def run_daily(
             status_sink.begin_stage(stage.name, i + 1)
             action = actions[stage.name]
             if stage.name == "report" and stage.name not in (stage_actions or {}):
-                action = _build_report_action(result)
-            step_result = _run_step(stage.name, action, on_log=on_log)
+                step_result = _run_report_step(result, t_start=t_start, on_log=on_log)
+            else:
+                step_result = _run_step(stage.name, action, on_log=on_log)
             status_sink.end_stage(
                 stage.name,
                 failed=step_result.status == StageStatus.FAILED,

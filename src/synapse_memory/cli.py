@@ -25,6 +25,7 @@ import json
 import os
 import stat
 import sys
+import threading
 import time
 from collections.abc import Iterable
 from pathlib import Path
@@ -130,6 +131,7 @@ from synapse_memory.redaction.redactlist import (
     load_redactlist,
     remove_redactlist_item,
 )
+from synapse_memory.status import DailyAlreadyRunningError
 from synapse_memory.storage.l0 import (
     L0_DIR_MODE,
     L0_FILE_MODE,
@@ -688,9 +690,6 @@ def cmd_me_decide(args: argparse.Namespace) -> int:
 
 def cmd_daily(args: argparse.Namespace) -> int:
     """일일 통합 파이프라인."""
-    only = set(args.only.split(",")) if args.only else None
-    skip = set(args.skip.split(",")) if args.skip else None
-
     if args.quick:
         print(
             f"⚡ quick mode — 최근 {args.quick_days}일 modified 노트 + "
@@ -705,30 +704,42 @@ def cmd_daily(args: argparse.Namespace) -> int:
     profile_model = _resolve_model(args.profile_model, "update_profile") or "sonnet"
 
     try:
-        result = run_daily(
-            only=only,
-            skip=skip,
-            resume_from=args.resume_from,
-            classify_model=classify_model,
-            generate_model=generate_model,
-            profile_model=profile_model,
-            profile_sample_lines=args.profile_sample_lines,
-            profile_facts_only=args.profile_facts_only,
-            quick=args.quick,
-            quick_days=args.quick_days,
-            quick_max_clusters=args.quick_max_clusters,
-            dry_run=args.dry_run,
-        )
+        only = _parse_stage_csv(args.only) if args.only else None
+        skip = _parse_stage_csv(args.skip) if args.skip else None
+        with _daily_status_watcher(
+            enabled=bool(args.watch_status and not args.dry_run),
+            interval=float(args.status_interval),
+        ):
+            result = run_daily(
+                only=only,
+                skip=skip,
+                resume_from=args.resume_from,
+                classify_model=classify_model,
+                generate_model=generate_model,
+                profile_model=profile_model,
+                profile_sample_lines=args.profile_sample_lines,
+                profile_facts_only=args.profile_facts_only,
+                quick=args.quick,
+                quick_days=args.quick_days,
+                quick_max_clusters=args.quick_max_clusters,
+                dry_run=args.dry_run,
+            )
     except ValueError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
+    except DailyAlreadyRunningError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 3
 
     if args.dry_run:
         return 0
 
     print("\n" + "=" * 60)
     print(f"Daily 총 시간: {result.total_elapsed:.1f}s")
-    print(f"실행 단계: {len(result.steps)}, 실패: {result.errors}, 건너뜀: {result.skipped}")
+    print(
+        f"실행 단계: {len(result.steps)}, 실패: {result.errors}, "
+        f"경고: {result.warnings}, 건너뜀: {result.skipped}"
+    )
     for s in result.steps:
         if s.status == StageStatus.SKIPPED:
             status = "-"
@@ -741,6 +752,72 @@ def cmd_daily(args: argparse.Namespace) -> int:
 
     print(f"\n진행률 status: {_DAILY_STATUS_FILE}  ('synapse-memory daily-status'로 조회)")
     return 1 if result.errors else 0
+
+
+def _parse_stage_csv(value: str) -> set[str]:
+    return {part.strip() for part in value.split(",") if part.strip()}
+
+
+@contextlib.contextmanager
+def _daily_status_watcher(*, enabled: bool, interval: float):
+    if not enabled:
+        yield
+        return
+
+    from synapse_memory.status import read_status
+
+    stop = threading.Event()
+    pid = os.getpid()
+    last_signature: tuple[object, ...] | None = None
+    poll_interval = max(0.5, interval)
+
+    def watch() -> None:
+        nonlocal last_signature
+        while not stop.wait(poll_interval):
+            status = read_status()
+            if status is None or status.pid != pid:
+                continue
+            signature = (
+                status.state,
+                status.current_stage,
+                status.current_stage_index,
+                status.current_item,
+                status.current_item_index,
+                status.current_item_total,
+                tuple(status.completed_stages),
+                tuple(status.failed_stages),
+            )
+            if signature == last_signature:
+                continue
+            last_signature = signature
+            print(_format_daily_status_line(status), flush=True)
+
+    thread = threading.Thread(target=watch, name="daily-status-watch", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=1.0)
+
+
+def _format_daily_status_line(status: Any) -> str:
+    if status.current_stage:
+        head = (
+            f"[daily-status] {status.current_stage} "
+            f"({status.current_stage_index}/{status.total_stages})"
+        )
+    else:
+        head = f"[daily-status] {status.state}"
+    if status.current_item_total:
+        pct = int(status.current_item_index / status.current_item_total * 100)
+        head += (
+            f" — {status.current_item} "
+            f"[{status.current_item_index}/{status.current_item_total}, {pct}%]"
+        )
+    if status.failed_stages:
+        head += f" — failed: {', '.join(status.failed_stages)}"
+    return head
 
 
 def cmd_daily_status(args: argparse.Namespace) -> int:
@@ -3494,6 +3571,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=10,
         help="--quick 모드의 classify 최대 cluster 수 (기본 10)",
+    )
+    p_daily.add_argument(
+        "--watch-status",
+        action="store_true",
+        help="daily 실행 중 status 파일을 폴링해 stage 진행률을 한 줄씩 출력",
+    )
+    p_daily.add_argument(
+        "--status-interval",
+        type=float,
+        default=2.0,
+        help="--watch-status 폴링 주기(초, 최소 0.5)",
     )
     p_daily.add_argument("--dry-run", action="store_true", help="실행 안 하고 단계만")
     p_daily.set_defaults(func=cmd_daily)

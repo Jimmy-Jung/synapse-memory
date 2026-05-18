@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import sqlite3
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from synapse_memory.collectors.browser_history.mirror import (
+    DEFAULT_BACKUP_TIMEOUT_SECONDS,
     META_DIR,
     STATES_FILE,
     BrowserSource,
@@ -118,6 +120,39 @@ class TestCollectBrowserHistory:
         collect_browser_history(browsers=browsers, dst_root=dst_root)
         assert stat.S_IMODE(dst_root.stat().st_mode) == L0_DIR_MODE
         assert (dst_root / META_DIR / STATES_FILE).is_file()
+
+    def test_backup_timeout_records_error_and_continues(
+        self, tmp_path: Path, dst_root: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        src = tmp_path / "chrome" / "History"
+        _make_history_db(src)
+        browsers = (BrowserSource(name="chrome", db_path=src),)
+
+        def fake_run(*_args: object, **kwargs: object) -> object:
+            raise subprocess.TimeoutExpired(
+                cmd="sqlite-backup",
+                timeout=kwargs.get("timeout", DEFAULT_BACKUP_TIMEOUT_SECONDS),
+            )
+
+        monkeypatch.setattr(
+            "synapse_memory.collectors.browser_history.mirror.subprocess.run",
+            fake_run,
+        )
+
+        stats = collect_browser_history(
+            browsers=browsers,
+            dst_root=dst_root,
+            backup_timeout_seconds=0.01,
+        )
+
+        assert stats.browsers_scanned == 1
+        assert stats.browsers_mirrored == 0
+        assert stats.browsers_unchanged == 0
+        assert len(stats.errors) == 1
+        assert stats.errors[0][0] == "chrome"
+        assert "timed out" in stats.errors[0][1]
+        assert not (dst_root / "chrome" / "History.tmp").exists()
+        assert not (dst_root / "chrome" / "History").exists()
 
 
 class TestDailyStageWiring:

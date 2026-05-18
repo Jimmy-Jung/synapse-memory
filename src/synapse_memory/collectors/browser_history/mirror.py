@@ -20,6 +20,8 @@ import hashlib
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -33,6 +35,23 @@ from synapse_memory.storage.l0 import (
 SUBPATH = Path("raw") / "browser-history"
 META_DIR = ".meta"
 STATES_FILE = "states.json"
+DEFAULT_BACKUP_TIMEOUT_SECONDS = 10.0
+
+_SQLITE_BACKUP_SCRIPT = """
+import sqlite3
+import sys
+
+src, tmp = sys.argv[1], sys.argv[2]
+src_conn = sqlite3.connect(f"file:{src}?mode=ro", uri=True)
+try:
+    dst_conn = sqlite3.connect(tmp)
+    try:
+        src_conn.backup(dst_conn)
+    finally:
+        dst_conn.close()
+finally:
+    src_conn.close()
+"""
 
 
 @dataclass(frozen=True)
@@ -74,6 +93,7 @@ DEFAULT_BROWSERS: tuple[BrowserSource, ...] = (
 )
 
 __all__ = [
+    "DEFAULT_BACKUP_TIMEOUT_SECONDS",
     "DEFAULT_BROWSERS",
     "SUBPATH",
     "BrowserSource",
@@ -155,21 +175,37 @@ def _save_states_atomic(meta_path: Path, states: dict[str, FileState]) -> None:
     os.replace(tmp, meta_path)
 
 
-def _sqlite_backup(src: Path, dst: Path) -> None:
-    src_uri = f"file:{src}?mode=ro"
+def _sqlite_backup(
+    src: Path,
+    dst: Path,
+    *,
+    timeout_seconds: float = DEFAULT_BACKUP_TIMEOUT_SECONDS,
+) -> None:
     ensure_secure_dir(dst.parent)
     tmp = dst.with_suffix(dst.suffix + ".tmp")
     if tmp.exists():
         tmp.unlink()
-    src_conn = sqlite3.connect(src_uri, uri=True)
     try:
-        dst_conn = sqlite3.connect(str(tmp))
-        try:
-            src_conn.backup(dst_conn)
-        finally:
-            dst_conn.close()
-    finally:
-        src_conn.close()
+        subprocess.run(
+            [sys.executable, "-c", _SQLITE_BACKUP_SCRIPT, str(src), str(tmp)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise sqlite3.OperationalError(
+            f"sqlite backup timed out after {timeout_seconds:.1f}s: {src}"
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        detail = (exc.stderr or exc.stdout or "").strip()
+        raise sqlite3.OperationalError(
+            f"sqlite backup failed for {src}: {detail or exc.returncode}"
+        ) from exc
     with contextlib.suppress(OSError):
         os.chmod(tmp, L0_FILE_MODE)
     os.replace(tmp, dst)
@@ -179,12 +215,15 @@ def collect_browser_history(
     *,
     browsers: tuple[BrowserSource, ...] | None = None,
     dst_root: Path | None = None,
+    backup_timeout_seconds: float = DEFAULT_BACKUP_TIMEOUT_SECONDS,
 ) -> CollectStats:
     """브라우저 history 1회 수집 (incremental, per-browser).
 
     Args:
         browsers: 처리할 BrowserSource 리스트 (기본: macOS 표준 Chrome/Safari/Arc).
         dst_root: L0 mirror 루트 (기본: ``<l0_root>/raw/browser-history``).
+        backup_timeout_seconds: 브라우저 DB lock 대기 상한. 초과 시 해당 브라우저만
+            errors 에 기록하고 daily 는 다음 stage 로 진행.
 
     Returns:
         CollectStats — 처리 통계. 각 브라우저별로 미존재 시 silent skip,
@@ -221,7 +260,11 @@ def collect_browser_history(
                 continue
 
             dst_file = dst / browser.name / browser.dst_filename
-            _sqlite_backup(src, dst_file)
+            _sqlite_backup(
+                src,
+                dst_file,
+                timeout_seconds=backup_timeout_seconds,
+            )
             sha = _file_sha256(dst_file)
 
             if prev_state and prev_state.sha256 == sha:

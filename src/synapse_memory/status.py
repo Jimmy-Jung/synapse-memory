@@ -12,7 +12,9 @@ polling으로 확인할 수 있도록 atomic write로 갱신한다. stdout이 �
 
 from __future__ import annotations
 
+import contextlib
 import datetime
+import fcntl
 import json
 import os
 import tempfile
@@ -22,6 +24,7 @@ from pathlib import Path
 
 STATUS_DIR = Path.home() / ".synapse" / "run"
 STATUS_FILE = STATUS_DIR / "daily.status.json"
+LOCK_FILE = STATUS_DIR / "daily.lock"
 
 _TMP_PREFIX = ".daily.status-"
 _TMP_SUFFIX = ".tmp"
@@ -58,6 +61,60 @@ class StatusSink:
     def update_item(self, *, index: int, total: int, label: str) -> None: ...
     def end_stage(self, name: str, *, failed: bool = False) -> None: ...
     def finish(self, *, errors: int) -> None: ...
+
+
+class DailyAlreadyRunningError(RuntimeError):
+    """다른 daily 프로세스가 같은 machine-local pipeline을 실행 중."""
+
+
+class DailyRunLock:
+    """daily 중복 실행 방지용 advisory file lock.
+
+    ChromaDB / status 파일 같은 machine-local write surface는 동시 실행에 취약하다.
+    lock 획득 실패 시 기존 pid를 포함해 즉시 실패시킨다.
+    """
+
+    def __init__(self, *, path: Path | None = None, pid: int | None = None) -> None:
+        self._path = path if path is not None else LOCK_FILE
+        self._pid = pid if pid is not None else os.getpid()
+        self._fd: int | None = None
+
+    def __enter__(self) -> DailyRunLock:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self._path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            existing = _read_lock_pid(self._path)
+            os.close(fd)
+            detail = f"pid {existing}" if existing is not None else str(self._path)
+            raise DailyAlreadyRunningError(
+                f"daily already running ({detail})"
+            ) from exc
+        os.ftruncate(fd, 0)
+        os.write(fd, f"{self._pid}\n".encode())
+        os.fsync(fd)
+        self._fd = fd
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        if self._fd is None:
+            return
+        with contextlib.suppress(OSError):
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+        with contextlib.suppress(OSError):
+            os.close(self._fd)
+        with contextlib.suppress(OSError):
+            self._path.unlink()
+        self._fd = None
+
+
+def _read_lock_pid(path: Path) -> int | None:
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        return int(text) if text else None
+    except (OSError, ValueError):
+        return None
 
 
 class StatusWriter(StatusSink):

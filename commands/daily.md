@@ -1,6 +1,6 @@
 ---
-description: 일일 통합 워크플로 — 실패 stage 격리, resume, DailyReport. 첫 호출은 --quick 권장.
-argument-hint: [--quick] [--profile-facts-only] [--resume-from <stage>]
+description: 일일 통합 워크플로 — 실패 stage 격리, resume, DailyReport. 첫 호출은 --quick --watch-status 권장.
+argument-hint: [--quick] [--watch-status] [--profile-facts-only] [--resume-from <stage>]
 ---
 
 !`SYNAPSE_FROM_AGENT=1 synapse-memory daily $ARGUMENTS`
@@ -27,6 +27,7 @@ SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick
 - 최근 7일 modified 노트만 mirror (mtime cutoff)
 - classify 최대 10 cluster (AI 호출 cap)
 - `update_profile` auto-skip (heavy AI)
+- `--watch-status`를 붙이면 실행 중 `[daily-status] stage (n/22)` 진행률을 같이 출력
 - 첫 호출 ~3분 목표. 이후 매일 호출은 더 짧음 (incremental)
 
 **Full (별도 호출 — 매주 1회 또는 작가 판단)**
@@ -36,14 +37,16 @@ SYNAPSE_FROM_AGENT=1 synapse-memory daily
 ```
 
 - 전체 vault scan + 모든 신규 cluster classify + update_profile 포함
-- ⚠ ChromaDB write 동시성 회피를 위해 `--quick` 과 *동시* 실행 금지
+- ChromaDB write 동시성 회피를 위해 daily 중복 실행은 lock 으로 차단됩니다.
 
 ## 재개 / 부분 실행 예
 
 ```bash
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --resume-from classify
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --dry-run --resume-from index
-SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick --quick-days 14
+SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick --watch-status --quick-days 14
+SYNAPSE_FROM_AGENT=1 synapse-memory daily-status --watch
+SYNAPSE_FROM_AGENT=1 synapse-memory daily --skip collect_browser_history
 ```
 
 ## 종료 후 흐름 — apply 제안

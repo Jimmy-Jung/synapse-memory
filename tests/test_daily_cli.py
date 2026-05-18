@@ -29,6 +29,8 @@ def _args(**overrides: object) -> argparse.Namespace:
         "quick": False,
         "quick_days": 7,
         "quick_max_clusters": 10,
+        "watch_status": False,
+        "status_interval": 2.0,
         "dry_run": False,
     }
     data.update(overrides)
@@ -42,6 +44,18 @@ def test_parser_has_daily_resume_from() -> None:
 
     assert args.func is cmd_daily
     assert args.resume_from == "classify"
+
+
+def test_parser_has_daily_watch_status() -> None:
+    parser = cli_mod.build_parser()
+
+    args = parser.parse_args(
+        ["daily", "--watch-status", "--status-interval", "0.75"]
+    )
+
+    assert args.func is cmd_daily
+    assert args.watch_status is True
+    assert args.status_interval == 0.75
 
 
 def test_cmd_daily_prints_failed_and_skipped_summary(
@@ -63,8 +77,30 @@ def test_cmd_daily_prints_failed_and_skipped_summary(
     out = capsys.readouterr().out
     assert rc == 1
     assert "실패: 1" in out
+    assert "경고: 0" in out
     assert "건너뜀: 1" in out
     assert "requires classify" in out
+
+
+def test_format_daily_status_line_with_stage_and_item() -> None:
+    from synapse_memory.status import DailyStatus
+
+    status = DailyStatus(
+        pid=42,
+        started_at="2026-05-18T00:00:00+00:00",
+        updated_at="2026-05-18T00:00:01+00:00",
+        current_stage="generate",
+        current_stage_index=19,
+        total_stages=22,
+        current_item="project-a",
+        current_item_index=3,
+        current_item_total=10,
+    )
+
+    assert (
+        cli_mod._format_daily_status_line(status)
+        == "[daily-status] generate (19/22) — project-a [3/10, 30%]"
+    )
 
 
 def test_cmd_daily_unknown_resume_returns_2(
@@ -83,6 +119,62 @@ def test_cmd_daily_unknown_resume_returns_2(
 
     assert rc == 2
     assert "unknown daily stage: nope" in capsys.readouterr().err
+
+
+def test_cmd_daily_strips_comma_separated_stage_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_daily(**kwargs: object) -> DailyResult:
+        captured.update(kwargs)
+        return DailyResult()
+
+    monkeypatch.setattr(cli_mod, "run_daily", fake_run_daily)
+
+    rc = cmd_daily(
+        _args(
+            only="collect_claude_code, report",
+            skip="collect_browser_history, collect_screen_time",
+            dry_run=True,
+        )
+    )
+
+    assert rc == 0
+    assert captured["only"] == {"collect_claude_code", "report"}
+    assert captured["skip"] == {"collect_browser_history", "collect_screen_time"}
+
+
+def test_cmd_daily_unknown_only_returns_2(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail(**_kwargs: object) -> DailyResult:
+        raise ValueError("unknown daily stage in only: nope")
+
+    monkeypatch.setattr(cli_mod, "run_daily", fail)
+
+    rc = cmd_daily(_args(only="nope"))
+
+    assert rc == 2
+    assert "unknown daily stage in only" in capsys.readouterr().err
+
+
+def test_cmd_daily_already_running_returns_3(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from synapse_memory.status import DailyAlreadyRunningError
+
+    def fail(**_kwargs: object) -> DailyResult:
+        raise DailyAlreadyRunningError("daily already running (pid 42)")
+
+    monkeypatch.setattr(cli_mod, "run_daily", fail)
+
+    rc = cmd_daily(_args())
+
+    assert rc == 3
+    assert "daily already running" in capsys.readouterr().err
 
 
 def test_ci_workflow_exists() -> None:
