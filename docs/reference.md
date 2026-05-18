@@ -475,6 +475,9 @@ synapse-memory doctor --fix-config
 | `collect_continue` | `~/.continue/sessions/*.json` | ✅ | Continue.dev VS Code 확장 |
 | `collect_aider` | `~/.aider.chat.history.md`, `.input.history` | ✅ | terminal AI pair |
 | `collect_git_self` | `SYNAPSE_GIT_SELF_ROOTS` 안의 본인 commit | ⛔ opt-in | 환경변수로 root 지정 시만 동작 |
+| `collect_apple_notes` | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | ✅ | Full Disk Access 필요 시 errors |
+| `collect_day_one` | `~/Library/Group Containers/<TEAM_ID>.dayoneapp2/` | ✅ | `SYNAPSE_DAYONE_HOME` override 가능 |
+| `collect_vscode_local_history` | `~/Library/Application Support/Code/User/History/` | ✅ | VS Code 자동 snapshot |
 | `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
 
 ### `collect_git_self` 켜기
