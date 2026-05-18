@@ -66,6 +66,9 @@ DAILY_STAGES = (
     DailyStage("collect_imessage", "iMessage chat.db mirror"),
     DailyStage("collect_gmail_sent", "Gmail Sent mirror (opt-in)"),
     DailyStage("collect_calendar", "Calendar ICS mirror"),
+    DailyStage("collect_browser_history", "브라우저 history mirror"),
+    DailyStage("collect_screen_time", "Screen Time (knowledgeC) mirror"),
+    DailyStage("collect_apple_health", "Apple Health export mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -266,6 +269,9 @@ def _build_stage_actions(
         "collect_imessage": _collect_imessage_action,
         "collect_gmail_sent": _collect_gmail_sent_action,
         "collect_calendar": _collect_calendar_action,
+        "collect_browser_history": _collect_browser_history_action,
+        "collect_screen_time": _collect_screen_time_action,
+        "collect_apple_health": _collect_apple_health_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -375,6 +381,27 @@ def _collect_calendar_action() -> str:
     from synapse_memory.collectors.calendar import collect_calendar
 
     stats = collect_calendar()
+    return stats.summary()
+
+
+def _collect_browser_history_action() -> str:
+    from synapse_memory.collectors.browser_history import collect_browser_history
+
+    stats = collect_browser_history()
+    return stats.summary()
+
+
+def _collect_screen_time_action() -> str:
+    from synapse_memory.collectors.screen_time import collect_screen_time
+
+    stats = collect_screen_time()
+    return stats.summary()
+
+
+def _collect_apple_health_action() -> str:
+    from synapse_memory.collectors.apple_health import collect_apple_health
+
+    stats = collect_apple_health()
     return stats.summary()
 
 
@@ -989,6 +1016,8 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
         "collect_vscode_local_history",
         "collect_imessage",
         "collect_calendar",
+        "collect_screen_time",
+        "collect_apple_health",
     ):
         labels = {
             "collect_cursor": "Cursor DB",
@@ -998,6 +1027,8 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             "collect_vscode_local_history": "VS Code 히스토리",
             "collect_imessage": "iMessage DB",
             "collect_calendar": "Calendar ICS",
+            "collect_screen_time": "Screen Time DB",
+            "collect_apple_health": "Apple Health export",
         }
         label = labels[stage]
         kv = _parse_kv(raw)
@@ -1036,6 +1067,19 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             ]
             if kv.get("bytes", 0) > 0:
                 parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("errors", 0):
+                parts.append(f"· 에러 {kv['errors']}")
+            return " ".join(parts)
+    elif stage == "collect_browser_history":
+        kv = _parse_kv(raw)
+        if "scanned" in kv:
+            parts = [
+                f"브라우저 history {kv.get('mirrored', 0)}/{kv.get('scanned', 0)} mirror"
+            ]
+            if kv.get("bytes", 0) > 0:
+                parts.append(f"({_format_bytes(kv['bytes'])})")
+            if kv.get("unchanged", 0):
+                parts.append(f"· 변경 없음 {kv['unchanged']}")
             if kv.get("errors", 0):
                 parts.append(f"· 에러 {kv['errors']}")
             return " ".join(parts)
