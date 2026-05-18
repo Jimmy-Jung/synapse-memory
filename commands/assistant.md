@@ -33,7 +33,10 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 5. **`empty_company_count >= 1`** → 키워드 비어 있는 회사 카드 보강 (`/sm:resume` 정확도에 영향)
 6. **`last_daily_at`가 24시간 이상 전이거나 `last_daily_state != "done"`** → `/sm:daily` 실행
 7. **`cleanup_candidate_count >= 1`** → vault 청소 권유 (`/sm:cleanup`). 영구 삭제 0건, archive 폴더로 이동만. `cleanup_by_kind`에서 카테고리별 건수를 사람 말로 짚어주세요 (예: "오래된 이력서 초안 3건, 묵은 MemoryInbox 후보 2건"). 청소 후 비용은 발생하지 않습니다 (로컬 작업).
-8. **모두 OK** → 자유 질문 (`/sm:ask`) 또는 회상 (`/sm:recall`) 안내
+8. **모두 OK이지만 사용자가 추천 정확도를 더 높이고 싶을 때** → Tier 3/4 opt-in 컬렉터 안내 (선택 사항, *우선순위 1~7이 모두 비었을 때만*). 다음 한 줄만:
+   > 더 풍부한 추천을 원하시면 iMessage(시스템 설정 → 개인정보 보호 → Full Disk Access), Gmail(`SYNAPSE_GMAIL_ENABLE=1`), 본인 git commit(`SYNAPSE_GIT_SELF_ROOTS=~/Documents/GitHub`), Apple Health(`~/Downloads/export*.zip` drop-in) 활성화를 검토해보세요.
+   사용자가 명시적으로 관심 보일 때만 자세히 설명. 첫 안내는 한 줄만.
+9. **모두 OK** → 자유 질문 (`/sm:ask`) 또는 회상 (`/sm:recall`) 안내
 
 ### 사용자에게 보여주는 형식
 

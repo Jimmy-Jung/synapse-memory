@@ -5,7 +5,16 @@ argument-hint: [--quick] [--profile-facts-only] [--resume-from <stage>]
 
 !`SYNAPSE_FROM_AGENT=1 synapse-memory daily $ARGUMENTS`
 
-위 출력은 daily 파이프라인(collect_claude_code → collect_obsidian → classify → generate → index → update_profile → report)의 단계별 진행 결과입니다. 각 step의 성공/실패/건너뜀, 소요 시간, skip reason, DailyReport 경로를 요약하고, 실패한 step이 있으면 다음 재개 명령을 제안하세요.
+위 출력은 daily 파이프라인의 단계별 진행 결과입니다.
+
+파이프라인 흐름 (v0.15+):
+
+1. **collect_* (17종 컬렉터)**: claude_code, codex, shell_history, cursor, continue, aider, git_self (opt-in), apple_notes, day_one, vscode_local_history, imessage (Full Disk Access), gmail_sent (opt-in), calendar, browser_history, screen_time, apple_health (drop-in), obsidian
+2. **classify** (신규 cluster 분류) → **generate** (Card 생성) → **index** (RAG)
+3. **update_profile** (Profile 후보 추출, full 모드만)
+4. **report** (DailyReport 작성)
+
+각 stage의 성공/실패/건너뜀, 소요 시간, skip reason, DailyReport 경로를 요약하고, 실패한 step이 있으면 다음 재개 명령을 제안하세요. 컬렉터별로 source 미존재 / 권한 부재면 자동 skip (errors 0 또는 짧은 안내 1줄) 되므로 실패가 아닙니다.
 
 ## 모드
 
