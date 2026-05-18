@@ -84,7 +84,27 @@ sed -i '' -E "s/^__version__ = \"[^\"]+\"/__version__ = \"${new}\"/" "$init_file
 sed -i '' -E "s|releases/download/v${old}/SynapseMemory-v${old}|releases/download/v${new}/SynapseMemory-v${new}|g" README.md
 sed -i '' -E "s|SynapseMemory-v${old}-macos-installer\.zip|SynapseMemory-v${new}-macos-installer.zip|g" README.md
 
-# 4) CHANGELOG stub
+# 4) plugin manifest version (Claude Code / Codex 플러그인 설정 화면 표시)
+#    pyproject 와 같은 값으로 강제 — 이전 값이 drift 되어 있어도 무조건 new 로 정렬.
+for manifest in .claude-plugin/plugin.json .codex-plugin/plugin.json; do
+  if [[ -f "$manifest" ]]; then
+    python3 - "$manifest" "$new" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+new = sys.argv[2]
+data = json.loads(path.read_text(encoding="utf-8"))
+if data.get("version") == new:
+    sys.exit(0)
+data["version"] = new
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+  fi
+done
+
+# 5) CHANGELOG stub
 python3 - "$new" "$today" <<'PY'
 import pathlib
 import sys
@@ -107,7 +127,8 @@ stub = (
 path.write_text(text.replace(marker, marker + stub, 1), encoding="utf-8")
 PY
 
-git add pyproject.toml "$init_file" README.md CHANGELOG.md
+git add pyproject.toml "$init_file" README.md CHANGELOG.md \
+  .claude-plugin/plugin.json .codex-plugin/plugin.json
 git commit -m "release: bump v${old} → v${new}"
 git push -u origin "${branch}"
 

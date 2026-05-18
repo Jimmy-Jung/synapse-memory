@@ -6,5 +6,5 @@ Apple Silicon + macOS Tahoe 26+ 전용. FoundationModels(apfel)을 로컬 게이
 저자: Synapse Memory Maintainers
 """
 
-__version__ = "0.8.5"
+__version__ = "0.13.1"
 __all__ = ["__version__"]
