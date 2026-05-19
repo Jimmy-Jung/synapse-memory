@@ -2,6 +2,48 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.4] — 2026-05-19
+
+### Fixed — Profile ledger fingerprint dispersion
+
+- `profile/ledger.py` 에 신규 `find_entry` 헬퍼 — 정확 fingerprint 매치 + 토큰
+  Jaccard ≥ 0.75 fallback. `record_extraction` / `promote_candidates` /
+  `mark_promoted` / `extract.save_profile_update._lookup` 모두 동일 매칭 정책으로
+  통일.
+- LLM 이 같은 관점을 매일 미세하게 다른 표현으로 추출해 ledger fingerprint 가
+  매번 달라져 `seen_count` 가 영영 1 에 머물던 dispersion 문제를 해결. 흡수된
+  entry 는 `statements` 에 표현 변종을 누적해 보관하며 `promote_candidates` 가
+  사용하는 누적 신호도 정상 작동.
+- `dedupe.py` 의 vault dedupe 와 동일한 0.75 임계치 — 정책 일치.
+
+### Changed — `fast_path_confidence` 기본값 0.95 → 0.90
+
+- `ProfileConfig.fast_path_confidence` 기본값 완화. 실측상 LLM peak confidence
+  가 대부분 0.80~0.92 구간이라 0.95 는 너무 빠듯해 의미 있는 신호도 fast path
+  를 못 타고 `awaiting` 만 누적되던 문제 해소.
+- `dedupe` / `dismissed` 안전망이 vault 진입 전 다시 거르므로 noise 위험은
+  제한적.
+
+### Added — `profile-review-awaiting` CLI
+
+- 신규 `synapse-memory profile-review-awaiting [--min-confidence X] [--dry-run]`
+  명령. ledger awaiting 중 `peak ≥ X` & window 내 entry 를 `ProfileFact` /
+  `DecisionPattern` 으로 변환해 MemoryInbox 후보 파일을 생성한다.
+- `daily` 가 "신규 fact/pattern 0건" 으로 끝났지만 ledger 에 awaiting 후보가
+  쌓여있을 때, 사용자가 임계치를 명시 완화해 검토할 수 있는 보조 경로.
+- vault dedupe / dismissed 안전망이 그대로 적용 — 중복 후보는 자동 제외.
+- 단위 테스트 용이성 위해 핵심 로직은 `ledger.collect_review_candidates` 로
+  분리.
+
+### Changed — `/sm:daily` 스킬 인터랙션 추가
+
+- `commands/daily.md` 에 "낮은 신뢰도 후보 검토 제안" 섹션 추가. `update_profile`
+  이 신규 0건이지만 ledger awaiting 합계가 > 0 일 때, AskUserQuestion 으로
+  **0.85 / 0.80 / 스킵** 임계치 선택을 사용자에게 제공하는 흐름을 명시.
+- 선택 시 `profile-review-awaiting --dry-run` → 본 실행 → `/sm:apply-profile`
+  체인으로 이어진다. Constitution VI Installation Consent 준수 — 사용자 명시
+  선택 없이는 자동 진입 금지.
+
 ## [0.15.3] — 2026-05-18
 
 ### Fixed — doctor `expanduser` 회귀
