@@ -21,6 +21,7 @@ from pathlib import Path
 
 from synapse_memory.profile.ledger import (
     LedgerEntry,
+    collect_review_candidates,
     enrich_promoted_patterns,
     find_entry,
     load_ledger,
@@ -506,6 +507,72 @@ class TestFingerprintDispersion:
 # ---------------------------------------------------------------------------
 # P2 — fast_path_confidence 0.90 기본값 회귀
 # ---------------------------------------------------------------------------
+
+
+class TestCollectReviewCandidates:
+    """daily 가 0건으로 끝났을 때 임계치 완화 검토 보조 경로."""
+
+    def test_filters_by_min_confidence(self) -> None:
+        ledger: dict[str, LedgerEntry] = {}
+        for day, stmt, conf in [
+            ("2026-05-15", "A 후보", 0.92),  # 통과
+            ("2026-05-16", "B 후보", 0.86),  # 통과
+            ("2026-05-17", "C 후보", 0.72),  # 임계치 미달
+        ]:
+            record_extraction(
+                ledger, [_fact(stmt, conf=conf)], [],
+                today=datetime.date.fromisoformat(day),
+            )
+        facts, patterns = collect_review_candidates(
+            ledger,
+            min_confidence=0.85,
+            window_days=14,
+            today=datetime.date(2026, 5, 18),
+        )
+        statements = {f.statement for f in facts}
+        assert statements == {"A 후보", "B 후보"}
+        assert patterns == []
+
+    def test_excludes_promoted(self) -> None:
+        ledger: dict[str, LedgerEntry] = {}
+        record_extraction(
+            ledger, [_fact("X", conf=0.92)], [],
+            today=datetime.date(2026, 5, 18),
+        )
+        entry = next(iter(ledger.values()))
+        entry.promoted = True
+        facts, _ = collect_review_candidates(
+            ledger, min_confidence=0.85, window_days=14,
+            today=datetime.date(2026, 5, 18),
+        )
+        assert facts == []
+
+    def test_excludes_out_of_window(self) -> None:
+        ledger: dict[str, LedgerEntry] = {}
+        record_extraction(
+            ledger, [_fact("옛 후보", conf=0.92)], [],
+            today=datetime.date(2026, 4, 1),  # 47일 전
+        )
+        facts, _ = collect_review_candidates(
+            ledger, min_confidence=0.85, window_days=14,
+            today=datetime.date(2026, 5, 18),
+        )
+        assert facts == []
+
+    def test_pattern_carried_over(self) -> None:
+        ledger: dict[str, LedgerEntry] = {}
+        record_extraction(
+            ledger, [],
+            [_pattern("패턴 후보", conf=0.88)],
+            today=datetime.date(2026, 5, 18),
+        )
+        facts, patterns = collect_review_candidates(
+            ledger, min_confidence=0.85, window_days=14,
+            today=datetime.date(2026, 5, 18),
+        )
+        assert facts == []
+        assert len(patterns) == 1
+        assert patterns[0].trigger == "패턴 후보"
 
 
 class TestFastPathThreshold:

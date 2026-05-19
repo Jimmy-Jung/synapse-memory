@@ -433,6 +433,57 @@ def promote_candidates(
     )
 
 
+def collect_review_candidates(
+    ledger: dict[str, LedgerEntry],
+    *,
+    min_confidence: float,
+    window_days: int,
+    today: datetime.date | None = None,
+) -> tuple[list[ProfileFact], list[DecisionPattern]]:
+    """awaiting entry 중 ``peak_confidence ≥ min_confidence`` & window 내 항목을
+    review candidate 로 변환.
+
+    daily 가 신규 0건으로 끝났을 때 사용자가 임계치를 명시 완화해 검토할 수
+    있도록 한 보조 경로. ``promote_candidates`` 와 달리 ``today input`` 없이
+    ledger 누적 정보(peak)만 본다. dedupe 안전망은 호출자 (CLI) 가 적용.
+    """
+    today_d = today or datetime.date.today()
+    facts: list[ProfileFact] = []
+    patterns: list[DecisionPattern] = []
+    for entry in ledger.values():
+        if entry.promoted:
+            continue
+        peak = entry.peak_confidence()
+        if peak < min_confidence:
+            continue
+        if not _within_window(entry.last_seen, today_d, window_days):
+            continue
+        if entry.kind == "fact":
+            facts.append(
+                ProfileFact(
+                    category=(
+                        entry.categories[-1] if entry.categories else "preference"
+                    ),
+                    statement=entry.best_statement(),
+                    confidence=peak,
+                    source_ids=["ledger-review"],
+                    extracted_at=entry.last_seen,
+                )
+            )
+        else:
+            patterns.append(
+                DecisionPattern(
+                    trigger=entry.best_statement(),
+                    action="",
+                    rationale="",
+                    confidence=peak,
+                    examples=["ledger-review"],
+                    extracted_at=entry.last_seen,
+                )
+            )
+    return facts, patterns
+
+
 def mark_promoted(
     ledger: dict[str, LedgerEntry],
     promoted_facts: list[ProfileFact],
