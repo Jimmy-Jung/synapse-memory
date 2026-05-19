@@ -7,7 +7,7 @@
 # 흐름:
 #   1) main 브랜치 / 클린 상태 검증 + origin/main 동기화
 #   2) release/<new-version> 브랜치 생성
-#   3) pyproject.toml, __init__.py, README.md, CHANGELOG.md 자동 bump
+#   3) pyproject.toml, __init__.py, uv.lock, README.md, CHANGELOG.md 자동 bump
 #   4) commit + push + PR 생성
 #   5) PR 에서 .github/workflows/release-check.yml 가 검증
 #      merge 시 .github/workflows/release-publish.yml 가
@@ -77,6 +77,15 @@ git checkout -b "${branch}"
 # 1) pyproject.toml
 sed -i '' -E "s/^version = \"${old}\"/version = \"${new}\"/" pyproject.toml
 
+# 1-1) uv.lock editable package version
+if [[ -f uv.lock ]]; then
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "uv CLI is required to refresh uv.lock" >&2
+    exit 1
+  fi
+  uv lock --quiet
+fi
+
 # 2) __init__.py
 sed -i '' -E "s/^__version__ = \"[^\"]+\"/__version__ = \"${new}\"/" "$init_file"
 
@@ -128,7 +137,7 @@ path.write_text(text.replace(marker, marker + stub, 1), encoding="utf-8")
 PY
 
 git add pyproject.toml "$init_file" README.md CHANGELOG.md \
-  .claude-plugin/plugin.json .codex-plugin/plugin.json
+  uv.lock .claude-plugin/plugin.json .codex-plugin/plugin.json
 git commit -m "release: bump v${old} → v${new}"
 git push -u origin "${branch}"
 
@@ -150,7 +159,7 @@ if command -v gh >/dev/null 2>&1; then
 
 ### 자동 검증 항목 (release-check.yml)
 
-- 브랜치명 \`release/${new}\` ↔ \`pyproject.toml\` version ↔ \`__version__\` 일치
+- 브랜치명 \`release/${new}\` ↔ \`pyproject.toml\` version ↔ \`__version__\` ↔ plugin manifest version ↔ \`uv.lock\` package version 일치
 - README installer 링크가 \`v${new}\` 를 가리킴
 - CHANGELOG \`[${new}]\` 섹션이 비어있지 않고 TODO 미잔존
 - pytest 전체 통과

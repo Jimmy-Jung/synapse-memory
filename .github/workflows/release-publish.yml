@@ -41,6 +41,27 @@ jobs:
             exit 1
           fi
 
+      - name: Guard — release version surfaces match branch
+        run: |
+          want="${{ steps.ver.outputs.version }}"
+          init_version=$(awk -F'"' '/^__version__ = /{print $2; exit}' src/synapse_memory/__init__.py)
+          if [[ "$init_version" != "$want" ]]; then
+            echo "::error::__version__=$init_version but PR head was release/$want"
+            exit 1
+          fi
+          for manifest in .claude-plugin/plugin.json .codex-plugin/plugin.json; do
+            file=$(python3 -c 'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")).get("version", ""))' "$manifest")
+            if [[ "$file" != "$want" ]]; then
+              echo "::error::${manifest} version=$file but PR head was release/$want"
+              exit 1
+            fi
+          done
+          lock_version=$(python3 -c 'import pathlib, tomllib; lock = tomllib.loads(pathlib.Path("uv.lock").read_text(encoding="utf-8")); print(next(package["version"] for package in lock["package"] if package["name"] == "synapse-memory"))')
+          if [[ "$lock_version" != "$want" ]]; then
+            echo "::error::uv.lock synapse-memory version=$lock_version but PR head was release/$want"
+            exit 1
+          fi
+
       - name: Guard — tag does not already exist
         run: |
           v="${{ steps.ver.outputs.version }}"

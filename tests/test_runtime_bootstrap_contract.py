@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import tomllib
 from pathlib import Path
 
 from synapse_memory.installer.runtime import (
@@ -18,6 +19,25 @@ from synapse_memory.installer.runtime import (
     render_bootstrap_script,
 )
 from synapse_memory.installer.state import load_manifest
+
+
+def test_release_version_surfaces_stay_in_sync() -> None:
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    expected = pyproject["project"]["version"]
+    init_text = Path("src/synapse_memory/__init__.py").read_text(encoding="utf-8")
+    claude_manifest = json.loads(Path(".claude-plugin/plugin.json").read_text(encoding="utf-8"))
+    codex_manifest = json.loads(Path(".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
+    lock_versions = [
+        package["version"]
+        for package in lock["package"]
+        if package["name"] == "synapse-memory"
+    ]
+
+    assert f'__version__ = "{expected}"' in init_text
+    assert claude_manifest["version"] == expected
+    assert codex_manifest["version"] == expected
+    assert lock_versions == [expected]
 
 
 def test_managed_bin_dir_uses_synapse_home(tmp_path: Path) -> None:
