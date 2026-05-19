@@ -18,7 +18,7 @@ from synapse_memory.cost.pricing import price_usage
 from synapse_memory.llm.apfel import estimate_tokens
 
 CODEX_BIN = "codex"
-DEFAULT_MODEL = "gpt-5.4"
+DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_TIMEOUT_SEC = 240
 
 _CODE_FENCE_RE = re.compile(

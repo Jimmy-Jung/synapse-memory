@@ -19,7 +19,7 @@ from synapse_memory.llm.codex import (
 
 
 def _ready_env() -> CodexEnvironment:
-    return CodexEnvironment("/opt/homebrew/bin/codex", "codex 1.0", "gpt-5.4")
+    return CodexEnvironment("/opt/homebrew/bin/codex", "codex 1.0", "gpt-5.5")
 
 
 def _mock_run(stdout: str = "", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess[str]:

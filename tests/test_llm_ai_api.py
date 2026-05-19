@@ -20,8 +20,8 @@ def test_auto_provider_uses_codex_runtime(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
 
     with patch("synapse_memory.llm.ai_api.codex.detect_codex_environment") as detect:
-        detect.return_value = CodexEnvironment("/x/codex", "codex 1.0", "gpt-5.4")
-        env = detect_ai_environment(model="gpt-5.4")
+        detect.return_value = CodexEnvironment("/x/codex", "codex 1.0", "gpt-5.5")
+        env = detect_ai_environment(model="gpt-5.5")
 
     assert env.provider == "codex"
 
@@ -41,7 +41,7 @@ def test_complete_dispatches_to_codex() -> None:
 
     env = AIEnvironment(
         provider="codex",
-        provider_env=CodexEnvironment("/x/codex", "codex 1.0", "gpt-5.4"),
+        provider_env=CodexEnvironment("/x/codex", "codex 1.0", "gpt-5.5"),
     )
     with patch("synapse_memory.llm.ai_api.codex.complete", return_value="ok") as complete:
         assert ai_api.complete("p", env=env) == "ok"
@@ -61,4 +61,3 @@ def test_complete_wraps_provider_errors() -> None:
         side_effect=ClaudeError("boom"),
     ), pytest.raises(AIError, match="boom"):
         ai_api.complete("p", env=env)
-

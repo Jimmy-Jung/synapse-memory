@@ -1,5 +1,5 @@
 ---
-description: 일일 통합 워크플로 — 실패 stage 격리, resume, DailyReport. 첫 호출은 --quick --watch-status 권장.
+description: 일일 통합 워크플로 — 실패 stage 격리, resume, DailyReport. 기본은 full pipeline.
 argument-hint: [--quick] [--watch-status] [--profile-facts-only] [--resume-from <stage>]
 ---
 
@@ -18,7 +18,16 @@ argument-hint: [--quick] [--watch-status] [--profile-facts-only] [--resume-from 
 
 ## 모드
 
-**`--quick` (권장 — 첫 호출 및 매일 routine)**
+**Full (기본 — 사용자가 인자를 명시하지 않은 경우)**
+
+```bash
+SYNAPSE_FROM_AGENT=1 synapse-memory daily
+```
+
+- 전체 vault scan + 모든 신규 cluster classify + update_profile 포함
+- ChromaDB write 동시성 회피를 위해 daily 중복 실행은 lock 으로 차단됩니다.
+
+**`--quick` (명시 요청 시만)**
 
 ```bash
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick
@@ -28,16 +37,7 @@ SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick
 - classify 최대 10 cluster (AI 호출 cap)
 - `update_profile` auto-skip (heavy AI)
 - `--watch-status`를 붙이면 실행 중 `[daily-status] stage (n/22)` 진행률을 같이 출력
-- 첫 호출 ~3분 목표. 이후 매일 호출은 더 짧음 (incremental)
-
-**Full (별도 호출 — 매주 1회 또는 작가 판단)**
-
-```bash
-SYNAPSE_FROM_AGENT=1 synapse-memory daily
-```
-
-- 전체 vault scan + 모든 신규 cluster classify + update_profile 포함
-- ChromaDB write 동시성 회피를 위해 daily 중복 실행은 lock 으로 차단됩니다.
+- 사용자가 "빠르게", "최근 변경분만", "`--quick`"을 명시한 경우에만 사용
 
 ## 재개 / 부분 실행 예
 
