@@ -13,8 +13,9 @@ vault + Claude Code 활동 로그를 mirror → redact → Card 추출 → embed
 synapse-memory daily [--quick] [--watch-status] [--profile-facts-only] [--resume-from <stage>]
 ```
 
-- **첫 호출은 `--quick` 권장** (전체 vault 대신 최근 변경분만)
-- 실행 중 진행도 표시: `--watch-status` (예: `synapse-memory daily --quick --watch-status`)
+- 기본 실행은 full pipeline: `synapse-memory daily`
+- `--quick`: 사용자가 빠른 실행/최근 변경분만 처리를 명시한 경우에만 사용
+- 실행 중 진행도 표시: `--watch-status` (예: `synapse-memory daily --watch-status`)
 - `--profile-facts-only`: ProfileFact 추출만
 - `--resume-from`: 실패 지점부터 이어서
 - 진행 상태 확인: `synapse-memory daily-status` 또는 `synapse-memory daily-status --watch`
