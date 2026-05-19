@@ -507,7 +507,7 @@ def save_profile_update(
             ledger 기반으로 정렬 — apply 단계 판단 보조.
     """
     from synapse_memory.folders import year_month_path
-    from synapse_memory.profile.ledger import LedgerEntry, _ledger_key
+    from synapse_memory.profile.ledger import LedgerEntry, find_entry
 
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     inbox_base = vault / get_config().vault_folders.system.ai.memory_inbox
@@ -518,14 +518,12 @@ def save_profile_update(
     today = today_date.isoformat()
     path = inbox / f"Profile-{today}.md"
 
-    # ledger lookup helper — fact/pattern fingerprint 기준.
-    from synapse_memory.profile.dedupe import _normalize
-
+    # ledger lookup helper — find_entry 가 정확 fingerprint + Jaccard fallback
+    # 둘 다 처리. 흡수된 entry 의 best_statement 로 만든 ProfileFact 도 매칭됨.
     def _lookup(kind: str, text: str) -> LedgerEntry | None:
         if not ledger:
             return None
-        entry = ledger.get(_ledger_key(kind, _normalize(text)))
-        return entry if isinstance(entry, LedgerEntry) else None
+        return find_entry(ledger, kind, text)  # type: ignore[arg-type]
 
     # 평균 confidence 한 줄 — apply 스킬의 bulk 화면 요약용.
     def _avg(items: list[float]) -> float:

@@ -61,3 +61,27 @@ daily가 정상 종료되고 `update_profile` 단계가 성공하면(즉 신규 
 A 선택 시 `/sm:apply-profile` 흐름으로 이어집니다. B 선택 시 일반 종료. 사용자가 옵션을 명시 선택하지 않은 상태로는 apply 자동 진입 금지 — Constitution VI Installation Consent 준수.
 
 `--dry-run` 모드이거나 `update_profile` 단계가 실패·skip이면 이 제안을 생략하세요 (신규 후보가 없음).
+
+## 종료 후 흐름 — 낮은 신뢰도 후보 검토 제안
+
+`update_profile` 이 **신규 fact/pattern 0건** 으로 끝났는데 ledger awaiting 합계가 0보다 크다면 (예: `[ledger ... | awaiting fact=27 pattern=29]`), 추출은 됐지만 promotion 임계치(`fast_path_confidence`, 기본 0.90)를 못 넘은 후보가 쌓여 있다는 뜻입니다.
+
+이 경우 AskUserQuestion으로 다음을 제안하세요.
+
+> "오늘 신규 Profile 후보는 임계치(0.90)를 못 넘었습니다. 추출된 후보(awaiting N건)는 있지만 신뢰도가 낮아 자동 추천을 미뤘습니다. **어느 신뢰도까지 직접 검토하시겠어요?**"
+>
+> A. 0.85 이상 검토 (관대 — noise 약간 늘 수 있음)
+> B. 0.80 이상 검토 (더 관대 — review 가짓수 많음)
+> C. 검토 안 함 (그대로 두기, 며칠 더 daily 누적)
+
+선택에 따라 다음 명령을 실행하세요 (먼저 `--dry-run` 으로 후보 수만 확인하면 안전):
+
+```bash
+SYNAPSE_FROM_AGENT=1 synapse-memory profile-review-awaiting --min-confidence 0.85 --dry-run
+# 후보 수가 합리적이면 dry-run 빼고 실행
+SYNAPSE_FROM_AGENT=1 synapse-memory profile-review-awaiting --min-confidence 0.85
+```
+
+명령이 성공하면 `MemoryInbox/YYYY/MM/Profile-YYYY-MM-DD.md` 가 생성되므로, 이어서 위 "apply 제안" 흐름(`/sm:apply-profile`)으로 진행할지 다시 AskUserQuestion으로 물어보세요. dedupe / dismissed 안전망은 그대로 적용되므로 vault 진실원본과 중복되는 후보는 자동 제외됩니다.
+
+`--quick` 모드이거나 ledger awaiting 합계가 0이면 이 제안을 생략하세요.

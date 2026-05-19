@@ -2876,6 +2876,85 @@ def cmd_ledger_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
+    """ledger awaiting 중 peak ≥ ``--min-confidence`` 인 항목을 promote.
+
+    daily 종료 후 "신규 fact/pattern 0건" 으로 끝났지만 ledger 에 의미 있는
+    awaiting 후보가 있을 때, 사용자가 명시적으로 임계치를 완화해 검토하고
+    싶을 때 호출. dedupe/dismissed 안전망은 그대로 적용.
+    """
+    from synapse_memory.collectors.obsidian.mirror import get_vault_path
+    from synapse_memory.config import get_config
+    from synapse_memory.profile.dedupe import dedupe_against_vault
+    from synapse_memory.profile.dismissed import dismissed_path, load_dismissed
+    from synapse_memory.profile.extract import save_profile_update
+    from synapse_memory.profile.ledger import (
+        collect_review_candidates,
+        load_ledger,
+        mark_promoted,
+        save_ledger,
+    )
+
+    cfg = get_config()
+    vault = get_vault_path()
+    ai = cfg.vault_folders.system.ai
+    profile_path = vault / ai.profile
+    dp_path = vault / ai.decision_patterns
+    dismissed = load_dismissed(dismissed_path(vault))
+
+    ledger = load_ledger()
+    if not ledger:
+        print("ledger 비어있음 — 먼저 'synapse-memory daily' 를 실행하세요.")
+        return 0
+
+    window_days = cfg.profile.promotion_window_days
+    min_conf = args.min_confidence
+
+    candidate_facts, candidate_patterns = collect_review_candidates(
+        ledger, min_confidence=min_conf, window_days=window_days,
+    )
+
+    if not candidate_facts and not candidate_patterns:
+        print(
+            f"임계치 peak ≥ {min_conf:.2f} & window {window_days}일 내 awaiting "
+            "항목 없음."
+        )
+        return 0
+
+    facts, patterns, report = dedupe_against_vault(
+        candidate_facts,
+        candidate_patterns,
+        profile_path=profile_path,
+        decision_patterns_path=dp_path,
+        dismissed_facts=dismissed.facts,
+        dismissed_patterns=dismissed.patterns,
+    )
+
+    if args.dry_run:
+        print(
+            f"[dry-run] 후보 fact={len(facts)} pattern={len(patterns)} "
+            f"(dedupe 제외 -{report.total_dropped}) — peak ≥ {min_conf:.2f}"
+        )
+        for f in facts[:10]:
+            print(f"  fact    [{f.confidence:.2f}] {f.statement[:80]}")
+        for p in patterns[:10]:
+            print(f"  pattern [{p.confidence:.2f}] {p.trigger[:80]}")
+        return 0
+
+    if not facts and not patterns:
+        print("dedupe 후 남은 후보 없음 (vault 또는 dismissed 와 중복).")
+        return 0
+
+    mark_promoted(ledger, facts, patterns)
+    save_ledger(ledger)
+    path = save_profile_update(facts, patterns, ledger=ledger)
+    print(
+        f"{OK} fact={len(facts)} pattern={len(patterns)} → {path.name} "
+        f"(peak ≥ {min_conf:.2f}, vault dedupe -{report.total_dropped})"
+    )
+    return 0
+
+
 def cmd_collect_obsidian(args: argparse.Namespace) -> int:
     """Obsidian vault → L0 mirror (incremental)."""
     vault: Path = args.vault.expanduser().resolve()
@@ -3200,6 +3279,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON 배열로 출력",
     )
     p_ledger_show.set_defaults(func=cmd_ledger_show)
+
+    p_review_awaiting = sub.add_parser(
+        "profile-review-awaiting",
+        help=(
+            "ledger awaiting 중 peak ≥ --min-confidence 인 항목을 promote — "
+            "daily 가 0건으로 끝났을 때 임계치 완화 검토용"
+        ),
+    )
+    p_review_awaiting.add_argument(
+        "--min-confidence",
+        type=float,
+        default=0.85,
+        help="peak confidence 임계치 (기본 0.85)",
+    )
+    p_review_awaiting.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="실제 promote 없이 후보만 출력",
+    )
+    p_review_awaiting.set_defaults(func=cmd_profile_review_awaiting)
 
     p_eval = sub.add_parser("eval", help="평가/측정")
     eval_sub = p_eval.add_subparsers(dest="kind", required=True, metavar="KIND")

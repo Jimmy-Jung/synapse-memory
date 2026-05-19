@@ -154,7 +154,11 @@ class ProfileConfig:
     promotion_min_count: int = 3
     promotion_window_days: int = 14
     # 단일 호출 confidence 가 이 값 이상이면 즉시 promote (fast path).
-    fast_path_confidence: float = 0.95
+    # 0.95 는 LLM 출력 confidence 가 도달하기 너무 빠듯해서 (실측상 peak 가
+    # 대부분 0.80~0.92 구간) 의미 있는 신호도 fast path 를 못 타고 누적만 되는
+    # 문제가 발생. 0.90 으로 완화 — dedupe/dismissed 안전망이 vault 진입 전
+    # 다시 거름.
+    fast_path_confidence: float = 0.90
 
 
 @dataclass
