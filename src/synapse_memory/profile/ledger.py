@@ -17,8 +17,15 @@
 promotion 조건 (둘 중 하나):
 1. ``seen_count >= promotion_min_count`` (기본 3) 그리고 ``last_seen`` 이
    ``promotion_window_days`` (기본 14) 내 → 안정 패턴
-2. 단일 호출 ``confidence >= fast_path_confidence`` (기본 0.95) → 즉시 promote
+2. 단일 호출 ``confidence >= fast_path_confidence`` (기본 0.90) → 즉시 promote
    (LLM 이 매우 확신하는 경우 cross-validation 우회)
+
+fingerprint dispersion
+----------------------
+LLM 이 같은 관점을 매일 미세하게 다른 표현으로 뽑으면 fingerprint 가 매번
+달라져 ``seen_count`` 가 영영 1 에 머무는 문제가 있었음. ``find_entry`` 가
+정확 매치 + 토큰 Jaccard ≥ 0.75 fallback 으로 의미 매칭 — 흡수된 entry 에
+``statements`` 가 누적되며 한 entry 로 모인다.
 
 한 번 promote 된 fact 는 ``promoted=true`` 마크 — 다시 candidate 로 노출 안 됨
 (사용자가 vault 에 반영했든 dismiss 했든 그 후속은 vault/dismissed 가 책임).
@@ -42,12 +49,16 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from synapse_memory.profile.dedupe import _normalize
+from synapse_memory.profile.dedupe import _jaccard, _normalize, _token_set
 from synapse_memory.profile.schema import DecisionPattern, ProfileFact
 from synapse_memory.storage.l0 import L0_FILE_MODE, ensure_secure_dir, l0_root
 
 _LEDGER_SUBPATH = Path("state") / "profile_ledger.jsonl"
 _VALID_KINDS: frozenset[str] = frozenset({"fact", "pattern"})
+# fingerprint dispersion 완화 — LLM 이 같은 관점을 매일 다른 표현으로 뽑아
+# seen_count 가 영원히 1 에 머무는 문제를 해결하기 위한 의미 매칭 임계치.
+# dedupe.py 의 vault dedupe 와 동일한 0.75 정책 사용.
+_FINGERPRINT_JACCARD_THRESHOLD = 0.75
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +177,48 @@ def _ledger_key(kind: str, fingerprint: str) -> str:
     return f"{kind}::{fingerprint}"
 
 
+def find_entry(
+    ledger: dict[str, LedgerEntry],
+    kind: str,
+    statement: str,
+    *,
+    threshold: float = _FINGERPRINT_JACCARD_THRESHOLD,
+) -> LedgerEntry | None:
+    """주어진 statement 와 매칭되는 entry 검색.
+
+    1단계: 정확 fingerprint (``_normalize`` 결과) dict lookup — 빠른 path.
+    2단계: 토큰 Jaccard ≥ threshold fallback — entry.fingerprint 와 누적된
+    모든 entry.statements 토큰셋과 비교해서 가장 높은 점수 entry 반환.
+
+    LLM 이 같은 관점을 "Swift 6 동시성 선호" / "Swift 6 concurrency 를 선호함"
+    처럼 미세 다른 표현으로 매일 뽑아도 같은 entry 로 흡수되도록 의미 매칭 도입.
+    dedupe.py 의 vault dedupe 와 동일한 0.75 임계치 — 정책 일치.
+
+    매치 없으면 ``None``.
+    """
+    fp = _normalize(statement)
+    if not fp:
+        return None
+    direct = ledger.get(_ledger_key(kind, fp))
+    if direct is not None and direct.kind == kind:
+        return direct
+    cand_tokens = _token_set(statement)
+    if not cand_tokens:
+        return None
+    best: LedgerEntry | None = None
+    best_score = threshold
+    for entry in ledger.values():
+        if entry.kind != kind:
+            continue
+        for variant in (entry.fingerprint, *entry.statements):
+            score = _jaccard(cand_tokens, _token_set(variant))
+            if score >= best_score:
+                best_score = score
+                best = entry
+                break
+    return best
+
+
 def load_ledger(path: Path | None = None) -> dict[str, LedgerEntry]:
     """ledger 파일 → ``{(kind, fingerprint) key: entry}``. 없으면 빈 dict."""
     target = path or ledger_path()
@@ -224,18 +277,21 @@ def record_extraction(
     *,
     today: datetime.date | None = None,
 ) -> dict[str, LedgerEntry]:
-    """오늘 추출 결과를 ledger 에 누적. 입력 ledger 를 mutate + 반환."""
+    """오늘 추출 결과를 ledger 에 누적. 입력 ledger 를 mutate + 반환.
+
+    매칭은 ``find_entry`` — 정확 fingerprint 우선, 없으면 토큰 Jaccard fallback.
+    이로써 LLM 표현 변동이 fingerprint dispersion 으로 이어지지 않음.
+    """
     today_str = (today or datetime.date.today()).isoformat()
 
     for f in facts:
         fp = _normalize(f.statement)
         if not fp:
             continue
-        key = _ledger_key("fact", fp)
-        entry = ledger.get(key)
+        entry = find_entry(ledger, "fact", f.statement)
         if entry is None:
             entry = LedgerEntry(kind="fact", fingerprint=fp)
-            ledger[key] = entry
+            ledger[_ledger_key("fact", fp)] = entry
         entry.record(
             statement=f.statement,
             confidence=f.confidence,
@@ -247,11 +303,10 @@ def record_extraction(
         fp = _normalize(p.trigger)
         if not fp:
             continue
-        key = _ledger_key("pattern", fp)
-        entry = ledger.get(key)
+        entry = find_entry(ledger, "pattern", p.trigger)
         if entry is None:
             entry = LedgerEntry(kind="pattern", fingerprint=fp)
-            ledger[key] = entry
+            ledger[_ledger_key("pattern", fp)] = entry
         entry.record(
             statement=p.trigger,
             confidence=p.confidence,
@@ -308,16 +363,21 @@ def promote_candidates(
     """
     today_d = today or datetime.date.today()
 
-    today_fact_conf: dict[str, float] = {}
+    # entry 별로 오늘 호출에서의 max confidence 매칭 — fingerprint dispersion
+    # 우회 위해 find_entry (Jaccard fallback) 사용. id(entry) 기준 dict.
+    today_conf_by_entry: dict[int, float] = {}
     for f in facts_input:
-        fp = _normalize(f.statement)
-        if fp:
-            today_fact_conf[fp] = max(today_fact_conf.get(fp, 0.0), f.confidence)
-    today_pattern_conf: dict[str, float] = {}
+        e = find_entry(ledger, "fact", f.statement)
+        if e is not None:
+            today_conf_by_entry[id(e)] = max(
+                today_conf_by_entry.get(id(e), 0.0), f.confidence
+            )
     for p in patterns_input:
-        fp = _normalize(p.trigger)
-        if fp:
-            today_pattern_conf[fp] = max(today_pattern_conf.get(fp, 0.0), p.confidence)
+        e = find_entry(ledger, "pattern", p.trigger)
+        if e is not None:
+            today_conf_by_entry[id(e)] = max(
+                today_conf_by_entry.get(id(e), 0.0), p.confidence
+            )
 
     promoted_facts: list[ProfileFact] = []
     promoted_patterns: list[DecisionPattern] = []
@@ -329,11 +389,7 @@ def promote_candidates(
             continue
         in_window = _within_window(entry.last_seen, today_d, window_days)
         repeated = entry.seen_count >= min_count and in_window
-        today_conf = (
-            today_fact_conf.get(entry.fingerprint, 0.0)
-            if entry.kind == "fact"
-            else today_pattern_conf.get(entry.fingerprint, 0.0)
-        )
+        today_conf = today_conf_by_entry.get(id(entry), 0.0)
         fast_path = today_conf >= fast_path_confidence
 
         if not (repeated or fast_path):
@@ -384,17 +440,19 @@ def mark_promoted(
     *,
     today: datetime.date | None = None,
 ) -> dict[str, LedgerEntry]:
-    """promote 된 entry 를 ``promoted=True`` 로 마크. 입력 ledger mutate."""
+    """promote 된 entry 를 ``promoted=True`` 로 마크. 입력 ledger mutate.
+
+    promoted_*의 statement 는 ``entry.best_statement()`` 라 fingerprint 와
+    다를 수 있음 (흡수된 entry). ``find_entry`` 가 statements 누적과 매칭해줌.
+    """
     today_str = (today or datetime.date.today()).isoformat()
     for f in promoted_facts:
-        key = _ledger_key("fact", _normalize(f.statement))
-        entry = ledger.get(key)
+        entry = find_entry(ledger, "fact", f.statement)
         if entry is not None and not entry.promoted:
             entry.promoted = True
             entry.promoted_at = today_str
     for p in promoted_patterns:
-        key = _ledger_key("pattern", _normalize(p.trigger))
-        entry = ledger.get(key)
+        entry = find_entry(ledger, "pattern", p.trigger)
         if entry is not None and not entry.promoted:
             entry.promoted = True
             entry.promoted_at = today_str
