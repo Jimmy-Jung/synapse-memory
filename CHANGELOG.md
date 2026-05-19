@@ -2,6 +2,18 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.5] — 2026-05-19
+
+### Fixed — 릴리즈 버전 surface 정렬
+
+- `v0.15.4` 배포에서 `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`,
+  `uv.lock` 이 이전 버전으로 남던 release drift 를 정정.
+- `release-check` / `release-publish` workflow 가 pyproject, `__version__`,
+  plugin manifest, `uv.lock` package version 불일치를 모두 실패 처리하도록
+  보강.
+- `scripts/release.sh` 가 release branch 생성 시 `uv.lock` 도 함께 갱신하고,
+  PR checklist 에 plugin manifest / lock 정합성 검증 항목을 반영.
+
 ## [0.15.4] — 2026-05-19
 
 ### Fixed — Profile ledger fingerprint dispersion

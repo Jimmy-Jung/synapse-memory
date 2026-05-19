@@ -45,6 +45,26 @@ jobs:
             exit 1
           fi
 
+      - name: Verify plugin manifest versions
+        run: |
+          want="${{ steps.ver.outputs.version }}"
+          for manifest in .claude-plugin/plugin.json .codex-plugin/plugin.json; do
+            file=$(python3 -c 'import json, pathlib, sys; print(json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")).get("version", ""))' "$manifest")
+            if [[ "$file" != "$want" ]]; then
+              echo "::error::${manifest} version=$file but branch expects $want"
+              exit 1
+            fi
+          done
+
+      - name: Verify uv.lock package version
+        run: |
+          file=$(python3 -c 'import pathlib, tomllib; lock = tomllib.loads(pathlib.Path("uv.lock").read_text(encoding="utf-8")); print(next(package["version"] for package in lock["package"] if package["name"] == "synapse-memory"))')
+          want="${{ steps.ver.outputs.version }}"
+          if [[ "$file" != "$want" ]]; then
+            echo "::error::uv.lock synapse-memory version=$file but branch expects $want"
+            exit 1
+          fi
+
       - name: Verify README installer link
         run: |
           v="${{ steps.ver.outputs.version }}"
