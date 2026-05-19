@@ -2,6 +2,17 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.6] — 2026-05-19
+
+### Fixed — Codex daily 기본 실행과 최신 모델 정렬
+
+- Codex `sm:daily` skill 과 Claude `commands/daily.md` 의 안내를 full pipeline
+  기본으로 정렬. `--quick` 은 사용자가 빠른 실행/최근 변경분만 처리를 명시한
+  경우에만 사용하도록 문구를 수정.
+- Codex provider fallback 기본 모델을 `gpt-5.5` 로 갱신. config 가 비어 있거나
+  provider 기본값으로 떨어지는 경로에서도 이전 `gpt-5.4` 로 실행되지 않도록
+  정리.
+
 ## [0.15.5] — 2026-05-19
 
 ### Fixed — 릴리즈 버전 surface 정렬
