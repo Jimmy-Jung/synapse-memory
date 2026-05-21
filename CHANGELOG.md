@@ -2,6 +2,34 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.7] — 2026-05-21
+
+### Fixed — Codex sessions 신호 누락
+
+- Codex 0.131+ 부터 `~/.codex/history.jsonl` 기록이 사실상 멈추고 실제 사용
+  신호가 `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-*.jsonl` 에만 남는 환경
+  변화로, `profile/extract.py` 의 ProfileFact / DecisionPattern 추출이
+  `history.jsonl` 만 읽고 sessions 데이터를 통째로 무시하던 결함을 수정.
+- `profile.extract._read_codex_sessions_tail` 신규 — 최신 rollout 파일에서
+  `response_item.payload.{type=='message', role=='user'}` 라인만 추출.
+  AGENTS.md / CLAUDE.md / `<system-reminder>` 등 자동 첨부 prefix 는 노이즈로
+  스킵. token 비용 보호 위해 파일 수·메시지 수 cap.
+- `extract_profile_facts` / `extract_decision_patterns` 모두 sessions tail 을
+  history.jsonl 과 병행 source 로 사용. history.jsonl 이 stale 인 환경에서도
+  자동 보충.
+
+### Added — Codex rollout cwd 로 cluster 시드
+
+- `clusters/identify.py` 가 `~/.synapse/private/raw/codex/sessions/` 의 첫
+  `session_meta.payload.cwd` 로 ProjectCluster 시드. Claude Code 매칭이
+  안 되던 GitLab / 사내 프로젝트도 cluster 후보로 인식.
+- 동일 `Path(cwd).name` 일 때 Claude Code / Codex 시드가 자연스럽게 머지,
+  `seed_kind` 가 `merged` 로 표시. `ProjectCluster.codex_jsonl` 필드 추가.
+- `cards/auto_classify.classify_cluster` 가 cluster.codex_jsonl 에서 최신
+  rollout 2개·각 6개 user message 까지 발췌해 분류 sample 끝에 첨부. vault
+  노트만으로 `domain`/`skip` 으로 오분류되던 codex-only 프로젝트의 분류
+  정확도 보강.
+
 ## [0.15.6] — 2026-05-19
 
 ### Fixed — Codex daily 기본 실행과 최신 모델 정렬

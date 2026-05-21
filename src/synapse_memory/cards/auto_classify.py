@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -36,6 +38,19 @@ SAMPLE_NOTES = 5
 SAMPLE_NOTE_CHARS = 1500   # 노트당 최대 문자 (redact 전)
 MAX_RAW_TEXT = 8000         # AI provider 입력 총량 제한
 DEFAULT_CLASSIFY_MODEL = "haiku"  # 단순 분류 작업 — haiku로 비용 1/3
+
+# codex rollout 신호 — Claude Code 매칭 못한 GitLab/사내 프로젝트도
+# cluster 분류 입력에 포함되도록 user message 일부만 발췌.
+CODEX_SAMPLE_ROLLOUTS = 2
+CODEX_SAMPLE_MESSAGES_PER_ROLLOUT = 6
+CODEX_SAMPLE_CHARS_PER_MESSAGE = 240
+_CODEX_INSTRUCTION_PREFIX_MARKERS: tuple[str, ...] = (
+    "# AGENTS.md instructions for ",
+    "# CLAUDE.md instructions for ",
+    "<INSTRUCTIONS>",
+    "<system-reminder>",
+    "<user-prompt-submit-hook>",
+)
 
 CLASSIFY_SYSTEM = (
     "당신은 사용자의 vault 폴더(cluster)를 보고 카테고리를 분류하는 분석가입니다.\n"
@@ -96,6 +111,128 @@ def _gather_sample_text(
     return "".join(parts)
 
 
+def _gather_codex_sample(
+    cluster: ProjectCluster,
+    codex_root: Path,
+    *,
+    used_chars: int,
+    max_rollouts: int = CODEX_SAMPLE_ROLLOUTS,
+    max_messages_per_rollout: int = CODEX_SAMPLE_MESSAGES_PER_ROLLOUT,
+    max_chars_per_message: int = CODEX_SAMPLE_CHARS_PER_MESSAGE,
+) -> str:
+    """cluster에 매핑된 rollout-*.jsonl 에서 user message 일부 발췌.
+
+    obsidian 노트 sample 만으로는 Claude Code 매칭 안 된 GitLab/사내 프로젝트가
+    domain/skip 으로 오분류될 수 있다. 짧은 codex user message 몇 줄을
+    sample text 끝에 붙여 분류 정확도를 보강한다.
+
+    Args:
+        used_chars: 이미 obsidian sample 이 차지한 문자 수. ``MAX_RAW_TEXT`` 잔량 계산용.
+
+    Returns:
+        ``--- codex: <rel> ---`` 블록을 합친 문자열. cluster에 codex 신호 없거나
+        잔량 부족 시 ``""``.
+    """
+    if not cluster.codex_jsonl:
+        return ""
+    remaining = MAX_RAW_TEXT - used_chars
+    if remaining <= 0:
+        return ""
+
+    parts: list[str] = []
+    consumed = 0
+    # mtime 내림차순 — 최신 rollout 우선.
+    candidates: list[tuple[float, Path, str]] = []
+    for rel in cluster.codex_jsonl[: max_rollouts * 4]:  # mtime 정렬용 약간 여유
+        path = codex_root / rel
+        if not path.is_file():
+            continue
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            continue
+        candidates.append((mtime, path, rel))
+    candidates.sort(key=lambda t: t[0], reverse=True)
+
+    for _mtime, path, rel in candidates[:max_rollouts]:
+        messages = _extract_user_messages(
+            path,
+            max_messages=max_messages_per_rollout,
+            max_chars=max_chars_per_message,
+        )
+        if not messages:
+            continue
+        body = "\n".join(messages)
+        block = f"--- codex: {rel} ---\n{body}\n"
+        if consumed + len(block) > remaining:
+            break
+        parts.append(block)
+        consumed += len(block)
+    return "".join(parts)
+
+
+def _extract_user_messages(
+    rollout_path: Path,
+    *,
+    max_messages: int,
+    max_chars: int,
+) -> list[str]:
+    """rollout-*.jsonl 에서 user message text 만 추출.
+
+    ``response_item.payload.{type=='message', role=='user'}`` 만 채택.
+    AGENTS.md / CLAUDE.md instruction prefix 가 붙은 첫 turn 은 노이즈로 스킵.
+    """
+    messages: list[str] = []
+    try:
+        with open(rollout_path, encoding="utf-8", errors="replace") as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    ev = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(ev, Mapping):
+                    continue
+                if ev.get("type") != "response_item":
+                    continue
+                payload = ev.get("payload")
+                if not isinstance(payload, Mapping):
+                    continue
+                if payload.get("type") != "message" or payload.get("role") != "user":
+                    continue
+                content = payload.get("content")
+                if not isinstance(content, list):
+                    continue
+                parts: list[str] = []
+                for item in content:
+                    if not isinstance(item, Mapping):
+                        continue
+                    text = item.get("text")
+                    if isinstance(text, str) and text:
+                        parts.append(text)
+                if not parts:
+                    continue
+                combined = " ".join(parts).lstrip()
+                if any(
+                    combined.startswith(marker)
+                    for marker in _CODEX_INSTRUCTION_PREFIX_MARKERS
+                ):
+                    continue
+                flat = " ".join(combined.split())
+                if not flat:
+                    continue
+                if len(flat) > max_chars:
+                    flat = flat[:max_chars] + "…"
+                messages.append(f"- {flat}")
+                if len(messages) >= max_messages:
+                    break
+    except OSError:
+        return messages
+    return messages
+
+
 def _build_user_prompt(
     cluster: ProjectCluster, redacted_sample: str
 ) -> str:
@@ -109,11 +246,12 @@ def _build_user_prompt(
         f"- vault_folders: {folders}\n"
         f"- cwd_paths: {cwds}\n"
         f"- 노트 수: {len(cluster.obsidian_files)}\n"
-        f"- jsonl 수: {len(cluster.claude_jsonl)}\n"
+        f"- claude jsonl 수: {len(cluster.claude_jsonl)}\n"
+        f"- codex rollout 수: {len(cluster.codex_jsonl)}\n"
         f"- 태그: {tags}\n"
         f"\n"
-        f"# Sample 노트 (redacted)\n"
-        f"{redacted_sample if redacted_sample else '(노트 없음)'}\n"
+        f"# Sample (redacted — vault 노트 + codex user message)\n"
+        f"{redacted_sample if redacted_sample else '(자료 없음)'}\n"
         f"\n"
         f"위 cluster의 카테고리는?"
     )
@@ -126,21 +264,28 @@ def classify_cluster(
     ai_env: AIEnvironment,
     apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_CLASSIFY_MODEL,
+    codex_root: Path | None = None,
 ) -> ClusterClassification:
     """단일 cluster 분류.
 
-    sample notes → redact_full → AI provider → ClusterClassification.
+    sample (vault notes + codex user messages) → redact_full → AI provider
+    → ClusterClassification.
 
     Args:
         model: 분류용 모델 (기본 haiku — 단순 분류라 충분).
+        codex_root: ``~/.synapse/private/raw/codex`` (기본). cluster.codex_jsonl 의
+            상대 경로 해석에 사용. 미지정 시 ``<l0>/raw/codex``.
 
     Raises:
         AIError: AI provider 호출 실패 또는 응답 schema 어긋남.
     """
     raw_sample = _gather_sample_text(cluster, obs_root)
+    cx_root = (codex_root or (l0_root() / "raw" / "codex")).expanduser().resolve()
+    codex_sample = _gather_codex_sample(cluster, cx_root, used_chars=len(raw_sample))
+    combined_sample = raw_sample + codex_sample
     redacted_sample = ""
-    if raw_sample:
-        result = redact_full(raw_sample, env=apfel_env)
+    if combined_sample:
+        result = redact_full(combined_sample, env=apfel_env)
         redacted_sample = result.redacted
 
     user_prompt = _build_user_prompt(cluster, redacted_sample)

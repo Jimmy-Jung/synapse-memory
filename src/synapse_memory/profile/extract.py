@@ -36,6 +36,19 @@ DEFAULT_MODEL = "sonnet"
 DEFAULT_TIMEOUT = 240
 MEMORY_INBOX_SUBPATH = Path("90_System") / "AI" / "MemoryInbox"
 
+# codex sessions/*.jsonl 신호 캡 — token 비용 보호.
+# 최신 N개 rollout 파일에서 user message 만 추출한다.
+DEFAULT_CODEX_SESSIONS_FILES = 10
+# rollout 첫 user turn 에 자동 첨부되는 시스템 instruction prefix.
+# 추출 시 노이즈가 되므로 스킵한다 (Codex 0.1x rollout schema 기준).
+_CODEX_INSTRUCTION_PREFIX_MARKERS: tuple[str, ...] = (
+    "# AGENTS.md instructions for ",
+    "# CLAUDE.md instructions for ",
+    "<INSTRUCTIONS>",
+    "<system-reminder>",
+    "<user-prompt-submit-hook>",
+)
+
 # negative example 섹션에 포함할 최대 항목 수 — 토큰 비용 vs 품질 트레이드오프.
 # 100개면 평균 ~50자 * 100 = 약 2000 tokens 추가.
 _EXCLUDED_MAX_ITEMS = 100
@@ -216,6 +229,105 @@ def _read_codex_history_tail(path: Path, n: int, *, max_chars_per_line: int = 40
     return "\n".join(lines[-n:])
 
 
+def _read_codex_sessions_tail(
+    sessions_dir: Path,
+    max_messages: int,
+    *,
+    max_files: int = DEFAULT_CODEX_SESSIONS_FILES,
+    max_chars_per_line: int = 400,
+) -> str:
+    """codex sessions/*.jsonl 최신 N파일 → user message 만 합쳐 단일 텍스트.
+
+    Codex 0.131+ 부터 ``~/.codex/history.jsonl`` 기록이 중단되거나 stale 화 되어
+    실제 사용 신호는 ``sessions/<YYYY>/<MM>/<DD>/rollout-*.jsonl`` 에만 남는다.
+    이 함수가 그 누락을 메운다.
+
+    rollout 라인 schema (Codex 0.131 기준)::
+
+        {"timestamp": "ISO", "type": "response_item",
+         "payload": {"type": "message", "role": "user",
+                     "content": [{"type": "input_text", "text": "..."}]}}
+
+    user message 첫 turn 에는 AGENTS.md / CLAUDE.md instruction prefix 가
+    자동 첨부되므로 ``_CODEX_INSTRUCTION_PREFIX_MARKERS`` 매칭은 스킵한다
+    (사용자 실제 발화가 아님).
+
+    Args:
+        sessions_dir: ``raw/codex/sessions/`` 루트. 미존재 시 빈 문자열.
+        max_messages: 누적 user message 상한 (token 비용 보호).
+        max_files: mtime 내림차순으로 스캔할 rollout 파일 개수 상한.
+        max_chars_per_line: 한 message 최대 길이 (이상은 ``…`` truncate).
+
+    Returns:
+        ``[codex-session] ...`` 라인을 ``\\n`` 으로 묶은 문자열. 자료 없으면 ``""``.
+    """
+    if max_messages <= 0:
+        return ""
+    if not sessions_dir.is_dir():
+        return ""
+    try:
+        files = sorted(
+            (p for p in sessions_dir.rglob("rollout-*.jsonl") if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )[:max_files]
+    except OSError:
+        return ""
+
+    messages: list[str] = []
+    for path in files:
+        if len(messages) >= max_messages:
+            break
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for raw in f:
+                    raw = raw.strip()
+                    if not raw:
+                        continue
+                    try:
+                        ev = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(ev, Mapping):
+                        continue
+                    if ev.get("type") != "response_item":
+                        continue
+                    payload = ev.get("payload")
+                    if not isinstance(payload, Mapping):
+                        continue
+                    if payload.get("type") != "message" or payload.get("role") != "user":
+                        continue
+                    content = payload.get("content")
+                    if not isinstance(content, list):
+                        continue
+                    parts: list[str] = []
+                    for item in content:
+                        if not isinstance(item, Mapping):
+                            continue
+                        text = item.get("text")
+                        if isinstance(text, str) and text:
+                            parts.append(text)
+                    if not parts:
+                        continue
+                    combined = " ".join(parts).lstrip()
+                    if any(
+                        combined.startswith(marker)
+                        for marker in _CODEX_INSTRUCTION_PREFIX_MARKERS
+                    ):
+                        continue
+                    flat = " ".join(combined.split())
+                    if not flat:
+                        continue
+                    if len(flat) > max_chars_per_line:
+                        flat = flat[:max_chars_per_line] + "…"
+                    messages.append(f"[codex-session] {flat}")
+                    if len(messages) >= max_messages:
+                        break
+        except OSError:
+            continue
+    return "\n".join(messages)
+
+
 # ---------------------------------------------------------------------------
 # 추출
 # ---------------------------------------------------------------------------
@@ -229,17 +341,21 @@ def extract_profile_facts(
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
+    codex_sessions_path: Path | None = None,
     extra_text: str | None = None,
     excluded_statements: list[str] | None = None,
     excluded_statements_strong: list[str] | None = None,
 ) -> list[ProfileFact]:
-    """Claude Code + Codex history (+ 선택적 외부 자료) → ProfileFact 후보.
+    """Claude Code + Codex history/sessions (+ 선택적 외부 자료) → ProfileFact 후보.
 
     Args:
         sample_lines: 각 source 의 history.jsonl 마지막 N줄. 0 이면 history 무시.
         history_path: claude-code history override.
         codex_history_path: codex history override. 기본 ``<l0>/raw/codex/history.jsonl``.
-            파일 없으면 silent skip — codex 미사용 환경도 정상 동작.
+            파일 없거나 stale 인 환경도 silent skip 후 sessions 로 보충.
+        codex_sessions_path: codex sessions 디렉터리 override. 기본
+            ``<l0>/raw/codex/sessions``. Codex 0.131+ 에서 사용자 신호의
+            진짜 원본 — history.jsonl 누락분을 메운다.
         extra_text: 이미 redacted 된 외부 자료. history 와 함께 사용 가능.
 
     Raises:
@@ -251,6 +367,9 @@ def extract_profile_facts(
     )
     codex_history = codex_history_path or (
         l0_root() / "raw" / "codex" / "history.jsonl"
+    )
+    codex_sessions = codex_sessions_path or (
+        l0_root() / "raw" / "codex" / "sessions"
     )
 
     sections: list[str] = []
@@ -275,6 +394,18 @@ def extract_profile_facts(
                     f"{redacted_codex}"
                 )
                 source_ids.append("codex/history.jsonl")
+        raw_codex_sessions = _read_codex_sessions_tail(
+            codex_sessions, max_messages=sample_lines
+        )
+        if raw_codex_sessions:
+            redacted_sessions = redact_full(raw_codex_sessions, env=apfel_env).redacted
+            if redacted_sessions:
+                sections.append(
+                    f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
+                    f"최대 {sample_lines}개 user message, redacted)\n\n"
+                    f"{redacted_sessions}"
+                )
+                source_ids.append("codex/sessions/")
 
     if extra_text:
         sections.append(f"## 외부 첨부 자료 (redacted)\n\n{extra_text}")
@@ -283,9 +414,9 @@ def extract_profile_facts(
     if not sections:
         raise FileNotFoundError(
             f"수집할 자료 없음: claude-code={history} codex={codex_history} "
-            f"sample_lines={sample_lines} extra_text=None — "
-            "`synapse-memory collect claude-code` / `daily --only collect_codex` "
-            "또는 `persona ingest --file ...` 먼저"
+            f"codex_sessions={codex_sessions} sample_lines={sample_lines} "
+            f"extra_text=None — `synapse-memory collect claude-code` / "
+            "`daily --only collect_codex` 또는 `persona ingest --file ...` 먼저"
         )
 
     combined = "\n\n---\n\n".join(sections)
@@ -351,6 +482,7 @@ def extract_decision_patterns(
     apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
+    codex_sessions_path: Path | None = None,
     excluded_triggers: list[str] | None = None,
     excluded_triggers_strong: list[str] | None = None,
 ) -> list[DecisionPattern]:
@@ -359,6 +491,9 @@ def extract_decision_patterns(
     )
     codex_history = codex_history_path or (
         l0_root() / "raw" / "codex" / "history.jsonl"
+    )
+    codex_sessions = codex_sessions_path or (
+        l0_root() / "raw" / "codex" / "sessions"
     )
 
     sections: list[str] = []
@@ -381,10 +516,23 @@ def extract_decision_patterns(
                 f"{redacted_cx}"
             )
             examples.append("codex/history.jsonl")
+    codex_sessions_text = _read_codex_sessions_tail(
+        codex_sessions, max_messages=sample_lines
+    )
+    if codex_sessions_text:
+        redacted_sess = redact_full(codex_sessions_text, env=apfel_env).redacted
+        if redacted_sess:
+            sections.append(
+                f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
+                f"최대 {sample_lines}개 user message, redacted)\n\n"
+                f"{redacted_sess}"
+            )
+            examples.append("codex/sessions/")
 
     if not sections:
         raise FileNotFoundError(
-            f"history 비어있음: claude-code={history} codex={codex_history}"
+            f"history 비어있음: claude-code={history} codex={codex_history} "
+            f"codex_sessions={codex_sessions}"
         )
 
     combined = "\n\n---\n\n".join(sections)

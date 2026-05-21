@@ -163,6 +163,7 @@ class TestExtractProfileFacts:
             extract_profile_facts(
                 history_path=tmp_path / "missing.jsonl",
                 codex_history_path=tmp_path / "missing_codex.jsonl",
+                codex_sessions_path=tmp_path / "missing_codex_sessions",
                 ai_env=_ai_env(),
                 apfel_env=_apfel_disabled(),
             )
@@ -412,3 +413,124 @@ def test_profile_categories_sanity() -> None:
     assert "work_style" in PROFILE_CATEGORIES
     assert "preference" in PROFILE_CATEGORIES
     assert "value" in PROFILE_CATEGORIES
+
+
+# ---------------------------------------------------------------------------
+# _read_codex_sessions_tail — 0.15.7: history.jsonl stale fallback
+# ---------------------------------------------------------------------------
+
+
+def _write_rollout(path: Path, *user_texts: str) -> None:
+    """Codex 0.131 rollout-*.jsonl 형식 — session_meta + user response_item."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines: list[str] = [
+        json.dumps(
+            {
+                "timestamp": "2026-05-19T11:00:00.000Z",
+                "type": "session_meta",
+                "payload": {"cwd": "/work/sample", "cli_version": "0.131.0"},
+            }
+        )
+    ]
+    for t in user_texts:
+        lines.append(
+            json.dumps(
+                {
+                    "timestamp": "2026-05-19T11:00:01.000Z",
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": t}],
+                    },
+                }
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+class TestReadCodexSessionsTail:
+    def test_extracts_user_messages_from_rollout(self, tmp_path: Path) -> None:
+        rollout = tmp_path / "2026" / "05" / "19" / "rollout-a.jsonl"
+        _write_rollout(rollout, "토스뱅크 지원 자기소개서 작성", "FPS DRM 흐름 정리")
+        from synapse_memory.profile.extract import _read_codex_sessions_tail
+
+        text = _read_codex_sessions_tail(tmp_path, max_messages=10)
+        assert "토스뱅크 지원 자기소개서 작성" in text
+        assert "FPS DRM 흐름 정리" in text
+        assert text.startswith("[codex-session]")
+
+    def test_skips_agents_md_instruction_prefix(self, tmp_path: Path) -> None:
+        rollout = tmp_path / "2026" / "05" / "19" / "rollout-a.jsonl"
+        _write_rollout(
+            rollout,
+            "# AGENTS.md instructions for /work/sample\n실제 발화 아님",
+            "이건 진짜 발화입니다",
+        )
+        from synapse_memory.profile.extract import _read_codex_sessions_tail
+
+        text = _read_codex_sessions_tail(tmp_path, max_messages=10)
+        assert "AGENTS.md instructions" not in text
+        assert "이건 진짜 발화입니다" in text
+
+    def test_max_messages_cap(self, tmp_path: Path) -> None:
+        rollout = tmp_path / "2026" / "05" / "19" / "rollout-a.jsonl"
+        _write_rollout(rollout, *[f"메시지-{i}" for i in range(20)])
+        from synapse_memory.profile.extract import _read_codex_sessions_tail
+
+        text = _read_codex_sessions_tail(tmp_path, max_messages=5)
+        lines = [ln for ln in text.splitlines() if ln.strip()]
+        assert len(lines) == 5
+
+    def test_missing_directory_returns_empty(self, tmp_path: Path) -> None:
+        from synapse_memory.profile.extract import _read_codex_sessions_tail
+
+        assert _read_codex_sessions_tail(tmp_path / "nope", max_messages=10) == ""
+
+    def test_zero_max_messages_returns_empty(self, tmp_path: Path) -> None:
+        rollout = tmp_path / "2026" / "05" / "19" / "rollout-a.jsonl"
+        _write_rollout(rollout, "메시지")
+        from synapse_memory.profile.extract import _read_codex_sessions_tail
+
+        assert _read_codex_sessions_tail(tmp_path, max_messages=0) == ""
+
+    def test_ignores_non_user_response_items(self, tmp_path: Path) -> None:
+        rollout = tmp_path / "2026" / "05" / "19" / "rollout-a.jsonl"
+        rollout.parent.mkdir(parents=True, exist_ok=True)
+        rollout.write_text(
+            json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [{"type": "output_text", "text": "어시 답변"}],
+                    },
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {"type": "function_call", "name": "shell"},
+                }
+            )
+            + "\n"
+            + json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": "유저 발화"}],
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        from synapse_memory.profile.extract import _read_codex_sessions_tail
+
+        text = _read_codex_sessions_tail(tmp_path, max_messages=10)
+        assert "유저 발화" in text
+        assert "어시 답변" not in text

@@ -58,7 +58,8 @@ _SLUG_BAD_RE = re.compile(r"[^a-zA-Z0-9가-힣\-]+")
 class ProjectCluster:
     """동일 프로젝트로 묶인 raw 데이터 모음.
 
-    seed_kind: "claude_code"(cwd 기반) / "vault"(폴더 기반) / "merged"(둘 다)
+    seed_kind: "claude_code"(cwd 기반) / "codex"(rollout cwd 기반)
+        / "vault"(폴더 기반) / "merged"(여러 소스 합류)
     """
 
     cluster_id: str
@@ -66,6 +67,7 @@ class ProjectCluster:
     cwd_paths: set[str] = field(default_factory=set)
     obsidian_files: list[str] = field(default_factory=list)
     claude_jsonl: list[str] = field(default_factory=list)
+    codex_jsonl: list[str] = field(default_factory=list)
     tags: set[str] = field(default_factory=set)
     vault_folders: set[str] = field(default_factory=set)
     seed_kind: str = "claude_code"
@@ -86,7 +88,11 @@ class ProjectCluster:
 
     @property
     def total_sources(self) -> int:
-        return len(self.obsidian_files) + len(self.claude_jsonl)
+        return (
+            len(self.obsidian_files)
+            + len(self.claude_jsonl)
+            + len(self.codex_jsonl)
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +156,39 @@ def _extract_cwd_from_jsonl(path: Path) -> str | None:
     return None
 
 
+def _extract_cwd_from_rollout(path: Path) -> str | None:
+    """codex rollout-*.jsonl 첫 N 줄에서 ``session_meta.payload.cwd`` 추출.
+
+    Codex 0.131+ rollout schema::
+
+        {"type": "session_meta", "payload": {"cwd": "...", "cli_version": "...", ...}}
+
+    Claude Code 와 달리 cwd 가 최상위가 아니라 payload 안에 있다.
+    """
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for _ in range(_CWD_PROBE_LINES):
+                line = f.readline()
+                if not line:
+                    break
+                try:
+                    ev = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(ev, dict):
+                    continue
+                if ev.get("type") != "session_meta":
+                    continue
+                payload = ev.get("payload")
+                if isinstance(payload, dict):
+                    cwd = payload.get("cwd")
+                    if isinstance(cwd, str) and cwd:
+                        return cwd
+    except OSError:
+        return None
+    return None
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -161,6 +200,10 @@ def _default_obsidian_raw() -> Path:
 
 def _default_claude_code_raw() -> Path:
     return l0_root() / "raw" / "claude-code"
+
+
+def _default_codex_raw() -> Path:
+    return l0_root() / "raw" / "codex"
 
 
 def _slug_from_segment(name: str) -> str:
@@ -230,15 +273,19 @@ def identify_clusters(
     *,
     obsidian_raw: Path | None = None,
     claude_code_raw: Path | None = None,
+    codex_raw: Path | None = None,
 ) -> list[ProjectCluster]:
     """raw mirror 스캔 → ProjectCluster 목록 (신뢰도 내림차순).
 
     Args:
         obsidian_raw: ``~/.synapse/private/raw/obsidian`` (기본).
         claude_code_raw: ``~/.synapse/private/raw/claude-code`` (기본).
+        codex_raw: ``~/.synapse/private/raw/codex`` (기본). sessions/*.jsonl
+            첫 ``session_meta`` 라인의 ``payload.cwd`` 로 cluster 시드.
     """
     obs_root = (obsidian_raw or _default_obsidian_raw()).expanduser().resolve()
     cc_root = (claude_code_raw or _default_claude_code_raw()).expanduser().resolve()
+    cx_root = (codex_raw or _default_codex_raw()).expanduser().resolve()
 
     clusters: dict[str, ProjectCluster] = {}
 
@@ -260,6 +307,30 @@ def identify_clusters(
                 )
                 cluster.cwd_paths.add(cwd)
                 cluster.claude_jsonl.append(str(jsonl.relative_to(cc_root)))
+
+    # 1.5. Codex 시드 — sessions/<YYYY>/<MM>/<DD>/rollout-*.jsonl
+    # Claude Code 와 동일 cluster_id (Path(cwd).name) 사용 → 자연스럽게 머지.
+    sessions_dir = cx_root / "sessions"
+    if sessions_dir.is_dir():
+        for rollout in sorted(sessions_dir.rglob("rollout-*.jsonl")):
+            if not rollout.is_file():
+                continue
+            cwd = _extract_cwd_from_rollout(rollout)
+            if not cwd:
+                continue
+            cwd_path = Path(cwd)
+            cid = cwd_path.name or "untitled"
+            existed = cid in clusters
+            cluster = clusters.setdefault(
+                cid,
+                ProjectCluster(
+                    cluster_id=cid, candidate_name=cid, seed_kind="codex"
+                ),
+            )
+            if existed and cluster.seed_kind == "claude_code":
+                cluster.seed_kind = "merged"
+            cluster.cwd_paths.add(cwd)
+            cluster.codex_jsonl.append(str(rollout.relative_to(cx_root)))
 
     # 2. Obsidian 노트 → 기존 Claude Code cluster 매칭 (GitHub path)
     if obs_root.is_dir():
