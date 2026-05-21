@@ -327,3 +327,101 @@ class TestVaultFolderClusters:
         assert c.cwd_paths == {"/Users/sampleuser/Documents/GitHub/dansim-ios"}
         assert len(c.obsidian_files) == 2
         assert c.confidence >= 0.8  # cwd + vault → 0.8
+
+
+# ---------------------------------------------------------------------------
+# Codex sessions 시드 — 0.15.7
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cx_raw(tmp_path: Path) -> Path:
+    """가짜 Codex mirror — raw/codex 루트."""
+    root = tmp_path / "cx"
+    (root / "sessions" / "2026" / "05" / "19").mkdir(parents=True)
+    return root
+
+
+def _write_rollout(path: Path, cwd: str, *events: dict) -> None:
+    """rollout-*.jsonl: session_meta 먼저, 이후 추가 events."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        meta = {
+            "timestamp": "2026-05-19T11:00:00.000Z",
+            "type": "session_meta",
+            "payload": {"cwd": cwd, "cli_version": "0.131.0"},
+        }
+        f.write(json.dumps(meta, ensure_ascii=False) + "\n")
+        for ev in events:
+            f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+
+
+class TestCodexSessionsCluster:
+    def test_extract_cwd_from_rollout(self, cx_raw: Path) -> None:
+        from synapse_memory.clusters.identify import _extract_cwd_from_rollout
+
+        rollout = cx_raw / "sessions" / "2026" / "05" / "19" / "rollout-a.jsonl"
+        _write_rollout(rollout, "/work/gitlab-proj")
+        assert (
+            _extract_cwd_from_rollout(rollout) == "/work/gitlab-proj"
+        )
+
+    def test_extract_cwd_missing_returns_none(self, cx_raw: Path) -> None:
+        from synapse_memory.clusters.identify import _extract_cwd_from_rollout
+
+        rollout = cx_raw / "sessions" / "2026" / "05" / "19" / "rollout-a.jsonl"
+        rollout.write_text(
+            json.dumps({"type": "event_msg", "payload": {}}) + "\n",
+            encoding="utf-8",
+        )
+        assert _extract_cwd_from_rollout(rollout) is None
+
+    def test_codex_only_cluster_seeded(
+        self, cc_raw: Path, obs_raw: Path, cx_raw: Path
+    ) -> None:
+        """Claude Code 매칭 없는 codex-only 프로젝트도 cluster 시드."""
+        rollout = cx_raw / "sessions" / "2026" / "05" / "19" / "rollout-a.jsonl"
+        _write_rollout(rollout, "/work/gitlab-proj-x")
+        clusters = identify_clusters(
+            obsidian_raw=obs_raw, claude_code_raw=cc_raw, codex_raw=cx_raw
+        )
+        c = next(c for c in clusters if c.cluster_id == "gitlab-proj-x")
+        assert c.seed_kind == "codex"
+        assert "/work/gitlab-proj-x" in c.cwd_paths
+        assert len(c.codex_jsonl) == 1
+        assert c.claude_jsonl == []
+
+    def test_claude_and_codex_merge(
+        self, cc_raw: Path, obs_raw: Path, cx_raw: Path
+    ) -> None:
+        """같은 cwd basename 으로 Claude Code + Codex 만나면 머지."""
+        _write_jsonl(
+            cc_raw
+            / "projects"
+            / "-Users-sampleuser-Documents-GitHub-dansim-ios"
+            / "abc.jsonl",
+            {"cwd": "/Users/sampleuser/Documents/GitHub/dansim-ios"},
+        )
+        rollout = cx_raw / "sessions" / "2026" / "05" / "19" / "rollout-x.jsonl"
+        _write_rollout(rollout, "/Users/sampleuser/Documents/GitHub/dansim-ios")
+
+        clusters = identify_clusters(
+            obsidian_raw=obs_raw, claude_code_raw=cc_raw, codex_raw=cx_raw
+        )
+        c = next(c for c in clusters if c.cluster_id == "dansim-ios")
+        assert c.seed_kind == "merged"
+        assert len(c.claude_jsonl) == 1
+        assert len(c.codex_jsonl) == 1
+        assert c.total_sources >= 2
+
+    def test_codex_raw_missing_silent(
+        self, cc_raw: Path, obs_raw: Path, tmp_path: Path
+    ) -> None:
+        """codex_raw 경로 자체가 없어도 에러 없이 동작."""
+        clusters = identify_clusters(
+            obsidian_raw=obs_raw,
+            claude_code_raw=cc_raw,
+            codex_raw=tmp_path / "nope",
+        )
+        # codex 없어도 정상 종료
+        assert isinstance(clusters, list)
