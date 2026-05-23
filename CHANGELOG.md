@@ -2,7 +2,7 @@
 
 All notable changes to Synapse Memory are documented here.
 
-## [0.15.7] — 2026-05-21
+## [0.15.7] — 2026-05-23
 
 ### Fixed — Codex sessions 신호 누락
 
@@ -29,6 +29,26 @@ All notable changes to Synapse Memory are documented here.
   rollout 2개·각 6개 user message 까지 발췌해 분류 sample 끝에 첨부. vault
   노트만으로 `domain`/`skip` 으로 오분류되던 codex-only 프로젝트의 분류
   정확도 보강.
+
+### Fixed — Codex 0.122.0 호환 + vault config 자동 작성
+
+- 인스톨러의 `verify_codex_plugin` 단계가 Codex 0.122.0 에서 항상 실패하던
+  회귀를 수정. 기존 검증은 `codex debug prompt-input` 출력에서 literal `sm:sm`
+  토큰만 찾았는데, Codex 0.122.0 은 plugin skill 을 `<plugin>:<skill>` prefix
+  로 노출하지 않고 `<plugins_instructions>` 섹션에 plugin displayName 만
+  표시한다. 다중 signal (`sm:sm` / `sm@synapse-memory-marketplace` /
+  `Synapse Memory`) 중 하나만 매칭돼도 통과하도록 패턴을 확장.
+- verify 단계의 결과를 `failed`(`return 1`) 에서 `warning`(`return 0`) 으로
+  강등. plugin cache 와 `config.toml` 활성화가 이미 성공한 시점이므로 surface
+  가시성 검사는 보조 진단일 뿐이며, false negative 가 전체 install 을
+  중단시키지 않도록 함. 이전에는 `set -euo pipefail` 때문에 verify 실패 →
+  `activate_codex_plugin` `return 1` → `activate_plugins` 비정상 종료 →
+  vault 설정 단계까지 도달하지 못했다.
+- vault 선택 직후 `~/.synapse/bin/synapse-memory config set vault <path>` 를
+  자동 호출해 runtime config.yaml 에 vault 경로를 기록. 이전에는 `.obsidian`
+  디렉터리만 생성하고 끝나서 직후 `synapse-memory doctor` 가
+  "config.yaml vault 미설정" 경고와 Private/Dataview 진단 None 오류를 띄웠다.
+  runtime binary 가 없는 환경(설치 직후 미부트스트랩)에서는 `skipped` 로 기록.
 
 ## [0.15.6] — 2026-05-19
 
