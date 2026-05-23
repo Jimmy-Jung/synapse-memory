@@ -2,6 +2,54 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.7] — 2026-05-23
+
+### Fixed — Codex sessions 신호 누락
+
+- Codex 0.131+ 부터 `~/.codex/history.jsonl` 기록이 사실상 멈추고 실제 사용
+  신호가 `~/.codex/sessions/<YYYY>/<MM>/<DD>/rollout-*.jsonl` 에만 남는 환경
+  변화로, `profile/extract.py` 의 ProfileFact / DecisionPattern 추출이
+  `history.jsonl` 만 읽고 sessions 데이터를 통째로 무시하던 결함을 수정.
+- `profile.extract._read_codex_sessions_tail` 신규 — 최신 rollout 파일에서
+  `response_item.payload.{type=='message', role=='user'}` 라인만 추출.
+  AGENTS.md / CLAUDE.md / `<system-reminder>` 등 자동 첨부 prefix 는 노이즈로
+  스킵. token 비용 보호 위해 파일 수·메시지 수 cap.
+- `extract_profile_facts` / `extract_decision_patterns` 모두 sessions tail 을
+  history.jsonl 과 병행 source 로 사용. history.jsonl 이 stale 인 환경에서도
+  자동 보충.
+
+### Added — Codex rollout cwd 로 cluster 시드
+
+- `clusters/identify.py` 가 `~/.synapse/private/raw/codex/sessions/` 의 첫
+  `session_meta.payload.cwd` 로 ProjectCluster 시드. Claude Code 매칭이
+  안 되던 GitLab / 사내 프로젝트도 cluster 후보로 인식.
+- 동일 `Path(cwd).name` 일 때 Claude Code / Codex 시드가 자연스럽게 머지,
+  `seed_kind` 가 `merged` 로 표시. `ProjectCluster.codex_jsonl` 필드 추가.
+- `cards/auto_classify.classify_cluster` 가 cluster.codex_jsonl 에서 최신
+  rollout 2개·각 6개 user message 까지 발췌해 분류 sample 끝에 첨부. vault
+  노트만으로 `domain`/`skip` 으로 오분류되던 codex-only 프로젝트의 분류
+  정확도 보강.
+
+### Fixed — Codex 0.122.0 호환 + vault config 자동 작성
+
+- 인스톨러의 `verify_codex_plugin` 단계가 Codex 0.122.0 에서 항상 실패하던
+  회귀를 수정. 기존 검증은 `codex debug prompt-input` 출력에서 literal `sm:sm`
+  토큰만 찾았는데, Codex 0.122.0 은 plugin skill 을 `<plugin>:<skill>` prefix
+  로 노출하지 않고 `<plugins_instructions>` 섹션에 plugin displayName 만
+  표시한다. 다중 signal (`sm:sm` / `sm@synapse-memory-marketplace` /
+  `Synapse Memory`) 중 하나만 매칭돼도 통과하도록 패턴을 확장.
+- verify 단계의 결과를 `failed`(`return 1`) 에서 `warning`(`return 0`) 으로
+  강등. plugin cache 와 `config.toml` 활성화가 이미 성공한 시점이므로 surface
+  가시성 검사는 보조 진단일 뿐이며, false negative 가 전체 install 을
+  중단시키지 않도록 함. 이전에는 `set -euo pipefail` 때문에 verify 실패 →
+  `activate_codex_plugin` `return 1` → `activate_plugins` 비정상 종료 →
+  vault 설정 단계까지 도달하지 못했다.
+- vault 선택 직후 `~/.synapse/bin/synapse-memory config set vault <path>` 를
+  자동 호출해 runtime config.yaml 에 vault 경로를 기록. 이전에는 `.obsidian`
+  디렉터리만 생성하고 끝나서 직후 `synapse-memory doctor` 가
+  "config.yaml vault 미설정" 경고와 Private/Dataview 진단 None 오류를 띄웠다.
+  runtime binary 가 없는 환경(설치 직후 미부트스트랩)에서는 `skipped` 로 기록.
+
 ## [0.15.6] — 2026-05-19
 
 ### Fixed — Codex daily 기본 실행과 최신 모델 정렬

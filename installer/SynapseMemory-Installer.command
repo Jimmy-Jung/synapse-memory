@@ -266,17 +266,28 @@ activate_codex_plugin() {
   install_codex_plugin_cache
   ensure_codex_plugin_enabled "${codex_config_path}"
 
+  # 이 시점에서 plugin cache(install_codex_plugin_cache) 와 config 활성화
+  # (ensure_codex_plugin_enabled) 는 이미 성공한 상태다. verify 는 Codex CLI 가
+  # 실제로 plugin 을 surface 하는지 확인하는 보조 검사일 뿐이므로, 검사 실패가
+  # 전체 install 을 중단시키지 않도록 warning 으로 강등한다.
+  #
+  # 추가로 Codex 0.122.0 부터는 plugin skill 이 "<plugin>:<skill>" prefix 없이
+  # <plugins_instructions> 섹션에만 등장하는 경우가 있어 단일 "sm:sm" grep 으로는
+  # 정상 활성화 상태에서도 false negative 가 난다. 다중 signal 중 하나라도 매칭되면
+  # 가시 상태로 간주한다.
   prompt_input_file="$(mktemp)"
   if codex debug prompt-input "Synapse Memory plugin visibility check" >"${prompt_input_file}" 2>>"${LOG_FILE}"; then
-    if grep -q "sm:sm" "${prompt_input_file}"; then
+    if grep -qE 'sm:sm|sm@synapse-memory-marketplace|Synapse Memory' "${prompt_input_file}"; then
       log_step "verify_codex_plugin" "success" "prompt_visible=true"
       rm -f "${prompt_input_file}"
       return 0
     fi
+    log_step "verify_codex_plugin" "warning" "prompt_visible=false; plugin enabled in config/cache but not surfaced by codex debug prompt-input"
+  else
+    log_step "verify_codex_plugin" "warning" "codex debug prompt-input failed; plugin enabled in config/cache"
   fi
   rm -f "${prompt_input_file}"
-  log_step "verify_codex_plugin" "failed" "prompt_visible=false"
-  return 1
+  return 0
 }
 
 codex_plugin_manifest_value() {
@@ -527,9 +538,26 @@ PY
   log_step "vault_selection" "success" "path=${SELECTED_VAULT} needs_creation=${NEEDS_CREATION}"
   if [ "${DRY_RUN}" = "1" ]; then
     log_step "vault_setup" "preview" "would prepare vault at ${SELECTED_VAULT}"
+    log_step "vault_config" "preview" "would write vault to ~/.synapse/config.yaml"
   else
     mkdir -p "${SELECTED_VAULT}/.obsidian"
     log_step "vault_setup" "success" "prepared=${SELECTED_VAULT}"
+
+    # bootstrap_runtime 이 ~/.synapse/bin/synapse-memory 를 깔아둔 경우, 사용자가
+    # 다음 doctor 실행에서 "config.yaml vault 미설정" 경고로 막히지 않도록
+    # vault 경로를 runtime config 에 자동 기록한다. 이전에는 vault_setup 이
+    # .obsidian 디렉터리만 생성하고 끝나서 사용자가 수동으로
+    # `synapse-memory config set vault <path>` 를 호출해야 했다.
+    synapse_runtime_bin="${HOME}/.synapse/bin/synapse-memory"
+    if [ -x "${synapse_runtime_bin}" ]; then
+      if "${synapse_runtime_bin}" config set vault "${SELECTED_VAULT}" >>"${LOG_FILE}" 2>&1; then
+        log_step "vault_config" "success" "path=${SELECTED_VAULT}"
+      else
+        log_step "vault_config" "warning" "synapse-memory config set vault failed; run manually after install"
+      fi
+    else
+      log_step "vault_config" "skipped" "synapse-memory runtime not available at ${synapse_runtime_bin}"
+    fi
   fi
 else
   log_step "vault_detection" "skipped" "python3 unavailable before runtime bootstrap"
