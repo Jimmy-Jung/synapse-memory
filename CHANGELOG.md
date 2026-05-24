@@ -2,6 +2,27 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [0.15.8] — 2026-05-24
+
+### Fixed — CLI 인식 실패 & `/sm:recall` 인자 파싱 오류
+
+- **`bootstrap_runtime.sh`** — 설치 후 플러그인 훅이 bare `synapse-memory`
+  호출 시 `command not found`로 실패하던 문제를 수정. 기존
+  `~/.synapse/bin/synapse-memory` shim은 그대로 유지하면서, XDG user-local
+  표준인 `~/.local/bin/`에 추가 symlink를 생성한다. 이 디렉터리는 uv·pipx·
+  Claude Code CLI(`claude`) 모두 기본 설치 경로로 사용하므로 일반적인 macOS
+  사용자 PATH에 이미 잡혀있다. 사용자 `~/.zshrc` / `~/.bash_profile`을
+  건드리지 않는다.
+  - `SYNAPSE_SKIP_LOCAL_BIN=1` 환경 변수로 opt-out 가능.
+  - `SYNAPSE_LOCAL_BIN_DIR` 으로 대체 경로 지정 가능.
+  - `~/.local/bin/synapse-memory`에 기존 비-symlink 정규 파일이 있으면
+    덮어쓰지 않고 경고 후 skip (사용자 수동 설치 보호).
+- **`commands/recall.md`** — `/sm:recall <주제>` 호출 시 `$ARGUMENTS` quote
+  누락으로 셸이 공백 단위로 split 하여 CLI가 `unrecognized arguments`로
+  거부하던 버그를 수정. `synapse-memory persona what-did-i-think
+  "$ARGUMENTS"` 로 따옴표 추가. (`ask` / `decide` / `resume`은 이미 quoted
+  상태였음 — `recall`만 누락.)
+
 ## [0.15.7] — 2026-05-23
 
 ### Fixed — Codex sessions 신호 누락
