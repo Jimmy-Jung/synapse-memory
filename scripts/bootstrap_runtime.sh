@@ -33,4 +33,20 @@ if [ "${SYNAPSE_EXPOSE_SHORT_ALIAS:-0}" = "1" ]; then
   ln -sf "${SYNAPSE_BIN_DIR}/synapse-memory" "${SYNAPSE_BIN_DIR}/synapse"
 fi
 
+# Expose CLI on user PATH via ~/.local/bin (XDG user-local standard,
+# already present in PATH for typical macOS shells thanks to uv / pipx / claude).
+# Plugin hooks invoke bare `synapse-memory`, so the shim must be discoverable
+# without requiring rc-file edits.
+if [ "${SYNAPSE_SKIP_LOCAL_BIN:-0}" != "1" ]; then
+  LOCAL_BIN="${SYNAPSE_LOCAL_BIN_DIR:-${HOME}/.local/bin}"
+  LOCAL_LINK="${LOCAL_BIN}/synapse-memory"
+  mkdir -p "${LOCAL_BIN}"
+  if [ -e "${LOCAL_LINK}" ] && [ ! -L "${LOCAL_LINK}" ]; then
+    echo "[synapse] ${LOCAL_LINK} exists and is not a symlink; skipping to avoid overwriting." >&2
+  else
+    ln -sf "${SYNAPSE_BIN_DIR}/synapse-memory" "${LOCAL_LINK}"
+    echo "synapse-memory symlink: ${LOCAL_LINK} -> ${SYNAPSE_BIN_DIR}/synapse-memory"
+  fi
+fi
+
 echo "synapse-memory runtime ready: ${SYNAPSE_BIN_DIR}/synapse-memory"
