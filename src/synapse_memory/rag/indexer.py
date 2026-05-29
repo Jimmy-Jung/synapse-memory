@@ -18,7 +18,7 @@ Metadata: source_kind, card_id, display_name, status, domains, stack, keywords, 
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -143,7 +143,7 @@ def company_card_to_text(card: CompanyCard) -> str:
     return "\n".join(lines)
 
 
-def _join_strings(values: list[object]) -> str:
+def _join_strings(values: Sequence[object]) -> str:
     return ", ".join(str(value) for value in values)
 
 
