@@ -49,6 +49,7 @@ def test_build_cmd_uses_current_codex_exec_flags(tmp_path) -> None:
     assert "--ask-for-approval" not in cmd
     assert "--sandbox" in cmd
     assert "read-only" in cmd
+    assert "--skip-git-repo-check" in cmd
     assert "--output-last-message" in cmd
 
 

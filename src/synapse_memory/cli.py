@@ -225,8 +225,9 @@ def _resolve_model(arg_model: str | None, task: str) -> str | None:
 
     1) CLI 인자 명시 → 그대로
     2) ``SYNAPSE_AI_PROVIDER`` env → 그 provider의 task model
-    3) config ``ai_provider`` → 그 provider의 task model
-    4) provider가 ``auto``이거나 결정 불가 → None (detect_ai_environment가 자체 결정)
+    3) Codex/Claude 런타임 감지 → 실제 호출 provider의 task model
+    4) config ``ai_provider`` → 그 provider의 task model
+    5) provider가 ``auto``이거나 결정 불가 → None (detect_ai_environment가 자체 결정)
 
     Args:
         arg_model: argparse가 채운 값. None이면 config 폴백.
@@ -237,7 +238,11 @@ def _resolve_model(arg_model: str | None, task: str) -> str | None:
     try:
         from synapse_memory.config import get_config
 
-        provider = os.environ.get("SYNAPSE_AI_PROVIDER") or get_config().ai_provider
+        provider = (
+            os.environ.get("SYNAPSE_AI_PROVIDER")
+            or _runtime_ai_provider()
+            or get_config().ai_provider
+        )
         if provider == "auto":
             return None
         cfg = get_config()
@@ -247,6 +252,28 @@ def _resolve_model(arg_model: str | None, task: str) -> str | None:
         return getattr(provider_models, task, None)
     except Exception:
         return None
+
+
+def _runtime_ai_provider() -> str | None:
+    if any(
+        os.environ.get(name)
+        for name in (
+            "CODEX_CI",
+            "CODEX_THREAD_ID",
+            "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+        )
+    ):
+        return "codex"
+    if any(
+        os.environ.get(name)
+        for name in (
+            "CLAUDECODE",
+            "CLAUDE_CODE",
+            "CLAUDE_PROJECT_DIR",
+        )
+    ):
+        return "claude"
+    return None
 
 
 def run_doctor_fix(*, assume_yes: bool = False) -> int:
