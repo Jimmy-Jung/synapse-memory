@@ -2,6 +2,21 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.15.9] — 2026-05-29
+
+### Fixed — Codex runtime daily/ask 안정화
+
+- **Codex adapter** — `synapse-memory ask` 와 daily 내부 classify/generate가
+  Obsidian vault 또는 임시 디렉터리처럼 git repo가 아닌 위치에서도 동작하도록
+  nested `codex exec` 호출에 `--skip-git-repo-check` 를 추가했다. (#35, #36)
+- **daily model resolution** — `SYNAPSE_AI_PROVIDER` 명시값 다음으로 실제
+  Codex/Claude 런타임 환경을 감지해 task별 model을 선택한다. Codex 세션에서
+  config 기본 provider가 Claude여도 `models.codex.classify` 를 사용해
+  Claude 전용 `haiku` 모델로 떨어지는 실패를 방지한다. (#36)
+- **RAG indexing** — Project/Company Card의 `domains`, `stack`, `keywords`,
+  position keywords에 숫자처럼 사람이 편집한 비문자 YAML 값이 들어와도 문자열로
+  정규화한 뒤 검색 텍스트를 생성한다. (#36)
+
 ## [0.15.8] — 2026-05-24
 
 ### Fixed — CLI 인식 실패 & `/sm:recall` 인자 파싱 오류
