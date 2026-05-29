@@ -196,6 +196,7 @@ def _build_cmd(
         "--sandbox",
         "read-only",
         "--ephemeral",
+        "--skip-git-repo-check",
         "--output-last-message",
         str(output_path),
         "-m",

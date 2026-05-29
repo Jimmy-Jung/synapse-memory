@@ -18,7 +18,7 @@ Metadata: source_kind, card_id, display_name, status, domains, stack, keywords, 
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -98,11 +98,11 @@ def project_card_to_text(card: ProjectCard) -> str:
     if card.status:
         lines.append(f"상태: {card.status}")
     if card.domains:
-        lines.append(f"도메인: {', '.join(card.domains)}")
+        lines.append(f"도메인: {_join_strings(card.domains)}")
     if card.stack:
-        lines.append(f"기술 스택: {', '.join(card.stack)}")
+        lines.append(f"기술 스택: {_join_strings(card.stack)}")
     if card.keywords:
-        lines.append(f"키워드: {', '.join(card.keywords)}")
+        lines.append(f"키워드: {_join_strings(card.keywords)}")
     if card.metrics:
         lines.append("지표:")
         for m in card.metrics:
@@ -134,13 +134,17 @@ def company_card_to_text(card: CompanyCard) -> str:
             if p.seniority:
                 extras.append(p.seniority)
             if p.keywords:
-                extras.append(", ".join(p.keywords))
+                extras.append(_join_strings(p.keywords))
             extras_str = f" ({'; '.join(extras)})" if extras else ""
             lines.append(f"  - {p.title}{extras_str}")
     if card.body:
         lines.append("")
         lines.append(card.body.strip())
     return "\n".join(lines)
+
+
+def _join_strings(values: Sequence[object]) -> str:
+    return ", ".join(str(value) for value in values)
 
 
 # ---------------------------------------------------------------------------

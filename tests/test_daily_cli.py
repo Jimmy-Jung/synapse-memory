@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -56,6 +58,23 @@ def test_parser_has_daily_watch_status() -> None:
     assert args.func is cmd_daily
     assert args.watch_status is True
     assert args.status_interval == 0.75
+
+
+def test_resolve_model_prefers_runtime_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
+    config = SimpleNamespace(
+        ai_provider="claude",
+        models=SimpleNamespace(
+            claude=SimpleNamespace(classify="haiku"),
+            codex=SimpleNamespace(classify="gpt-5.5"),
+        ),
+    )
+
+    with patch("synapse_memory.config.get_config", return_value=config):
+        assert cli_mod._resolve_model(None, "classify") == "gpt-5.5"
 
 
 def test_cmd_daily_prints_failed_and_skipped_summary(

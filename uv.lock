@@ -2574,7 +2574,7 @@ wheels = [
 
 [[package]]
 name = "synapse-memory"
-version = "0.15.8"
+version = "1.15.9"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },

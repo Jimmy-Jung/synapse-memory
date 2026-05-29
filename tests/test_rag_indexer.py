@@ -86,6 +86,15 @@ class TestProjectCardToText:
         text = project_card_to_text(card)
         assert "DAU: 10K" in text
 
+    def test_numeric_keywords_are_stringified(self) -> None:
+        card = ProjectCard(
+            project_id="x",
+            display_name="X",
+            keywords=[2026],  # type: ignore[list-item]
+        )
+        text = project_card_to_text(card)
+        assert "키워드: 2026" in text
+
 
 class TestCompanyCardToText:
     def test_includes_positions(self) -> None:
@@ -109,6 +118,20 @@ class TestCompanyCardToText:
         assert "Senior iOS" in text
         assert "Swift" in text
         assert "중고거래" in text
+
+    def test_numeric_position_keywords_are_stringified(self) -> None:
+        card = CompanyCard(
+            company_id="acme",
+            display_name="Acme",
+            positions=[
+                JobPosition(
+                    title="iOS",
+                    keywords=[2026],  # type: ignore[list-item]
+                )
+            ],
+        )
+        text = company_card_to_text(card)
+        assert "iOS (2026)" in text
 
 
 # ---------------------------------------------------------------------------
