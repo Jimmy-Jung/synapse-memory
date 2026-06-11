@@ -2,6 +2,39 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.16.1] — 2026-06-11
+
+### Added — Hook Context Injection
+
+- `synapse-memory hook install|uninstall|run`을 추가했다. Claude Code
+  `SessionStart` hook이 등록 프로젝트에서 세션 시작 시 사전 렌더된
+  Profile/DecisionPatterns 요약을 주입한다.
+- `synapse-memory context render`를 추가했다. `AGENTS.md`/`CLAUDE.md` marker를
+  다시 쓰지 않고 hook context cache만 갱신할 수 있다.
+- `synapse-memory setup --no-marker`를 추가했다. repo 파일 수정 없이 프로젝트를
+  registry에 등록하고 hook 전용 context cache를 생성한다.
+- `synapse-memory setup --target codex` alias를 추가했다. Codex용 `AGENTS.md`
+  marker만 갱신한다.
+- `hook.suggest_register` config를 추가했다. 켜면 미등록 git repo에서 세션당 1회
+  `setup --no-marker` 등록 힌트를 출력한다.
+
+### Changed — Context Freshness
+
+- `setup`, `sync`, `context render`, `hook install`이 `~/.synapse/context/` 아래
+  `rendered.md`와 hook runtime `settings.json` sidecar를 갱신한다.
+- `/sm:apply-profile` 승인 반영 후 `synapse-memory context render`를 실행하도록
+  skill/command 문서를 갱신했다. Profile 변경 직후 hook context staleness를 줄인다.
+- `synapse-memory doctor`가 Claude Code SessionStart hook 설치 상태를 점검하고
+  미설치 시 `synapse-memory hook install`을 안내한다.
+
+### Fixed — Hook Runtime Safety
+
+- hook runner는 stdlib-only fast path로 실행되며, 모든 예외를 침묵 처리해 세션
+  시작을 막지 않는다.
+- Claude settings.json 기록을 임시 파일 + `os.replace` 원자적 쓰기로 변경했다.
+- `cli.py`의 파일 전체 `E402` noqa를 import별 noqa로 좁히고, 기존 mypy 지적
+  4건을 함께 정리했다.
+
 ## [1.16.0] — 2026-06-11
 
 ### Added — Knowledge Compounding P1
