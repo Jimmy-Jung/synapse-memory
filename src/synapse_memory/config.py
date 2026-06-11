@@ -93,6 +93,7 @@ class VaultReferenceFoldersConfig:
     root: str = "20_Reference"
     projects: str = "20_Reference/Projects"
     companies: str = "20_Reference/Companies"
+    insights: str = "20_Reference/Insights"
 
 
 @dataclass
@@ -174,6 +175,13 @@ class InteractiveGuardConfig:
 
 
 @dataclass
+class HookConfig:
+    enabled: bool = True
+    max_inject_bytes: int = 2048
+    suggest_register: bool = False
+
+
+@dataclass
 class CodexPollerConfig:
     enabled: bool = True
 
@@ -219,6 +227,7 @@ class SynapseConfig:
     profile: ProfileConfig = field(default_factory=ProfileConfig)
     cost: CostConfig = field(default_factory=CostConfig)
     interactive_guard: InteractiveGuardConfig = field(default_factory=InteractiveGuardConfig)
+    hook: HookConfig = field(default_factory=HookConfig)
     automation: AutomationConfig = field(default_factory=AutomationConfig)
     advanced: AdvancedConfig = field(default_factory=AdvancedConfig)
 
@@ -458,6 +467,12 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
     if cfg.interactive_guard.delay_seconds < 0:
         errors.append("interactive_guard.delay_seconds는 0 이상")
 
+    if not isinstance(cfg.hook.max_inject_bytes, int) or cfg.hook.max_inject_bytes < 1:
+        errors.append(
+            "hook.max_inject_bytes는 1 이상 정수 — "
+            f"현재: {cfg.hook.max_inject_bytes!r}"
+        )
+
     if cfg.cost.summary_days < 1:
         errors.append("cost.summary_days는 1 이상")
 
@@ -513,6 +528,7 @@ def render_config(cfg: SynapseConfig, *, show_advanced: bool = False) -> str:
         "profile",
         "cost",
         "interactive_guard",
+        "hook",
         "automation",
         "advanced",
     ):

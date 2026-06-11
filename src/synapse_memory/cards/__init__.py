@@ -19,6 +19,15 @@ from synapse_memory.cards.company import (
     save_company_card,
     serialize_company_card,
 )
+from synapse_memory.cards.insight import (
+    DEFAULT_INSIGHTS_SUBPATH,
+    InsightCard,
+    list_insight_cards,
+    load_insight_card,
+    parse_insight_card,
+    save_insight_card,
+    serialize_insight_card,
+)
 from synapse_memory.cards.project import (
     DEFAULT_PROJECTS_SUBPATH,
     ProjectCard,
@@ -33,20 +42,27 @@ from synapse_memory.cards.project import (
 
 __all__ = [
     "DEFAULT_COMPANIES_SUBPATH",
+    "DEFAULT_INSIGHTS_SUBPATH",
     "DEFAULT_PROJECTS_SUBPATH",
     "CompanyCard",
+    "InsightCard",
     "JobPosition",
     "ProjectCard",
     "ProjectMetric",
     "ProjectSource",
     "list_company_cards",
+    "list_insight_cards",
     "list_project_cards",
     "load_company_card",
+    "load_insight_card",
     "load_project_card",
     "parse_company_card",
+    "parse_insight_card",
     "parse_project_card",
     "save_company_card",
+    "save_insight_card",
     "save_project_card",
     "serialize_company_card",
+    "serialize_insight_card",
     "serialize_project_card",
 ]

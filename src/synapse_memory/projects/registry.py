@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime
+import json
 import os
 import tempfile
 from dataclasses import dataclass
@@ -13,9 +15,9 @@ import yaml
 __all__ = [
     "ProjectEntry",
     "load_registry",
+    "mark_stale",
     "save_registry",
     "upsert_entry",
-    "mark_stale",
 ]
 
 
@@ -75,11 +77,29 @@ def save_registry(entries: list[ProjectEntry], registry_path: Path) -> None:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(serialized)
         os.replace(tmp, registry_path)
+        _save_json_sidecar(entries, registry_path.with_suffix(".json"))
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
+        raise
+
+
+def _save_json_sidecar(entries: list[ProjectEntry], path: Path) -> None:
+    payload = {
+        "version": 1,
+        "projects": [_entry_to_dict(e) for e in entries],
+    }
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+    fd, tmp = tempfile.mkstemp(
+        prefix="projects-", suffix=".json.tmp", dir=str(path.parent)
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(serialized)
+        os.replace(tmp, path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
         raise
 
 

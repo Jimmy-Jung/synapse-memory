@@ -26,6 +26,7 @@ from synapse_memory.cards.company import (
     CompanyCard,
     list_company_cards,
 )
+from synapse_memory.cards.insight import InsightCard, list_insight_cards
 from synapse_memory.cards.project import (
     ProjectCard,
     list_project_cards,
@@ -38,6 +39,7 @@ from synapse_memory.feedback.apply import (
 from synapse_memory.feedback.events import load_feedback_events
 from synapse_memory.rag.bm25 import (
     BM25Document,
+    load_bm25_documents,
     tokenize_for_bm25,
     write_bm25_documents,
 )
@@ -56,12 +58,14 @@ from synapse_memory.redaction import redact_full
 
 PREFIX_PROJECT = "card_project:"
 PREFIX_COMPANY = "card_company:"
+PREFIX_INSIGHT = "card_insight:"
 
 
 @dataclass
 class IndexStats:
     project_cards: int = 0
     company_cards: int = 0
+    insight_cards: int = 0
     raw_obsidian_chunks: int = 0
     raw_claude_code_chunks: int = 0
     bm25_documents: int = 0
@@ -70,7 +74,7 @@ class IndexStats:
 
     @property
     def total_cards(self) -> int:
-        return self.project_cards + self.company_cards
+        return self.project_cards + self.company_cards + self.insight_cards
 
     @property
     def total_raw_chunks(self) -> int:
@@ -143,6 +147,23 @@ def company_card_to_text(card: CompanyCard) -> str:
     return "\n".join(lines)
 
 
+def insight_card_to_text(card: InsightCard) -> str:
+    """InsightCard → 검색용 단일 텍스트."""
+    lines: list[str] = [
+        f"# {card.question}",
+        f"명령: {card.command}",
+        f"상태: {card.status}",
+    ]
+    if card.related:
+        lines.append(f"관련 카드: {_join_strings(card.related)}")
+    if card.keywords:
+        lines.append(f"키워드: {_join_strings(card.keywords)}")
+    if card.body:
+        lines.append("")
+        lines.append(card.body.strip())
+    return "\n".join(lines)
+
+
 def _join_strings(values: Sequence[object]) -> str:
     return ", ".join(str(value) for value in values)
 
@@ -185,6 +206,20 @@ def _company_meta(card: CompanyCard) -> dict[str, object]:
     }
 
 
+def _insight_meta(card: InsightCard) -> dict[str, object]:
+    return {
+        "source_kind": "card_insight",
+        "card_id": card.insight_id,
+        "display_name": card.question,
+        "command": card.command,
+        "status": card.status,
+        "related": list(card.related),
+        "keywords": list(card.keywords),
+        "created": card.created,
+        "confidence": card.confidence,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 메인
 # ---------------------------------------------------------------------------
@@ -200,7 +235,7 @@ def index_cards(
     on_progress: Callable[[str, int, int], None] | None = None,
     batch_size: int = 16,
 ) -> IndexStats:
-    """vault의 모든 Project/Company Card를 임베딩 → 벡터 DB upsert.
+    """vault의 모든 Project/Company/Insight Card를 임베딩 → 벡터 DB upsert.
 
     Args:
         store: VectorStore (기본: ``open_vector_store()``).
@@ -208,7 +243,7 @@ def index_cards(
         rebuild: True면 collection 비우고 처음부터.
         include_raw: True면 vault/L0 raw chunks 도 인덱싱.
         bm25_path: BM25 sidecar 경로 override (테스트용).
-        on_progress: ``(stage, current, total)`` 콜백 (stage="project"|"company").
+        on_progress: ``(stage, current, total)`` 콜백.
         batch_size: 임베딩 배치.
 
     Returns:
@@ -223,6 +258,7 @@ def index_cards(
 
     projects = list_project_cards(vault_path=vault_path)
     companies = list_company_cards(vault_path=vault_path)
+    insights = list_insight_cards(vault_path=vault_path)
     feedback_scores = card_feedback_scores(load_feedback_events(recover=True))
     bm25_documents: list[BM25Document] = []
 
@@ -292,6 +328,39 @@ def index_cards(
         except Exception as exc:
             stats.failed.append(("company_upsert", str(exc)))
 
+    # ---- Insight Card ----
+    if insights:
+        insight_records: list[VectorRecord] = []
+        texts = [insight_card_to_text(c) for c in insights]
+        vectors = embed_texts(texts, batch_size=batch_size)
+
+        for i, (insight, text, vec) in enumerate(
+            zip(insights, texts, vectors, strict=False)
+        ):
+            if on_progress:
+                on_progress("insight", i + 1, len(insights))
+            insight_records.append(
+                VectorRecord(
+                    id=f"{PREFIX_INSIGHT}{insight.insight_id}",
+                    document=text,
+                    embedding=vec,
+                    metadata={
+                        **_insight_meta(insight),
+                        "feedback_score": _feedback_score(
+                            feedback_scores, insight.insight_id
+                        ),
+                    },
+                )
+            )
+            stats.bytes_indexed += len(text.encode())
+
+        try:
+            store.upsert(insight_records)
+            stats.insight_cards = len(insight_records)
+            bm25_documents.extend(_bm25_documents_from_records(insight_records))
+        except Exception as exc:
+            stats.failed.append(("insight_upsert", str(exc)))
+
     if include_raw:
         raw_records = _build_raw_records(
             vault_path=vault_path,
@@ -306,13 +375,38 @@ def index_cards(
             except Exception as exc:
                 stats.failed.append(("raw_upsert", str(exc)))
 
+    if bm25_documents or include_raw or bm25_path is not None:
         try:
-            write_bm25_documents(bm25_documents, path=bm25_path)
-            stats.bm25_documents = len(bm25_documents)
+            merged_bm25_documents = _merge_existing_raw_bm25_documents(
+                bm25_documents,
+                include_raw=include_raw,
+                bm25_path=bm25_path,
+            )
+            write_bm25_documents(merged_bm25_documents, path=bm25_path)
+            stats.bm25_documents = len(merged_bm25_documents)
         except Exception as exc:
             stats.failed.append(("bm25_write", str(exc)))
 
     return stats
+
+
+def index_insight_card(
+    card: InsightCard, *, store: VectorStore | None = None
+) -> None:
+    """InsightCard 1건을 벡터 DB에 upsert한다."""
+    store = store or open_vector_store()
+    text = insight_card_to_text(card)
+    vector = embed_texts([text])[0]
+    store.upsert(
+        [
+            VectorRecord(
+                id=f"{PREFIX_INSIGHT}{card.insight_id}",
+                document=text,
+                embedding=vector,
+                metadata=_insight_meta(card),
+            )
+        ]
+    )
 
 
 def _build_raw_records(
@@ -378,6 +472,34 @@ def _bm25_documents_from_records(records: list[VectorRecord]) -> list[BM25Docume
         )
         for record in records
     ]
+
+
+def _merge_existing_raw_bm25_documents(
+    documents: list[BM25Document],
+    *,
+    include_raw: bool,
+    bm25_path: Path | None,
+) -> list[BM25Document]:
+    """card-only index 때 기존 raw BM25 문서를 보존한다."""
+    if include_raw:
+        return documents
+
+    existing_raw = [
+        doc
+        for doc in load_bm25_documents(path=bm25_path)
+        if _is_raw_bm25_document(doc)
+    ]
+    if not existing_raw:
+        return documents
+
+    new_ids = {doc.record_id for doc in documents}
+    preserved = [doc for doc in existing_raw if doc.record_id not in new_ids]
+    return preserved + documents
+
+
+def _is_raw_bm25_document(document: BM25Document) -> bool:
+    source_kind = str(document.metadata.get("source_kind", ""))
+    return document.record_id.startswith("raw_") or source_kind.startswith("raw_")
 
 
 def _feedback_score(

@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when the user wants a new project to see Synapse Memory context. Adds `<!-- SYNAPSE-MEMORY START/END -->` marker to AGENTS.md (Codex) and CLAUDE.md (Claude Code) with vault Profile/Patterns paths and quick reference. Registers cwd in `~/.synapse/projects.yaml`. Idempotent — safe to re-run.
+description: Use when the user wants a new project to see Synapse Memory context. Registers cwd in `~/.synapse/projects.yaml`; can add `<!-- SYNAPSE-MEMORY START/END -->` marker to AGENTS.md (Codex) and/or CLAUDE.md, or use `--no-marker` for Claude hook-only registration. Idempotent — safe to re-run.
 ---
 
 # /sm:setup — 프로젝트에 sm 컨텍스트 등록
@@ -10,20 +10,23 @@ description: Use when the user wants a new project to see Synapse Memory context
 ## 실행
 
 ```bash
-synapse-memory setup [--target {agents,claude,both}] [--dry-run]
+synapse-memory setup [--target {agents,claude,both,codex}] [--no-marker] [--dry-run]
 ```
 
 - `--target both` (기본): AGENTS.md + CLAUDE.md 둘 다
 - `--target agents`: AGENTS.md만
+- `--target codex`: AGENTS.md만 (`agents` alias)
 - `--target claude`: CLAUDE.md만
+- `--no-marker`: marker 파일 수정 없이 registry + Claude hook cache만 등록
 - `--dry-run`: 의도된 변경만 출력
 
 ## 동작
 
 1. vault `Profile.md` + `DecisionPatterns.md` 읽기
-2. 상위 N개 fact + M개 pattern으로 marker body 생성
-3. 대상 파일의 `<!-- SYNAPSE-MEMORY START -->`…`<!-- SYNAPSE-MEMORY END -->` 사이 교체 (또는 신규 생성)
+2. 상위 N개 fact + M개 pattern으로 context body 생성
+3. `--no-marker`가 아니면 대상 파일의 `<!-- SYNAPSE-MEMORY START -->`…`<!-- SYNAPSE-MEMORY END -->` 사이 교체 (또는 신규 생성)
 4. `~/.synapse/projects.yaml` 에 cwd 등록
+5. Claude hook용 `~/.synapse/context/rendered.md` cache 갱신
 
 ## 결과
 
@@ -33,5 +36,7 @@ synapse-memory setup [--target {agents,claude,both}] [--dry-run]
 
 ## 후속
 
-- vault Profile/Patterns 갱신 후 다시 반영하려면 → `/sm:sync`
+- Claude hook cache만 갱신하려면 → `synapse-memory context render`
+- Codex/marker 파일까지 갱신하려면 → `/sm:sync`
+- 미등록 git repo에서 등록 힌트를 받고 싶으면 → `synapse-memory config set hook.suggest_register true`
 - 자동 트리거 없음
