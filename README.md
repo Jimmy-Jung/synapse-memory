@@ -166,9 +166,21 @@ Codex marketplace catalog는 `.agents/plugins/marketplace.json`에 있고,
 | Profile 후보 항목별 GUI 승인 | `/sm:apply-profile [date]` | `$apply-profile` | `synapse-memory list-pending-profiles` (보조) |
 | private 파일 redact 후 외부 AI에 안전 전달 | `/sm:redact <path>` | `$redact <path>` | `synapse-memory redact file <path>` |
 | 다른 프로젝트에 sm 컨텍스트 marker 삽입 | `/sm:setup` | `$setup` | `synapse-memory setup` |
-| 등록된 프로젝트 marker 갱신 | `/sm:sync` | `$sync` | `synapse-memory sync` |
+| 등록된 프로젝트 marker + hook 캐시 갱신 | `/sm:sync` | `$sync` | `synapse-memory sync` |
 | MOC.md 생성·갱신 (Obsidian Graph 진입점) | `/sm:moc` | `$moc` | `synapse-memory moc` |
 | MemoryInbox / DailyReports flat → year/month 1회 마이그레이션 | — | — | `synapse-memory migrate-folders` |
+
+### v1.16.0+ 추가 명령
+
+| 하고 싶은 일 | Claude Code | Codex | 터미널 |
+| --- | --- | --- | --- |
+| 답변을 Insight 카드로 저장 (지식 축적) | `/sm:ask "질문" --save` | `$ask "질문" --save` | `synapse-memory ask "질문" --save` |
+| Claude Code 세션 자동 컨텍스트 주입 hook 설치 | — | — | `synapse-memory hook install` |
+| hook 컨텍스트 캐시 수동 갱신 | — | — | `synapse-memory context render` |
+| marker 파일 없이 프로젝트 등록 (hook 전용) | — | — | `synapse-memory setup --no-marker` |
+
+`ask --save`로 저장한 답변은 `<vault>/20_Reference/Insights/`에 카드로 쌓이고
+다음 질문의 검색 대상이 됩니다. 좋은 답변이 채팅에서 증발하지 않고 누적됩니다.
 
 신규 명령 자세한 사용법은 [docs/reference.md](docs/reference.md)를 참고하세요.
 
@@ -181,6 +193,24 @@ synapse-memory ask "TCA를 왜 도입했지?"
 synapse-memory persona what-did-i-think "AI 코딩 도구"
 synapse-memory persona draft-resume examplecorp
 ```
+
+## Claude Code 자동 컨텍스트 주입 (hook)
+
+매번 `/sm:setup`으로 marker를 관리하지 않아도, 전역 hook 한 번 설치로 등록된
+프로젝트에서 세션 시작 시 Profile/DecisionPatterns 요약이 자동 주입됩니다.
+
+```bash
+synapse-memory hook install        # 전역 1회
+synapse-memory setup --no-marker   # 프로젝트마다 — repo 파일 수정 없이 등록
+```
+
+- Profile 승인(`/sm:apply-profile`) 후 컨텍스트 캐시가 자동 갱신되어 다음
+  세션부터 바로 반영됩니다. 수동 갱신은 `synapse-memory context render`.
+- 개인 Profile 내용이 git에 커밋되는 `CLAUDE.md`에 남지 않습니다.
+- Codex는 hook을 지원하지 않으므로 기존처럼 `synapse-memory setup --target codex`로
+  `AGENTS.md` marker를 사용합니다. `/sm:sync`는 Codex marker 갱신 + 캐시 재렌더를
+  함께 수행합니다.
+- 설치 상태는 `synapse-memory doctor`가 점검합니다.
 
 ## 문서 읽는 순서
 
