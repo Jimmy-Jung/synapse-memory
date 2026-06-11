@@ -126,6 +126,8 @@ def test_set_value_parses_bool_from_string():
     assert cfg.interactive_guard.enabled is False
     set_value(cfg, "interactive_guard.enabled", "true")
     assert cfg.interactive_guard.enabled is True
+    set_value(cfg, "hook.suggest_register", "true")
+    assert cfg.hook.suggest_register is True
 
 
 def test_set_value_parses_optional_float_none():
@@ -181,6 +183,17 @@ def test_validate_passes_for_default():
     assert validate_config(SynapseConfig()) == []
 
 
+def test_hook_config_defaults_and_validation():
+    cfg = SynapseConfig()
+    assert cfg.hook.enabled is True
+    assert cfg.hook.max_inject_bytes == 2048
+    assert cfg.hook.suggest_register is False
+
+    cfg.hook.max_inject_bytes = 0
+    errors = validate_config(cfg)
+    assert any("hook.max_inject_bytes" in e for e in errors)
+
+
 def test_validate_catches_bad_ai_provider():
     cfg = SynapseConfig()
     cfg.ai_provider = "bogus"
@@ -206,6 +219,7 @@ def test_render_hides_advanced_by_default():
     cfg = SynapseConfig()
     text = render_config(cfg, show_advanced=False)
     assert "cleanup" in text
+    assert "hook.suggest_register" in text
     assert "rrf_k" not in text
 
 

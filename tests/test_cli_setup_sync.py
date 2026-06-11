@@ -33,6 +33,7 @@ def _setup_env(
 ) -> None:
     monkeypatch.setattr("synapse_memory.cli._setup_vault_path", lambda: vault)
     monkeypatch.setattr("synapse_memory.cli._setup_registry_path", lambda: registry)
+    monkeypatch.setenv("SYNAPSE_HOME", str(registry.parent / ".synapse"))
     monkeypatch.chdir(project)
 
 
@@ -55,6 +56,32 @@ def test_setup_target_both_creates_files(
     entries = load_registry(registry)
     assert len(entries) == 1
     assert entries[0].path == project.resolve()
+    assert registry.with_suffix(".json").is_file()
+    assert (registry.parent / ".synapse" / "context" / "rendered.md").is_file()
+    assert (registry.parent / ".synapse" / "context" / "settings.json").is_file()
+
+
+def test_setup_no_marker_registers_without_project_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _scaffold_vault(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    registry = tmp_path / "registry.yaml"
+    _setup_env(monkeypatch, vault, registry, project)
+
+    rc = main(["setup", "--no-marker"])
+
+    assert rc == 0
+    assert not (project / "AGENTS.md").exists()
+    assert not (project / "CLAUDE.md").exists()
+    entries = load_registry(registry)
+    assert len(entries) == 1
+    assert entries[0].path == project.resolve()
+    assert entries[0].target == "hook"
+    assert registry.with_suffix(".json").is_file()
+    assert (registry.parent / ".synapse" / "context" / "rendered.md").is_file()
+    assert (registry.parent / ".synapse" / "context" / "settings.json").is_file()
 
 
 def test_setup_idempotent_byte_level(
@@ -117,6 +144,27 @@ def test_sync_updates_all_registered(
     assert rc == 0
     assert "새 fact-line" in (p1 / "AGENTS.md").read_text(encoding="utf-8")
     assert "새 fact-line" in (p2 / "AGENTS.md").read_text(encoding="utf-8")
+    assert "새 fact-line" in (
+        registry.parent / ".synapse" / "context" / "rendered.md"
+    ).read_text(encoding="utf-8")
+
+
+def test_context_render_updates_cache_without_marker_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vault = _scaffold_vault(tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    registry = tmp_path / "registry.yaml"
+    _setup_env(monkeypatch, vault, registry, project)
+    out = tmp_path / "rendered.md"
+
+    rc = main(["context", "render", "--out", str(out)])
+
+    assert rc == 0
+    rendered = out.read_text(encoding="utf-8")
+    assert "iOS 주력" in rendered
+    assert "기능단위 커밋" in rendered
 
 
 def test_sync_marks_stale_when_project_missing(

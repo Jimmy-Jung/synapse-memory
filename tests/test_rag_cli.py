@@ -41,6 +41,39 @@ def test_parser_has_ask_save() -> None:
     assert args.save is True
 
 
+def test_parser_has_hook_install_and_run() -> None:
+    parser = cli_mod.build_parser()
+
+    install_args = parser.parse_args(["hook", "install"])
+    run_args = parser.parse_args(["hook", "run", "--event", "session-start"])
+
+    assert install_args.action == "install"
+    assert run_args.action == "run"
+    assert run_args.event == "session-start"
+
+
+def test_parser_has_setup_no_marker_and_codex_target() -> None:
+    parser = cli_mod.build_parser()
+
+    no_marker_args = parser.parse_args(["setup", "--no-marker"])
+    codex_args = parser.parse_args(["setup", "--target", "codex"])
+
+    assert no_marker_args.no_marker is True
+    assert codex_args.target == "codex"
+
+
+def test_parser_has_context_render() -> None:
+    parser = cli_mod.build_parser()
+
+    args = parser.parse_args(
+        ["context", "render", "--out", "/tmp/rendered.md", "--max-bytes", "1024"]
+    )
+
+    assert args.action == "render"
+    assert args.out == "/tmp/rendered.md"
+    assert args.max_bytes == 1024
+
+
 def test_parser_has_persona_what_did_i_think_hybrid() -> None:
     parser = cli_mod.build_parser()
 

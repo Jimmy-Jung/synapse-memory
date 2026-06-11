@@ -23,6 +23,7 @@ description: Use when the user wants to review and approve MemoryInbox Profile c
 4. AskUserQuestion 4개씩 (Yes / No / Edit)
 5. 승인분 → Profile.md (카테고리 섹션) / DecisionPatterns.md (`## Approved Patterns`)에 Edit으로 추가
 6. 후보 파일 frontmatter `status: pending_review` → `status: applied` + `applied_date` 갱신
+7. Bash로 `synapse-memory context render` 실행해 Claude hook context cache 갱신
 
 ## 자동 진입
 
@@ -35,4 +36,5 @@ description: Use when the user wants to review and approve MemoryInbox Profile c
 
 ## 후속
 
-- 승인분이 vault Profile.md에 들어간 뒤, 다른 프로젝트에서도 이 컨텍스트를 보고 싶다면 → `/sm:sync`
+- 승인분이 vault Profile.md에 들어가면 Claude hook context cache는 자동 갱신합니다.
+- Codex/marker 기반 프로젝트 파일까지 갱신해야 할 때만 별도로 `/sm:sync`를 안내합니다.

@@ -18,21 +18,33 @@
 
 from __future__ import annotations
 
-import argparse
-import contextlib
-import datetime
-import json
-import os
-import stat
 import sys
-import threading
-import time
-from collections.abc import Iterable
-from pathlib import Path
-from typing import Any
 
-from synapse_memory import __version__
-from synapse_memory.cards import (
+
+def _fast_path_hook() -> None:
+    """`synapse-memory hook run ...`은 무거운 CLI import 전에 처리한다."""
+    if len(sys.argv) >= 3 and sys.argv[1] == "hook" and sys.argv[2] == "run":
+        from synapse_memory.hooks.session_start import main as hook_main
+
+        raise SystemExit(hook_main())
+
+
+_fast_path_hook()
+
+import argparse  # noqa: E402
+import contextlib  # noqa: E402
+import datetime  # noqa: E402
+import json  # noqa: E402
+import os  # noqa: E402
+import stat  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
+from collections.abc import Iterable, Iterator  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
+
+from synapse_memory import __version__  # noqa: E402
+from synapse_memory.cards import (  # noqa: E402
     CompanyCard,
     ProjectCard,
     list_company_cards,
@@ -44,35 +56,35 @@ from synapse_memory.cards import (
     serialize_company_card,
     serialize_project_card,
 )
-from synapse_memory.cards.auto_classify import (
+from synapse_memory.cards.auto_classify import (  # noqa: E402
     classify_cluster,
     load_classifications,
     save_classifications,
 )
-from synapse_memory.cards.auto_generate import (
+from synapse_memory.cards.auto_generate import (  # noqa: E402
     generate_company_card,
     generate_project_card,
 )
-from synapse_memory.cards.company import companies_dir
-from synapse_memory.cards.project import projects_dir
-from synapse_memory.clusters import identify_clusters
-from synapse_memory.collectors.claude_code import (
+from synapse_memory.cards.company import companies_dir  # noqa: E402
+from synapse_memory.cards.project import projects_dir  # noqa: E402
+from synapse_memory.clusters import identify_clusters  # noqa: E402
+from synapse_memory.collectors.claude_code import (  # noqa: E402
     DEFAULT_CLAUDE_HOME,
     collect_claude_code,
 )
-from synapse_memory.collectors.obsidian import (
+from synapse_memory.collectors.obsidian import (  # noqa: E402
     collect_obsidian,
     get_vault_path,
 )
-from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault
-from synapse_memory.cost.events import command_context
-from synapse_memory.cost.summary import (
+from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault  # noqa: E402
+from synapse_memory.cost.events import command_context  # noqa: E402
+from synapse_memory.cost.summary import (  # noqa: E402
     load_summary,
     render_summary_json,
     render_summary_table,
 )
-from synapse_memory.daily import STEPS, StageStatus, run_daily
-from synapse_memory.doctor import (
+from synapse_memory.daily import STEPS, StageStatus, run_daily  # noqa: E402
+from synapse_memory.doctor import (  # noqa: E402
     DiagnosticStatus,
     apply_fix_actions,
     apply_set_config_vault,
@@ -81,65 +93,65 @@ from synapse_memory.doctor import (
     diagnose_vault_config_consistency,
     planned_fix_actions,
 )
-from synapse_memory.endpoints.ask import ask
-from synapse_memory.endpoints.persona import (
+from synapse_memory.endpoints.ask import ask  # noqa: E402
+from synapse_memory.endpoints.persona import (  # noqa: E402
     decide,
     draft_resume,
     what_did_i_think,
 )
-from synapse_memory.eval.golden import (
+from synapse_memory.eval.golden import (  # noqa: E402
     default_synthetic_path,
     evaluate,
     load_golden_set,
 )
-from synapse_memory.feedback.events import (
+from synapse_memory.feedback.events import (  # noqa: E402
     FeedbackAction,
     append_feedback_event,
     build_feedback_event,
 )
-from synapse_memory.feedback.targets import (
+from synapse_memory.feedback.targets import (  # noqa: E402
     FeedbackTarget,
     resolve_card_target,
     resolve_last_answer_targets,
     resolve_pattern_target,
 )
-from synapse_memory.llm import AIError, detect_ai_environment
-from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment
-from synapse_memory.profile.extract import (
+from synapse_memory.llm import AIError, detect_ai_environment  # noqa: E402
+from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment  # noqa: E402
+from synapse_memory.profile.extract import (  # noqa: E402
     extract_decision_patterns,
     extract_profile_facts,
     save_profile_update,
 )
-from synapse_memory.profile.ingest import (
+from synapse_memory.profile.ingest import (  # noqa: E402
     SUPPORTED_EXTENSIONS,
     ingest_files,
 )
-from synapse_memory.rag import (
+from synapse_memory.rag import (  # noqa: E402
     embed_query,
     index_cards,
     open_vector_store,
 )
-from synapse_memory.rag.bm25 import BM25IndexError
-from synapse_memory.rag.embeddings import (
+from synapse_memory.rag.bm25 import BM25IndexError  # noqa: E402
+from synapse_memory.rag.embeddings import (  # noqa: E402
     EmbeddingError,
     EmbeddingUnavailableError,
 )
-from synapse_memory.rag.vector_store import VectorStoreError
-from synapse_memory.redaction import redact_full
-from synapse_memory.redaction.redactlist import (
+from synapse_memory.rag.vector_store import VectorStoreError  # noqa: E402
+from synapse_memory.redaction import redact_full  # noqa: E402
+from synapse_memory.redaction.redactlist import (  # noqa: E402
     add_redactlist_item,
     load_redactlist,
     remove_redactlist_item,
 )
-from synapse_memory.status import DailyAlreadyRunningError
-from synapse_memory.storage.l0 import (
+from synapse_memory.status import DailyAlreadyRunningError  # noqa: E402
+from synapse_memory.storage.l0 import (  # noqa: E402
     L0_DIR_MODE,
     L0_FILE_MODE,
     ensure_l0_root_secure,
     ensure_secure_dir,
     l0_root,
 )
-from synapse_memory.storage.last_response import load_last_answer
+from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 
 OK = "✓"
 FAIL = "✗"
@@ -410,6 +422,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         from synapse_memory.doctor import diagnose_private_folder_deny
 
         pf_cfg = load_config()
+        if pf_cfg.vault is None:
+            raise ValueError("config.yaml vault 미설정")
         pf_result = diagnose_private_folder_deny(pf_cfg.vault)
         if pf_result.status == DiagnosticStatus.OK:
             print(f"{OK} {pf_result.message}")
@@ -426,6 +440,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         from synapse_memory.doctor import diagnose_dataview_plugin
 
         dv_cfg = load_config()
+        if dv_cfg.vault is None:
+            raise ValueError("config.yaml vault 미설정")
         dv_result = diagnose_dataview_plugin(dv_cfg.vault)
         if dv_result.status == DiagnosticStatus.OK:
             print(f"{OK} {dv_result.message}")
@@ -435,6 +451,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"{FAIL} {dv_result.message}")
     except Exception as exc:
         print(f"⚠ Dataview 플러그인 진단 실패: {exc}")
+
+    # Claude Code SessionStart hook 설치 상태
+    try:
+        from synapse_memory.hooks.install import diagnose_session_hook
+
+        hook_result = diagnose_session_hook()
+        if hook_result.installed:
+            print(f"{OK} {hook_result.message}")
+        else:
+            print(f"⚠ {hook_result.message}")
+            print("  설치: synapse-memory hook install")
+    except Exception as exc:
+        print(f"⚠ Claude Code hook 진단 실패: {exc}")
 
     # AI provider CLI
     ai_env = detect_ai_environment()
@@ -787,7 +816,7 @@ def _parse_stage_csv(value: str) -> set[str]:
 
 
 @contextlib.contextmanager
-def _daily_status_watcher(*, enabled: bool, interval: float):
+def _daily_status_watcher(*, enabled: bool, interval: float) -> Iterator[None]:
     if not enabled:
         yield
         return
@@ -2373,7 +2402,10 @@ def _setup_vault_path() -> Path:
     """vault 경로 resolver (테스트에서 monkeypatch 가능)."""
     from synapse_memory.config import get_config
 
-    return Path(get_config().vault).expanduser().resolve()
+    vault = get_config().vault
+    if vault is None:
+        raise ValueError("config.yaml vault 미설정")
+    return Path(vault).expanduser().resolve()
 
 
 def _setup_registry_path() -> Path:
@@ -2390,6 +2422,24 @@ def _setup_profile_patterns_paths(vault: Path) -> tuple[Path, Path]:
     return profile, patterns
 
 
+def _hook_runtime_settings() -> tuple[bool, bool, int]:
+    from synapse_memory.config import get_config
+
+    hook = get_config(refresh=True).hook
+    return hook.enabled, hook.suggest_register, hook.max_inject_bytes
+
+
+def _render_hook_settings_cache(*, max_inject_bytes: int | None = None) -> Path:
+    from synapse_memory.projects.summary import render_hook_settings_cache
+
+    enabled, suggest_register, configured_max = _hook_runtime_settings()
+    return render_hook_settings_cache(
+        enabled=enabled,
+        suggest_register=suggest_register,
+        max_inject_bytes=max_inject_bytes or configured_max,
+    )
+
+
 def cmd_setup(args: argparse.Namespace) -> int:
     """현재 디렉터리 프로젝트에 marker 삽입 + registry 등록."""
     import datetime as _datetime
@@ -2401,26 +2451,32 @@ def cmd_setup(args: argparse.Namespace) -> int:
         save_registry,
         upsert_entry,
     )
-    from synapse_memory.projects.summary import generate_marker_body
+    from synapse_memory.projects.summary import generate_marker_body, render_context_cache
 
     vault = _setup_vault_path()
     profile, patterns = _setup_profile_patterns_paths(vault)
     body = generate_marker_body(profile, patterns)
+    _, _, max_inject_bytes = _hook_runtime_settings()
 
     project = Path.cwd().resolve()
     targets_for = {
+        "codex": ["AGENTS.md"],
         "agents": ["AGENTS.md"],
         "claude": ["CLAUDE.md"],
         "both": ["AGENTS.md", "CLAUDE.md"],
-    }[args.target]
+        "hook": [],
+    }["hook" if args.no_marker else args.target]
 
     if args.dry_run:
         print(f"[dry-run] project: {project}")
+        if not targets_for:
+            print("  marker: 생성/갱신 안 함 (--no-marker)")
         for name in targets_for:
             target_file = project / name
             status = "신규 생성" if not target_file.is_file() else "갱신"
             print(f"  {status}: {target_file}")
-        print(f"  registry: {_setup_registry_path()} (등록 예정, target={args.target})")
+        target = "hook" if args.no_marker else args.target
+        print(f"  registry: {_setup_registry_path()} (등록 예정, target={target})")
         return 0
 
     for name in targets_for:
@@ -2437,13 +2493,15 @@ def cmd_setup(args: argparse.Namespace) -> int:
     entries = load_registry(registry)
     new = ProjectEntry(
         path=project,
-        target=args.target,
+        target="hook" if args.no_marker else args.target,
         registered_at=_datetime.date.today(),
         last_sync=None,
         state="active",
     )
     entries = upsert_entry(entries, new)
     save_registry(entries, registry)
+    render_context_cache(profile, patterns, max_bytes=max_inject_bytes)
+    _render_hook_settings_cache(max_inject_bytes=max_inject_bytes)
     print(f"  {OK} registry: {registry}")
     return 0
 
@@ -2459,11 +2517,12 @@ def cmd_sync(args: argparse.Namespace) -> int:
         mark_stale,
         save_registry,
     )
-    from synapse_memory.projects.summary import generate_marker_body
+    from synapse_memory.projects.summary import generate_marker_body, render_context_cache
 
     vault = _setup_vault_path()
     profile, patterns = _setup_profile_patterns_paths(vault)
     body = generate_marker_body(profile, patterns)
+    _, _, max_inject_bytes = _hook_runtime_settings()
 
     registry = _setup_registry_path()
     entries = load_registry(registry)
@@ -2488,9 +2547,11 @@ def cmd_sync(args: argparse.Namespace) -> int:
             print(f"  ⚠ stale: {entry.path}", file=sys.stderr)
             continue
         targets_for = {
+            "codex": ["AGENTS.md"],
             "agents": ["AGENTS.md"],
             "claude": ["CLAUDE.md"],
             "both": ["AGENTS.md", "CLAUDE.md"],
+            "hook": [],
         }[entry.target]
         for name in targets_for:
             target_file = entry.path / name
@@ -2512,7 +2573,84 @@ def cmd_sync(args: argparse.Namespace) -> int:
         print(f"  {OK} sync: {entry.path}")
 
     save_registry(new_entries, registry)
+    cache = render_context_cache(profile, patterns, max_bytes=max_inject_bytes)
+    _render_hook_settings_cache(max_inject_bytes=max_inject_bytes)
+    print(f"  {OK} context-cache: {cache}")
     return 0
+
+
+def cmd_context(args: argparse.Namespace) -> int:
+    """hook context cache를 marker 갱신 없이 렌더."""
+    if args.action == "render":
+        from synapse_memory.projects.summary import render_context_cache
+
+        vault = _setup_vault_path()
+        profile, patterns = _setup_profile_patterns_paths(vault)
+        out_path = Path(args.out).expanduser().resolve() if args.out else None
+        _, _, configured_max = _hook_runtime_settings()
+        max_bytes = args.max_bytes if args.max_bytes is not None else configured_max
+        cache = render_context_cache(profile, patterns, out_path=out_path, max_bytes=max_bytes)
+        _render_hook_settings_cache(max_inject_bytes=max_bytes)
+        print(f"{OK} context-cache: {cache}")
+        return 0
+
+    print(f"{FAIL} unknown context action: {args.action}", file=sys.stderr)
+    return 2
+
+
+def cmd_hook(args: argparse.Namespace) -> int:
+    """Claude Code SessionStart hook 관리."""
+    if args.action == "run":
+        from synapse_memory.hooks.session_start import main as hook_main
+
+        return hook_main()
+
+    if args.action == "install":
+        from synapse_memory.hooks.install import install_session_hook
+
+        try:
+            changed = install_session_hook()
+        except ValueError as exc:
+            print(f"{FAIL} {exc}", file=sys.stderr)
+            return 1
+        _refresh_hook_sidecars()
+        action = "설치됨" if changed else "이미 설치됨"
+        print(f"{OK} Claude Code SessionStart hook {action}")
+        return 0
+
+    if args.action == "uninstall":
+        from synapse_memory.hooks.install import uninstall_session_hook
+
+        try:
+            changed = uninstall_session_hook()
+        except ValueError as exc:
+            print(f"{FAIL} {exc}", file=sys.stderr)
+            return 1
+        action = "제거됨" if changed else "설치 항목 없음"
+        print(f"{OK} Claude Code SessionStart hook {action}")
+        return 0
+
+    print(f"{FAIL} unknown hook action: {args.action}", file=sys.stderr)
+    return 2
+
+
+def _refresh_hook_sidecars() -> None:
+    """hook install 시 기존 registry/cache sidecar를 best-effort 갱신."""
+    with contextlib.suppress(Exception):
+        from synapse_memory.projects.registry import load_registry, save_registry
+
+        registry = _setup_registry_path()
+        if registry.is_file():
+            save_registry(load_registry(registry), registry)
+
+    with contextlib.suppress(Exception):
+        from synapse_memory.projects.summary import render_context_cache
+
+        vault = _setup_vault_path()
+        profile, patterns = _setup_profile_patterns_paths(vault)
+        _, _, max_inject_bytes = _hook_runtime_settings()
+        render_context_cache(profile, patterns, max_bytes=max_inject_bytes)
+        _render_hook_settings_cache(max_inject_bytes=max_inject_bytes)
 
 
 def cmd_moc(args: argparse.Namespace) -> int:
@@ -3142,9 +3280,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_setup.add_argument(
         "--target",
-        choices=("agents", "claude", "both"),
+        choices=("agents", "claude", "both", "codex"),
         default="both",
         help="대상 파일 (기본: both)",
+    )
+    p_setup.add_argument(
+        "--no-marker",
+        action="store_true",
+        help="AGENTS.md/CLAUDE.md 수정 없이 registry와 hook cache만 등록",
     )
     p_setup.add_argument(
         "--dry-run",
@@ -3163,6 +3306,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="cwd 프로젝트만 갱신 (기본: 등록 전체)",
     )
     p_sync.set_defaults(func=cmd_sync)
+
+    p_context = sub.add_parser(
+        "context",
+        help="hook context cache 관리",
+    )
+    context_sub = p_context.add_subparsers(
+        dest="action", required=True, metavar="ACTION"
+    )
+    p_context_render = context_sub.add_parser(
+        "render",
+        help="Profile/DecisionPatterns hook context cache 렌더",
+    )
+    p_context_render.add_argument(
+        "--out",
+        default=None,
+        help="출력 경로 override (기본: ~/.synapse/context/rendered.md)",
+    )
+    p_context_render.add_argument(
+        "--max-bytes",
+        type=int,
+        default=None,
+        help="렌더 결과 byte 상한 (기본: 2048)",
+    )
+    p_context_render.set_defaults(func=cmd_context)
+
+    p_hook = sub.add_parser("hook", help="Claude Code SessionStart hook 관리")
+    hook_sub = p_hook.add_subparsers(dest="action", required=True, metavar="ACTION")
+
+    p_hook_install = hook_sub.add_parser("install", help="SessionStart hook 설치")
+    p_hook_install.set_defaults(func=cmd_hook)
+
+    p_hook_uninstall = hook_sub.add_parser("uninstall", help="SessionStart hook 제거")
+    p_hook_uninstall.set_defaults(func=cmd_hook)
+
+    p_hook_run = hook_sub.add_parser("run", help="SessionStart hook 실행")
+    p_hook_run.add_argument(
+        "--event",
+        choices=("session-start",),
+        required=True,
+        help="hook event 이름",
+    )
+    p_hook_run.set_defaults(func=cmd_hook)
 
     p_moc = sub.add_parser(
         "moc",

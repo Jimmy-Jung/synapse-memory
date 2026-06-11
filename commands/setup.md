@@ -1,11 +1,11 @@
 ---
-description: 현재 프로젝트의 AGENTS.md / CLAUDE.md에 SYNAPSE-MEMORY marker 삽입 + ~/.synapse/projects.yaml에 등록. Claude Code와 Codex 양쪽이 같은 컨텍스트를 읽도록.
-argument-hint: [--target agents|claude|both] [--dry-run]
+description: 현재 프로젝트를 ~/.synapse/projects.yaml에 등록하고, 선택적으로 AGENTS.md / CLAUDE.md에 SYNAPSE-MEMORY marker 삽입. Claude hook-only 등록은 --no-marker 사용.
+argument-hint: [--target agents|claude|both|codex] [--no-marker] [--dry-run]
 ---
 
 !`synapse-memory setup $ARGUMENTS`
 
-위 출력은 setup 결과입니다. 현재 디렉터리에 `AGENTS.md`(Codex 표준)와 `CLAUDE.md`(Claude Code 표준) 중 선택된 파일에 `<!-- SYNAPSE-MEMORY START -->` … `<!-- SYNAPSE-MEMORY END -->` marker로 감싼 컨텍스트 블록이 추가됐습니다. 외부 AI는 다음 세션부터 marker 안 내용을 자연스럽게 읽습니다.
+위 출력은 setup 결과입니다. 현재 디렉터리를 Synapse Memory registry에 등록하고, `--no-marker`가 아니면 `AGENTS.md`(Codex 표준)와 `CLAUDE.md`(Claude Code 표준) 중 선택된 파일에 `<!-- SYNAPSE-MEMORY START -->` … `<!-- SYNAPSE-MEMORY END -->` marker로 감싼 컨텍스트 블록을 추가합니다.
 
 ## 사용 시점
 
@@ -16,17 +16,22 @@ argument-hint: [--target agents|claude|both] [--dry-run]
 
 - `--target both` (기본): AGENTS.md + CLAUDE.md 둘 다
 - `--target agents`: AGENTS.md만 (Codex 사용자)
+- `--target codex`: AGENTS.md만 (`agents` alias)
 - `--target claude`: CLAUDE.md만 (Claude Code 사용자)
+- `--no-marker`: marker 파일 수정 없이 registry + Claude hook cache만 등록
 - `--dry-run`: 의도된 변경만 출력, 파일·registry 변경 X
 
 ## 동작
 
 1. vault Profile.md / DecisionPatterns.md 읽기
-2. 상위 N개 fact + M개 pattern으로 marker body 생성
-3. 대상 파일에 inject_or_replace (idempotent — 재실행 시 byte-level 동일)
+2. 상위 N개 fact + M개 pattern으로 context body 생성
+3. `--no-marker`가 아니면 대상 파일에 inject_or_replace (idempotent — 재실행 시 byte-level 동일)
 4. `~/.synapse/projects.yaml`에 cwd 등록
+5. Claude hook용 `~/.synapse/context/rendered.md` cache 갱신
 
 ## 후속
 
-- vault Profile/Patterns가 바뀐 뒤 marker를 새 내용으로 갱신하려면 → `/sm:sync`
+- Claude hook cache만 갱신하려면 → `synapse-memory context render`
+- Codex/marker 파일까지 갱신하려면 → `/sm:sync`
+- 미등록 git repo에서 등록 힌트를 받고 싶으면 → `synapse-memory config set hook.suggest_register true`
 - 자동 트리거 없음. 명시 호출만.
