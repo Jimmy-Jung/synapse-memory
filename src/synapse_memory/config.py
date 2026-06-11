@@ -93,6 +93,7 @@ class VaultReferenceFoldersConfig:
     root: str = "20_Reference"
     projects: str = "20_Reference/Projects"
     companies: str = "20_Reference/Companies"
+    insights: str = "20_Reference/Insights"
 
 
 @dataclass

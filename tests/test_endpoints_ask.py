@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -117,6 +118,77 @@ class TestAsk:
         assert ref is not None
         assert ref.command == "ask"
         assert ref.citations[0].target_ref == "dansim"
+
+    def test_save_writes_insight_and_returns_path(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(tmp_path / "vault"))
+        records = [
+            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
+        ]
+        store = self._setup_store(records)
+        redaction_results = [
+            SimpleNamespace(redacted="TCA를 왜 도입했지?"),
+            SimpleNamespace(redacted="개인 연락처 [PHONE_1] 대신 단심 근거 [dansim]."),
+        ]
+        with patch.object(
+            ask_mod, "embed_query", return_value=[0.0]
+        ), patch.object(
+            ask_mod.ai_api,
+            "complete",
+            return_value="개인 연락처 010-1234-5678 대신 단심 근거 [dansim].",
+        ), patch.object(
+            ask_mod,
+            "redact_full",
+            side_effect=redaction_results,
+        ), patch.object(
+            ask_mod, "index_insight_card"
+        ) as mock_index:
+            result = ask("TCA를 왜 도입했지?", store=store, ai_env=_ai_env(), save=True)
+
+        assert result.saved_path is not None
+        text = result.saved_path.read_text(encoding="utf-8")
+        assert "node/insight" in text
+        assert "[PHONE_1]" in text
+        assert "010-1234-5678" not in text
+        assert "related:" in text
+        assert "dansim" in text
+        mock_index.assert_called_once()
+
+    def test_save_redacts_question_for_frontmatter_filename_and_index(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(tmp_path / "vault"))
+        records = [
+            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
+        ]
+        store = self._setup_store(records)
+        redaction_results = [
+            SimpleNamespace(redacted="[PERSON_NAME_1] 이직 전략"),
+            SimpleNamespace(redacted="답변 본문 [dansim]."),
+        ]
+        with patch.object(
+            ask_mod, "embed_query", return_value=[0.0]
+        ), patch.object(
+            ask_mod.ai_api,
+            "complete",
+            return_value="답변 본문 [dansim].",
+        ), patch.object(
+            ask_mod,
+            "redact_full",
+            side_effect=redaction_results,
+        ), patch.object(
+            ask_mod, "index_insight_card"
+        ) as mock_index:
+            result = ask("홍길동 이직 전략", store=store, ai_env=_ai_env(), save=True)
+
+        assert result.saved_path is not None
+        assert "홍길동" not in result.saved_path.name
+        text = result.saved_path.read_text(encoding="utf-8")
+        assert "홍길동" not in text
+        assert "[PERSON_NAME_1] 이직 전략" in text
+        indexed_card = mock_index.call_args.args[0]
+        assert indexed_card.question == "[PERSON_NAME_1] 이직 전략"
 
     def test_strips_claude_meta_prefix(self) -> None:
         records = [

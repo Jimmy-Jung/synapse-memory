@@ -33,6 +33,14 @@ def test_parser_has_ask_hybrid() -> None:
     assert args.model is None
 
 
+def test_parser_has_ask_save() -> None:
+    parser = cli_mod.build_parser()
+
+    args = parser.parse_args(["ask", "TCA를 왜 도입했지?", "--save"])
+
+    assert args.save is True
+
+
 def test_parser_has_persona_what_did_i_think_hybrid() -> None:
     parser = cli_mod.build_parser()
 

@@ -600,6 +600,7 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
     print(
         f"\n인덱싱 완료: project={stats.project_cards} "
         f"company={stats.company_cards} "
+        f"insight={getattr(stats, 'insight_cards', 0)} "
         f"raw_obsidian={getattr(stats, 'raw_obsidian_chunks', 0)} "
         f"raw_claude_code={getattr(stats, 'raw_claude_code_chunks', 0)} "
         f"bm25={getattr(stats, 'bm25_documents', 0)} "
@@ -1747,6 +1748,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
             ai_env=ai_env,
             where=where,
             hybrid=args.hybrid,
+            save=args.save,
         )
     except (EmbeddingUnavailableError, VectorStoreError, BM25IndexError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
@@ -1765,6 +1767,9 @@ def cmd_ask(args: argparse.Namespace) -> int:
             f"  [{s.distance:.3f}] {s.source_kind:<14} {s.card_id} "
             f"— {s.display_name}"
         )
+    if result.saved_path is not None:
+        print()
+        print(f"저장: {result.saved_path}")
     return 0
 
 
@@ -3464,6 +3469,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--hybrid",
         action="store_true",
         help="dense + BM25 RRF 결합 검색",
+    )
+    p_ask.add_argument(
+        "--save",
+        action="store_true",
+        help="답변을 InsightCard로 저장",
     )
     p_ask.set_defaults(func=cmd_ask)
 

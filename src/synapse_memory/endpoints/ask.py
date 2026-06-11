@@ -19,7 +19,14 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
+from synapse_memory.cards.insight import (
+    InsightCard,
+    new_insight_id,
+    save_insight_card,
+)
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
@@ -30,6 +37,8 @@ from synapse_memory.rag import (
     hybrid_search,
     open_vector_store,
 )
+from synapse_memory.rag.indexer import index_insight_card
+from synapse_memory.redaction import redact_full
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     new_answer_reference,
@@ -66,6 +75,7 @@ class AskResult:
     query: str
     answer: str
     sources: list[SourceCitation] = field(default_factory=list)
+    saved_path: Path | None = None
 
 
 def _build_context(results: list[tuple[VectorRecord, float]]) -> str:
@@ -94,6 +104,7 @@ def ask(
     ai_env: AIEnvironment | None = None,
     where: dict[str, object] | None = None,
     hybrid: bool = False,
+    save: bool = False,
 ) -> AskResult:
     """질의 → RAG → AI provider 답변.
 
@@ -162,7 +173,30 @@ def ask(
         for rec, dist in results
     ]
     _record_last_answer(query, sources)
-    return AskResult(query=query, answer=answer, sources=sources)
+    result = AskResult(query=query, answer=answer, sources=sources)
+    if save:
+        result.saved_path = save_insight_from_ask(result)
+    return result
+
+
+def save_insight_from_ask(result: AskResult) -> Path:
+    """AskResult를 InsightCard로 저장하고 best-effort로 인덱싱한다."""
+    created = datetime.now().astimezone().isoformat(timespec="seconds")
+    redacted_query = redact_full(result.query).redacted
+    redacted_answer = redact_full(result.answer).redacted
+    related = list(dict.fromkeys(source.card_id for source in result.sources))
+    card = InsightCard(
+        insight_id=new_insight_id(redacted_query),
+        question=redacted_query,
+        command="ask",
+        created=created,
+        related=related,
+        body=redacted_answer,
+    )
+    path = save_insight_card(card)
+    with contextlib.suppress(Exception):
+        index_insight_card(card)
+    return path
 
 
 def _record_last_answer(query: str, sources: list[SourceCitation]) -> None:

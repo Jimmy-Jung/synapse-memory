@@ -17,18 +17,26 @@ from synapse_memory.cards.company import (
     JobPosition,
     save_company_card,
 )
+from synapse_memory.cards.insight import InsightCard, save_insight_card
 from synapse_memory.cards.project import (
     ProjectCard,
     ProjectMetric,
     save_project_card,
 )
 from synapse_memory.feedback.events import append_feedback_event, build_feedback_event
+from synapse_memory.rag.bm25 import (
+    BM25Document,
+    load_bm25_documents,
+    write_bm25_documents,
+)
 from synapse_memory.rag.indexer import (
     PREFIX_COMPANY,
+    PREFIX_INSIGHT,
     PREFIX_PROJECT,
     VectorRecord,
     company_card_to_text,
     index_cards,
+    index_insight_card,
     project_card_to_text,
 )
 from synapse_memory.rag.vector_store import VectorStore
@@ -134,6 +142,33 @@ class TestCompanyCardToText:
         assert "iOS (2026)" in text
 
 
+class TestInsightCardIndexing:
+    def test_index_insight_card_upserts_metadata(self) -> None:
+        card = InsightCard(
+            insight_id="2026-06-11-tca",
+            question="TCA를 왜 도입했지?",
+            command="ask",
+            created="2026-06-11T14:32:00+09:00",
+            related=["dansim-ios"],
+            keywords=["TCA"],
+            body="답변 본문",
+        )
+        store = MagicMock(spec=VectorStore)
+
+        with patch(
+            "synapse_memory.rag.indexer.embed_texts",
+            return_value=[[0.1] * 1024],
+        ):
+            index_insight_card(card, store=store)
+
+        records = store.upsert.call_args.args[0]
+        assert records[0].id == f"{PREFIX_INSIGHT}{card.insight_id}"
+        assert records[0].metadata["source_kind"] == "card_insight"
+        assert records[0].metadata["card_id"] == card.insight_id
+        assert records[0].metadata["display_name"] == card.question
+        assert "답변 본문" in records[0].document
+
+
 # ---------------------------------------------------------------------------
 # index_cards (mock)
 # ---------------------------------------------------------------------------
@@ -161,6 +196,17 @@ class TestIndexCards:
             ),
             vault_path=vault,
         )
+        save_insight_card(
+            InsightCard(
+                insight_id="2026-06-11-tca",
+                question="TCA를 왜 도입했지?",
+                command="ask",
+                created="2026-06-11T14:32:00+09:00",
+                related=["dansim"],
+                body="답변 본문",
+            ),
+            vault_path=vault,
+        )
 
     def _fake_store(self) -> MagicMock:
         store = MagicMock(spec=VectorStore)
@@ -174,31 +220,46 @@ class TestIndexCards:
         # bge-m3 응답 mock
         with patch(
             "synapse_memory.rag.indexer.embed_texts",
-            return_value=[[0.1] * 1024, [0.2] * 1024],
+            return_value=[[0.1] * 1024, [0.2] * 1024, [0.3] * 1024],
         ):
-            stats = index_cards(store=store, vault_path=vault)
+            stats = index_cards(
+                store=store,
+                vault_path=vault,
+                bm25_path=vault / "bm25.jsonl",
+            )
 
         assert stats.project_cards == 1
         assert stats.company_cards == 1
+        assert stats.insight_cards == 1
+        assert stats.bm25_documents == 3
         assert stats.bytes_indexed > 0
 
-        # 두 번 upsert (project 1번, company 1번)
-        assert store.upsert.call_count == 2
+        # 세 번 upsert (project, company, insight)
+        assert store.upsert.call_count == 3
 
     def test_rebuild_clears_first(self, vault: Path) -> None:
         self._setup_vault(vault)
         store = self._fake_store()
         with patch(
             "synapse_memory.rag.indexer.embed_texts",
-            return_value=[[0.1] * 1024],
+            return_value=[[0.1] * 1024, [0.2] * 1024, [0.3] * 1024],
         ):
-            index_cards(store=store, vault_path=vault, rebuild=True)
+            index_cards(
+                store=store,
+                vault_path=vault,
+                rebuild=True,
+                bm25_path=vault / "bm25.jsonl",
+            )
         store.clear.assert_called_once()
 
     def test_empty_vault(self, vault: Path) -> None:
         store = self._fake_store()
         with patch("synapse_memory.rag.indexer.embed_texts", return_value=[]):
-            stats = index_cards(store=store, vault_path=vault)
+            stats = index_cards(
+                store=store,
+                vault_path=vault,
+                bm25_path=vault / "bm25.jsonl",
+            )
         assert stats.total_cards == 0
         store.upsert.assert_not_called()
 
@@ -214,12 +275,17 @@ class TestIndexCards:
         store.upsert.side_effect = _capture
         with patch(
             "synapse_memory.rag.indexer.embed_texts",
-            return_value=[[0.1] * 1024, [0.2] * 1024],
+            return_value=[[0.1] * 1024, [0.2] * 1024, [0.3] * 1024],
         ):
-            index_cards(store=store, vault_path=vault)
+            index_cards(
+                store=store,
+                vault_path=vault,
+                bm25_path=vault / "bm25.jsonl",
+            )
 
         assert any(i.startswith(PREFIX_PROJECT) for i in upserted_ids)
         assert any(i.startswith(PREFIX_COMPANY) for i in upserted_ids)
+        assert any(i.startswith(PREFIX_INSIGHT) for i in upserted_ids)
 
     def test_metadata_includes_source_kind(self, vault: Path) -> None:
         self._setup_vault(vault)
@@ -232,12 +298,17 @@ class TestIndexCards:
         store.upsert.side_effect = _capture
         with patch(
             "synapse_memory.rag.indexer.embed_texts",
-            return_value=[[0.1] * 1024, [0.2] * 1024],
+            return_value=[[0.1] * 1024, [0.2] * 1024, [0.3] * 1024],
         ):
-            index_cards(store=store, vault_path=vault)
+            index_cards(
+                store=store,
+                vault_path=vault,
+                bm25_path=vault / "bm25.jsonl",
+            )
 
         kinds = {r.metadata.get("source_kind") for r in captured}
         assert "card_project" in kinds
+        assert "card_insight" in kinds
         assert "card_company" in kinds
 
     def test_metadata_includes_feedback_score(
@@ -267,9 +338,55 @@ class TestIndexCards:
             "synapse_memory.rag.indexer.embed_texts",
             return_value=[[0.1] * 1024],
         ):
-            index_cards(store=store, vault_path=vault)
+            index_cards(
+                store=store,
+                vault_path=vault,
+                bm25_path=tmp_path / "bm25.jsonl",
+            )
 
         assert captured[0].metadata["feedback_score"] == 0.85
+
+    def test_card_only_index_preserves_existing_raw_bm25_documents(
+        self, vault: Path
+    ) -> None:
+        self._setup_vault(vault)
+        bm25_path = vault / "bm25.jsonl"
+        write_bm25_documents(
+            [
+                BM25Document(
+                    record_id="raw_obsidian:10_Active/raw-note.md#0",
+                    text="기존 raw memo",
+                    tokens=["기존", "raw", "memo"],
+                    metadata={
+                        "source_kind": "raw_obsidian",
+                        "path": "10_Active/raw-note.md",
+                    },
+                ),
+                BM25Document(
+                    record_id="card_project:stale",
+                    text="오래된 카드 문서",
+                    tokens=["오래된", "카드"],
+                    metadata={"source_kind": "card_project", "card_id": "stale"},
+                ),
+            ],
+            path=bm25_path,
+        )
+        store = self._fake_store()
+
+        with patch(
+            "synapse_memory.rag.indexer.embed_texts",
+            side_effect=lambda texts, **_kwargs: [[0.1] * 1024 for _ in texts],
+        ):
+            stats = index_cards(store=store, vault_path=vault, bm25_path=bm25_path)
+
+        docs = load_bm25_documents(path=bm25_path)
+        ids = [doc.record_id for doc in docs]
+        assert "raw_obsidian:10_Active/raw-note.md#0" in ids
+        assert "card_project:stale" not in ids
+        assert any(record_id.startswith(PREFIX_PROJECT) for record_id in ids)
+        assert any(record_id.startswith(PREFIX_COMPANY) for record_id in ids)
+        assert any(record_id.startswith(PREFIX_INSIGHT) for record_id in ids)
+        assert stats.bm25_documents == 4
 
     def test_include_raw_indexes_obsidian_and_redacted_claude(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path

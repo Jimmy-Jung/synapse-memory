@@ -2,6 +2,23 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.16.0] — 2026-06-11
+
+### Added — Knowledge Compounding P1
+
+- `synapse-memory ask --save` 가 답변을 `InsightCard`로 저장한다. 저장 위치는
+  `<vault>/20_Reference/Insights/<yyyy>/<mm>/`이며, 저장된 Insight는 다음
+  RAG 인덱싱과 검색 대상이 된다.
+- `rag index --rebuild` 가 Project/Company Card뿐 아니라 기존 InsightCard도
+  재인덱싱하고 BM25 sidecar에 포함한다.
+
+### Fixed — Insight 저장 안전성
+
+- Insight 저장 시 질문과 답변을 모두 redaction 후 vault-visible markdown,
+  filename slug, index display name에 사용한다.
+- 같은 질문을 여러 번 저장해도 기존 Insight를 덮어쓰지 않고 `-2`, `-3`
+  suffix를 붙여 별도 파일로 보존한다.
+
 ## [1.15.9] — 2026-05-29
 
 ### Fixed — Codex runtime daily/ask 안정화
