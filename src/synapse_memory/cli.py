@@ -452,7 +452,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ Dataview 플러그인 진단 실패: {exc}")
 
-    # Claude Code SessionStart hook 설치 상태
+    # Claude Code/Codex SessionStart hook 설치 상태
     try:
         from synapse_memory.hooks.install import diagnose_session_hook
 
@@ -463,7 +463,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"⚠ {hook_result.message}")
             print("  설치: synapse-memory hook install")
     except Exception as exc:
-        print(f"⚠ Claude Code hook 진단 실패: {exc}")
+        print(f"⚠ SessionStart hook 진단 실패: {exc}")
 
     # AI provider CLI
     ai_env = detect_ai_environment()
@@ -2599,7 +2599,7 @@ def cmd_context(args: argparse.Namespace) -> int:
 
 
 def cmd_hook(args: argparse.Namespace) -> int:
-    """Claude Code SessionStart hook 관리."""
+    """Claude Code/Codex SessionStart hook 관리."""
     if args.action == "run":
         from synapse_memory.hooks.session_start import main as hook_main
 
@@ -2615,7 +2615,8 @@ def cmd_hook(args: argparse.Namespace) -> int:
             return 1
         _refresh_hook_sidecars()
         action = "설치됨" if changed else "이미 설치됨"
-        print(f"{OK} Claude Code SessionStart hook {action}")
+        print(f"{OK} Claude Code/Codex SessionStart hook {action}")
+        print("  Codex는 첫 실행 전 `/hooks`에서 hook 신뢰 승인이 필요할 수 있습니다.")
         return 0
 
     if args.action == "uninstall":
@@ -2627,7 +2628,7 @@ def cmd_hook(args: argparse.Namespace) -> int:
             print(f"{FAIL} {exc}", file=sys.stderr)
             return 1
         action = "제거됨" if changed else "설치 항목 없음"
-        print(f"{OK} Claude Code SessionStart hook {action}")
+        print(f"{OK} Claude Code/Codex SessionStart hook {action}")
         return 0
 
     print(f"{FAIL} unknown hook action: {args.action}", file=sys.stderr)
@@ -3331,7 +3332,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_context_render.set_defaults(func=cmd_context)
 
-    p_hook = sub.add_parser("hook", help="Claude Code SessionStart hook 관리")
+    p_hook = sub.add_parser("hook", help="Claude Code/Codex SessionStart hook 관리")
     hook_sub = p_hook.add_subparsers(dest="action", required=True, metavar="ACTION")
 
     p_hook_install = hook_sub.add_parser("install", help="SessionStart hook 설치")

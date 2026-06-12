@@ -1,4 +1,4 @@
-"""Install/uninstall Claude Code SessionStart hook."""
+"""Install/uninstall Claude Code and Codex SessionStart hooks."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ from typing import Any
 
 HOOK_COMMAND = "synapse-memory hook run --event session-start"
 DEFAULT_TIMEOUT_SECONDS = 5
+CODEX_SESSION_MATCHER = "startup|resume"
+CODEX_STATUS_MESSAGE = "Loading Synapse Memory context"
 
 
 @dataclass(frozen=True)
@@ -22,9 +24,29 @@ class HookDiagnostic:
     settings_path: Path
 
 
-def install_session_hook(settings_path: Path | None = None) -> bool:
-    """Claude Code settings.json에 SessionStart hook을 멱등 등록한다."""
-    path = settings_path or Path.home() / ".claude" / "settings.json"
+def install_session_hook(
+    settings_path: Path | None = None,
+    codex_hooks_path: Path | None = None,
+) -> bool:
+    """Claude Code/Codex SessionStart hook을 멱등 등록한다."""
+    return install_session_hooks(
+        settings_path=settings_path,
+        codex_hooks_path=codex_hooks_path,
+    )
+
+
+def install_session_hooks(
+    settings_path: Path | None = None,
+    codex_hooks_path: Path | None = None,
+) -> bool:
+    """Claude Code settings.json과 Codex hooks.json에 SessionStart hook을 등록한다."""
+    claude_changed = _install_claude_session_hook(settings_path)
+    codex_changed = _install_codex_session_hook(codex_hooks_path)
+    return claude_changed or codex_changed
+
+
+def _install_claude_session_hook(settings_path: Path | None = None) -> bool:
+    path = _claude_settings_path(settings_path)
     settings = _load_settings(path)
     session_hooks = settings.setdefault("hooks", {}).setdefault("SessionStart", [])
 
@@ -32,43 +54,76 @@ def install_session_hook(settings_path: Path | None = None) -> bool:
         return False
 
     _backup_if_exists(path)
-    session_hooks.append(
-        {
-            "hooks": [
-                {
-                    "type": "command",
-                    "command": HOOK_COMMAND,
-                    "timeout": DEFAULT_TIMEOUT_SECONDS,
-                }
-            ]
-        }
-    )
+    session_hooks.append(_claude_hook_group())
     _write_settings(path, settings)
     return True
 
 
-def diagnose_session_hook(settings_path: Path | None = None) -> HookDiagnostic:
-    """Claude Code SessionStart hook 설치 상태를 진단한다."""
-    path = settings_path or Path.home() / ".claude" / "settings.json"
+def _install_codex_session_hook(codex_hooks_path: Path | None = None) -> bool:
+    path = _codex_hooks_path(codex_hooks_path)
+    settings = _load_settings(path)
+    session_hooks = settings.setdefault("hooks", {}).setdefault("SessionStart", [])
+
+    if _contains_synapse_hook(session_hooks):
+        return False
+
+    _backup_if_exists(path)
+    session_hooks.append(_codex_hook_group())
+    _write_settings(path, settings)
+    return True
+
+
+def diagnose_session_hook(
+    settings_path: Path | None = None,
+    codex_hooks_path: Path | None = None,
+) -> HookDiagnostic:
+    """Claude Code/Codex SessionStart hook 설치 상태를 진단한다."""
+    claude_path = _claude_settings_path(settings_path)
+    codex_path = _codex_hooks_path(codex_hooks_path)
+
+    claude_installed, claude_message = _diagnose_hook_file(
+        claude_path, label="Claude Code", missing_label="settings"
+    )
+    codex_installed, codex_message = _diagnose_hook_file(
+        codex_path, label="Codex", missing_label="hooks"
+    )
+    installed = claude_installed and codex_installed
+    return HookDiagnostic(installed, f"{claude_message}; {codex_message}", claude_path)
+
+
+def _diagnose_hook_file(
+    path: Path,
+    *,
+    label: str,
+    missing_label: str,
+) -> tuple[bool, str]:
     if not path.is_file():
-        return HookDiagnostic(False, f"Claude Code SessionStart hook 미설치: {path}", path)
+        return False, f"{label} SessionStart hook 미설치 ({missing_label}: {path})"
 
     try:
         settings = _load_settings(path)
     except ValueError as exc:
-        return HookDiagnostic(False, f"Claude Code settings 진단 실패: {exc}", path)
+        return False, f"{label} hook 진단 실패: {exc}"
 
     hooks = settings.get("hooks")
     session_hooks = hooks.get("SessionStart") if isinstance(hooks, dict) else None
     installed = isinstance(session_hooks, list) and _contains_synapse_hook(session_hooks)
     if installed:
-        return HookDiagnostic(True, f"Claude Code SessionStart hook 설치됨: {path}", path)
-    return HookDiagnostic(False, f"Claude Code SessionStart hook 미설치: {path}", path)
+        return True, f"{label} SessionStart hook 설치됨: {path}"
+    return False, f"{label} SessionStart hook 미설치: {path}"
 
 
-def uninstall_session_hook(settings_path: Path | None = None) -> bool:
-    """Claude Code settings.json에서 Synapse hook entry만 제거한다."""
-    path = settings_path or Path.home() / ".claude" / "settings.json"
+def uninstall_session_hook(
+    settings_path: Path | None = None,
+    codex_hooks_path: Path | None = None,
+) -> bool:
+    """Claude Code/Codex hook 파일에서 Synapse hook entry만 제거한다."""
+    claude_changed = _uninstall_session_hook_file(_claude_settings_path(settings_path))
+    codex_changed = _uninstall_session_hook_file(_codex_hooks_path(codex_hooks_path))
+    return claude_changed or codex_changed
+
+
+def _uninstall_session_hook_file(path: Path) -> bool:
     if not path.is_file():
         return False
 
@@ -109,6 +164,40 @@ def uninstall_session_hook(settings_path: Path | None = None) -> bool:
     hooks["SessionStart"] = kept_groups
     _write_settings(path, settings)
     return True
+
+
+def _claude_settings_path(settings_path: Path | None = None) -> Path:
+    return settings_path or Path.home() / ".claude" / "settings.json"
+
+
+def _codex_hooks_path(codex_hooks_path: Path | None = None) -> Path:
+    return codex_hooks_path or Path.home() / ".codex" / "hooks.json"
+
+
+def _claude_hook_group() -> dict[str, Any]:
+    return {
+        "hooks": [
+            {
+                "type": "command",
+                "command": HOOK_COMMAND,
+                "timeout": DEFAULT_TIMEOUT_SECONDS,
+            }
+        ]
+    }
+
+
+def _codex_hook_group() -> dict[str, Any]:
+    return {
+        "matcher": CODEX_SESSION_MATCHER,
+        "hooks": [
+            {
+                "type": "command",
+                "command": HOOK_COMMAND,
+                "timeout": DEFAULT_TIMEOUT_SECONDS,
+                "statusMessage": CODEX_STATUS_MESSAGE,
+            }
+        ],
+    }
 
 
 def _load_settings(path: Path) -> dict[str, Any]:

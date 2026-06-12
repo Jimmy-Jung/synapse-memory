@@ -2,6 +2,29 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.16.2] — 2026-06-12
+
+### Added — Codex Hook Support
+
+- `synapse-memory hook install`이 Claude Code `~/.claude/settings.json`뿐 아니라
+  Codex `~/.codex/hooks.json`에도 `SessionStart` command hook을 설치한다.
+- Codex hook은 `startup|resume` matcher와 `Loading Synapse Memory context`
+  status message를 사용해 기존 hook runner의 Profile/DecisionPatterns 주입을
+  Codex 세션 시작에도 적용한다.
+
+### Changed — Hook Diagnostics
+
+- `synapse-memory doctor`와 `hook install|uninstall` 출력이 Claude Code/Codex
+  공통 SessionStart hook 상태를 설명하도록 갱신됐다.
+- README의 “Codex hook 미지원” 안내를 제거하고, Codex의 `/hooks` 신뢰 승인
+  필요성을 명시했다.
+
+### Fixed — Hook Lifecycle Safety
+
+- Codex hook 설치, 중복 설치 방지, 진단, 제거 테스트를 추가했다.
+- `hook uninstall`은 Claude Code와 Codex 양쪽에서 Synapse hook entry만 제거하고
+  사용자의 다른 hook은 보존한다.
+
 ## [1.16.1] — 2026-06-11
 
 ### Added — Hook Context Injection
