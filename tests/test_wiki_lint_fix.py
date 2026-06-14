@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from synapse_memory.wiki.lint import apply_structural_fixes
 from synapse_memory.wiki.page import WikiPage, load_page, save_page
 

@@ -159,6 +159,7 @@ from synapse_memory.wiki.launchd import (  # noqa: E402
     install_watch,
     uninstall_watch,
 )
+from synapse_memory.wiki.lint import run_lint  # noqa: E402
 from synapse_memory.wiki.query import ask_wiki  # noqa: E402
 from synapse_memory.wiki.watermark import load_watermark  # noqa: E402
 
@@ -785,6 +786,16 @@ def cmd_wiki_reindex(args: argparse.Namespace) -> int:
     """모든 wiki 페이지를 벡터 스토어에 재인덱싱."""
     count = index_wiki_pages()
     print(f"indexed {count} pages")
+    return 0
+
+
+def cmd_lint(args: argparse.Namespace) -> int:
+    """구조 자동 수정 + 검토 큐 + index.md 갱신."""
+    r = run_lint()
+    print(
+        f"lint: +{r.backlinks_added} backlinks, "
+        f"-{r.dead_links_removed} dead links, {len(r.review_items)} review items"
+    )
     return 0
 
 
@@ -3683,6 +3694,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_wiki_reindex = wiki_sub.add_parser("reindex", help="모든 wiki 페이지 재인덱싱")
     p_wiki_reindex.set_defaults(func=cmd_wiki_reindex)
+
+    p_lint = sub.add_parser(
+        "lint", help="구조 자동수정(역링크/죽은링크) + 검토 큐 + index.md"
+    )
+    p_lint.add_argument("--now", action="store_true", help="즉시 1회 실행")
+    p_lint.set_defaults(func=cmd_lint)
 
     p_watch = sub.add_parser(
         "watch", help="자동 통합 데몬 (launchd WatchPaths + 유휴 + 락)"

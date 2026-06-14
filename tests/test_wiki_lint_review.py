@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from synapse_memory.wiki.lint import merge_candidates, stale_candidates
 from synapse_memory.wiki.page import WikiPage
 

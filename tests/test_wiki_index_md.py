@@ -1,7 +1,13 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from synapse_memory.wiki.index_md import (
-    MARKER_END, MARKER_START, index_md_path, render_index, write_index,
+    MARKER_END,
+    MARKER_START,
+    index_md_path,
+    render_index,
+    write_index,
 )
 from synapse_memory.wiki.page import WikiPage
 

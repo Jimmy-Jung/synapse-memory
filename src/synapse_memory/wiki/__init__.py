@@ -9,6 +9,13 @@ from synapse_memory.wiki.index import (
     wiki_page_to_record,
     wiki_page_to_text,
 )
+from synapse_memory.wiki.index_md import (
+    MARKER_END,
+    MARKER_START,
+    index_md_path,
+    render_index,
+    write_index,
+)
 from synapse_memory.wiki.ingest import IngestResult, ingest_source
 from synapse_memory.wiki.launchd import (
     LABEL,
@@ -16,6 +23,16 @@ from synapse_memory.wiki.launchd import (
     install_watch,
     plist_path,
     uninstall_watch,
+)
+from synapse_memory.wiki.lint import (
+    LintReport,
+    apply_structural_fixes,
+    find_broken_backlinks,
+    find_dead_links,
+    find_orphans,
+    merge_candidates,
+    run_lint,
+    stale_candidates,
 )
 from synapse_memory.wiki.lock import FileLock, LockHeldError, default_lock_path
 from synapse_memory.wiki.page import (
@@ -42,38 +59,51 @@ from synapse_memory.wiki.schema import (
 
 __all__ = [
     "LABEL",
+    "MARKER_END",
+    "MARKER_START",
     "SCHEMA_FILENAME",
     "VALID_TYPES",
     "WIKI_SOURCE_KIND",
     "CycleOutcome",
     "FileLock",
     "IngestResult",
+    "LintReport",
     "LockHeldError",
     "WikiAnswer",
     "WikiPage",
+    "apply_structural_fixes",
     "ask_wiki",
     "build_plist",
     "default_lock_path",
     "ensure_schema",
     "extract_wikilinks",
+    "find_broken_backlinks",
+    "find_dead_links",
+    "find_orphans",
+    "index_md_path",
     "index_one_page",
     "index_wiki_pages",
     "ingest_source",
     "install_watch",
     "list_pages",
     "load_page",
+    "merge_candidates",
     "page_dir",
     "page_path",
     "parse_page",
     "plist_path",
+    "render_index",
+    "run_lint",
     "run_watch_cycle",
     "save_page",
     "schema_path",
     "serialize_page",
     "slugify",
+    "stale_candidates",
     "uninstall_watch",
     "wiki_page_to_record",
     "wiki_page_to_text",
     "with_related",
+    "write_index",
     "write_schema",
 ]

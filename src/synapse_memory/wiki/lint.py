@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
+from synapse_memory.wiki.index_md import write_index
+from synapse_memory.wiki.log import append_log
 from synapse_memory.wiki.page import (
     VALID_TYPES,
     WikiPage,
@@ -219,3 +221,42 @@ def merge_candidates(
             if ratio >= threshold:
                 pairs.append((p1.slug, p2.slug))
     return pairs
+
+
+# ---------------------------------------------------------------------------
+# 전체 lint 오케스트레이션
+# ---------------------------------------------------------------------------
+
+
+def run_lint(
+    *,
+    vault_path: Path | None = None,
+    today: str | None = None,
+) -> LintReport:
+    """구조 자동 수정 → 검토 큐 산출 → index.md 갱신 → log 기록."""
+    report = apply_structural_fixes(vault_path=vault_path)
+
+    pages = _all_pages(vault_path=vault_path)
+    orphans = find_orphans(pages)
+    stale = stale_candidates(pages, today=today)
+    merges = merge_candidates(pages)
+    review_items: list[dict] = [
+        {"kind": "stale", "slug": s} for s in stale
+    ] + [
+        {"kind": "merge", "slug": a, "other": b} for a, b in merges
+    ]
+    report.orphans = orphans
+    report.review_items = review_items
+
+    write_index(
+        pages,
+        orphans=orphans,
+        review_items=review_items,
+        vault_path=vault_path,
+    )
+    append_log(
+        f"lint: +{report.backlinks_added} backlinks, "
+        f"-{report.dead_links_removed} dead, {len(review_items)} review",
+        vault_path=vault_path,
+    )
+    return report
