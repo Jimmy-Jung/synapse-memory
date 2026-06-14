@@ -56,13 +56,13 @@ SEEN_IDS_FILE = "seen-ids.json"
 GMAIL_SCOPES = ("https://www.googleapis.com/auth/gmail.readonly",)
 
 __all__ = [
+    "DEFAULT_CREDS",
+    "DEFAULT_TOKEN",
     "ENV_CREDS",
     "ENV_ENABLE",
     "ENV_TOKEN",
-    "DEFAULT_CREDS",
-    "DEFAULT_TOKEN",
-    "SUBPATH",
     "GMAIL_SCOPES",
+    "SUBPATH",
     "CollectStats",
     "GmailMessage",
     "GmailService",
@@ -331,12 +331,12 @@ def collect_gmail_sent(
                 continue
             try:
                 m = service.get_message(msg_id)
-            except Exception as exc:  # noqa: BLE001 — Gmail API 클라이언트 다양한 예외
+            except Exception as exc:
                 stats.errors.append((msg_id, str(exc)))
                 continue
             new_messages.append(m)
             seen.add(msg_id)
-    except Exception as exc:  # noqa: BLE001 — list_sent_ids 자체 실패
+    except Exception as exc:
         stats.errors.append(("list_sent_ids", str(exc)))
 
     if new_messages:

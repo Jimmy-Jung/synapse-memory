@@ -31,9 +31,9 @@ DAYONE_DIR_PATTERN = "*.dayoneapp2"
 SUBPATH = Path("raw") / "day-one"
 
 __all__ = [
+    "DAYONE_DIR_PATTERN",
     "DEFAULT_DAYONE_HOME",
     "DEFAULT_DAYONE_PARENT",
-    "DAYONE_DIR_PATTERN",
     "ENV_DAYONE_HOME",
     "SUBPATH",
     "CollectStats",
@@ -86,10 +86,7 @@ def collect_day_one(
             if dayone_home_env is not None
             else os.environ.get(ENV_DAYONE_HOME)
         )
-        if env_val:
-            home = Path(env_val).expanduser()
-        else:
-            home = DEFAULT_DAYONE_HOME
+        home = Path(env_val).expanduser() if env_val else DEFAULT_DAYONE_HOME
 
     dst = dst_root or (l0_root() / SUBPATH)
 
