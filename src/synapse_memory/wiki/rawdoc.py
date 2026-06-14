@@ -87,7 +87,9 @@ def iter_new_raw(
     since_ts = datetime.fromisoformat(since).timestamp() if since else None
     docs: list[RawDoc] = []
     for path in sorted(base.rglob("*.jsonl")):
-        mtime = path.stat().st_mtime
+        # 워터마크는 초 단위(timespec="seconds")로 저장되므로 비교도 초로 절삭해야
+        # 동일 파일이 재처리되지 않는다.
+        mtime = float(int(path.stat().st_mtime))
         if since_ts is not None and mtime <= since_ts:
             continue
         text = _file_text(path)

@@ -1,6 +1,7 @@
 """v2 LLM-maintained wiki 페이지 계층."""
 from __future__ import annotations
 
+from synapse_memory.wiki.ingest import IngestResult, ingest_source
 from synapse_memory.wiki.page import (
     VALID_TYPES,
     WikiPage,
@@ -25,8 +26,10 @@ from synapse_memory.wiki.schema import (
 __all__ = [
     "SCHEMA_FILENAME",
     "VALID_TYPES",
+    "IngestResult",
     "WikiPage",
     "ensure_schema",
+    "ingest_source",
     "extract_wikilinks",
     "list_pages",
     "load_page",
