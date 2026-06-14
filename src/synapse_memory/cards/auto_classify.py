@@ -29,7 +29,6 @@ from pathlib import Path
 from synapse_memory.clusters.identify import ProjectCluster
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
-from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.storage.l0 import l0_root
 
 VALID_KINDS = ("project", "company", "domain", "life", "skip")
@@ -261,7 +260,6 @@ def classify_cluster(
     *,
     obs_root: Path,
     ai_env: AIEnvironment,
-    apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_CLASSIFY_MODEL,
     codex_root: Path | None = None,
 ) -> ClusterClassification:

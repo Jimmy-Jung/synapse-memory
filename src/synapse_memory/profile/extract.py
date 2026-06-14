@@ -22,7 +22,6 @@ from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.config import get_config
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment, AIError
-from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.profile.schema import (
     PROFILE_CATEGORIES,
     DecisionPattern,
@@ -337,7 +336,6 @@ def extract_profile_facts(
     sample_lines: int = DEFAULT_SAMPLE_LINES,
     model: str = DEFAULT_MODEL,
     ai_env: AIEnvironment | None = None,
-    apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
     codex_sessions_path: Path | None = None,
@@ -478,7 +476,6 @@ def extract_decision_patterns(
     sample_lines: int = DEFAULT_SAMPLE_LINES,
     model: str = DEFAULT_MODEL,
     ai_env: AIEnvironment | None = None,
-    apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
     codex_sessions_path: Path | None = None,

@@ -30,7 +30,6 @@ from synapse_memory.cards.project import (
 from synapse_memory.clusters.identify import ProjectCluster
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
-from synapse_memory.llm.apfel import ApfelEnvironment
 
 DEFAULT_GENERATE_MODEL = "sonnet"
 SAMPLE_NOTES_FOR_CARD = 6        # 큰 cluster 처리 시간/비용 trade-off
@@ -164,7 +163,6 @@ def _gather_redacted_text(
     cluster: ProjectCluster,
     obs_root: Path,
     *,
-    apfel_env: ApfelEnvironment | None,
     max_notes: int = SAMPLE_NOTES_FOR_CARD,
     chars_per_note: int = NOTE_CHARS_FOR_CARD,
     max_total: int = MAX_RAW_TEXT_FOR_CARD,
@@ -227,7 +225,6 @@ def generate_project_card(
     *,
     obs_root: Path,
     ai_env: AIEnvironment,
-    apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_GENERATE_MODEL,
 ) -> ProjectCard:
     """cluster → ProjectCard. yaml frontmatter parse까지 수행.
@@ -236,7 +233,7 @@ def generate_project_card(
         AIError: 호출 실패 또는 응답 형식 오류.
         ValueError: yaml 파싱 실패.
     """
-    redacted = _gather_redacted_text(cluster, obs_root, apfel_env=apfel_env)
+    redacted = _gather_redacted_text(cluster, obs_root)
     user_prompt = _build_user_prompt(cluster, redacted, candidate_name)
 
     text = ai_api.complete(
@@ -275,10 +272,9 @@ def generate_company_card(
     *,
     obs_root: Path,
     ai_env: AIEnvironment,
-    apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_GENERATE_MODEL,
 ) -> CompanyCard:
-    redacted = _gather_redacted_text(cluster, obs_root, apfel_env=apfel_env)
+    redacted = _gather_redacted_text(cluster, obs_root)
     user_prompt = _build_user_prompt(cluster, redacted, candidate_name)
 
     text = ai_api.complete(
