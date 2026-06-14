@@ -11,9 +11,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 from typing import Any
 
 import yaml
+
+from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.config import get_config
+from synapse_memory.folders import year_month_path
 
 FRONTMATTER_DELIMITER = "---"
 VALID_TYPES: tuple[str, ...] = (
@@ -29,6 +35,9 @@ _FRONTMATTER_RE = re.compile(
     r"^---\s*\n(?P<yaml>.*?)\n---\s*\n?(?P<body>.*)$",
     re.DOTALL,
 )
+
+# slug에 허용하지 않는 문자(영숫자·한글 음절·하이픈 외)를 ``-``로 치환.
+_SLUG_RE = re.compile(r"[^0-9a-z가-힣-]+")
 
 
 @dataclass(frozen=True)
@@ -124,3 +133,110 @@ def parse_page(text: str) -> WikiPage:
         status=str(meta.get("status") or "active"),
         body=m.group("body"),
     )
+
+
+# ---------------------------------------------------------------------------
+# slug + 디스크 I/O
+# ---------------------------------------------------------------------------
+
+_TYPE_FOLDER_ATTR = {
+    "project": "projects",
+    "company": "companies",
+    "person": "people",
+    "concept": "concepts",
+    "profile": "profile",
+}
+
+
+def slugify(name: str) -> str:
+    """display name → file-safe slug. 한국어 음절 보존, 공백 → ``-``."""
+    s = name.strip().replace(" ", "-").lower()
+    s = _SLUG_RE.sub("-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s or "untitled"
+
+
+def page_dir(
+    page_type: str,
+    *,
+    vault_path: Path | None = None,
+    when: date | None = None,
+) -> Path:
+    """페이지 타입별 저장 디렉토리. insight는 연/월 하위폴더 사용."""
+    if page_type not in VALID_TYPES:
+        raise ValueError(f"알 수 없는 type: {page_type!r}")
+    vault = (vault_path or get_vault_path()).expanduser().resolve()
+    wiki = get_config().vault_folders.wiki
+    if page_type == "insight":
+        return year_month_path(vault / wiki.insights, when or date.today())
+    sub = getattr(wiki, _TYPE_FOLDER_ATTR[page_type])
+    return vault / sub
+
+
+def _insight_when(page: WikiPage) -> date:
+    """insight 페이지의 updated(YYYY-MM-DD)로 연/월 폴더 결정. 없으면 today."""
+    if page.updated:
+        try:
+            return date.fromisoformat(page.updated)
+        except ValueError:
+            pass
+    return date.today()
+
+
+def page_path(page: WikiPage, *, vault_path: Path | None = None) -> Path:
+    """페이지의 디스크 경로."""
+    when = _insight_when(page) if page.type == "insight" else None
+    return page_dir(page.type, vault_path=vault_path, when=when) / page.filename
+
+
+def save_page(page: WikiPage, *, vault_path: Path | None = None) -> Path:
+    """WikiPage → vault 디스크. 디렉토리 자동 생성. 기존 파일 덮어씀."""
+    path = page_path(page, vault_path=vault_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(serialize_page(page), encoding="utf-8")
+    return path
+
+
+def load_page(
+    page_type: str,
+    slug: str,
+    *,
+    vault_path: Path | None = None,
+    when: date | None = None,
+) -> WikiPage:
+    """타입+slug로 페이지 로드.
+
+    Raises:
+        FileNotFoundError: 해당 페이지 없음.
+    """
+    path = page_dir(page_type, vault_path=vault_path, when=when) / f"{slug}.md"
+    if not path.is_file():
+        raise FileNotFoundError(f"wiki 페이지 없음: {path}")
+    return parse_page(path.read_text(encoding="utf-8"))
+
+
+def list_pages(
+    page_type: str,
+    *,
+    vault_path: Path | None = None,
+) -> list[WikiPage]:
+    """해당 타입 모든 페이지 로드 (parse 실패는 skip). slug 알파벳순.
+
+    insight는 연/월 하위폴더를 재귀 탐색한다.
+    """
+    if page_type == "insight":
+        base = (
+            (vault_path or get_vault_path()).expanduser().resolve()
+            / get_config().vault_folders.wiki.insights
+        )
+    else:
+        base = page_dir(page_type, vault_path=vault_path)
+    if not base.is_dir():
+        return []
+    pages: list[WikiPage] = []
+    for p in sorted(base.rglob("*.md")):
+        try:
+            pages.append(parse_page(p.read_text(encoding="utf-8")))
+        except (ValueError, OSError):
+            continue
+    return sorted(pages, key=lambda pg: pg.slug)
