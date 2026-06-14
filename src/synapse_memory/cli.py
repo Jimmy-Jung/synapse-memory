@@ -152,6 +152,7 @@ from synapse_memory.storage.l0 import (  # noqa: E402
     l0_root,
 )
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
+from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
 from synapse_memory.wiki.index import index_wiki_pages  # noqa: E402
 from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
@@ -769,6 +770,22 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         for e in result.errors:
             print(f"    - {e}")
     return 1 if result.errors else 0
+
+
+def cmd_backfill(args: argparse.Namespace) -> int:
+    """빈 vault 재구축 — 전체 raw 이력을 배치 단위로 ingest (재개 가능)."""
+    r = run_backfill(
+        source=args.source,
+        batch_size=args.batch_size,
+        max_batches=args.max_batches,
+    )
+    print(
+        f"backfill {r.source}: {r.batches} batches, "
+        f"{r.docs_processed} docs, {len(r.pages_written)} pages"
+    )
+    if r.errors:
+        print(f"  errors: {len(r.errors)}")
+    return 1 if r.errors else 0
 
 
 def cmd_wiki_ask(args: argparse.Namespace) -> int:
@@ -4044,6 +4061,22 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest.add_argument("--dry-run", action="store_true", help="적용 없이 결과만 표시")
     p_ingest.add_argument("--limit", type=int, default=None, help="처리할 최대 doc 수")
     p_ingest.set_defaults(func=cmd_ingest)
+
+    p_backfill = sub.add_parser(
+        "backfill",
+        help="빈 vault 재구축 — 전체 raw 이력을 배치로 ingest (재개 가능)",
+    )
+    p_backfill.add_argument(
+        "--source", default="claude-code", choices=["claude-code"],
+        help="백필 소스 (claude-code)",
+    )
+    p_backfill.add_argument(
+        "--batch-size", type=int, default=20, help="배치당 처리할 doc 수",
+    )
+    p_backfill.add_argument(
+        "--max-batches", type=int, default=None, help="최대 배치 수 (생략 시 소진까지)",
+    )
+    p_backfill.set_defaults(func=cmd_backfill)
 
     p_daily_status = sub.add_parser(
         "daily-status",

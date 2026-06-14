@@ -1,6 +1,7 @@
 """v2 LLM-maintained wiki 페이지 계층."""
 from __future__ import annotations
 
+from synapse_memory.wiki.backfill import BackfillResult, run_backfill
 from synapse_memory.wiki.daemon import CycleOutcome, run_watch_cycle
 from synapse_memory.wiki.index import (
     WIKI_SOURCE_KIND,
@@ -64,6 +65,7 @@ __all__ = [
     "SCHEMA_FILENAME",
     "VALID_TYPES",
     "WIKI_SOURCE_KIND",
+    "BackfillResult",
     "CycleOutcome",
     "FileLock",
     "IngestResult",
@@ -93,6 +95,7 @@ __all__ = [
     "parse_page",
     "plist_path",
     "render_index",
+    "run_backfill",
     "run_lint",
     "run_watch_cycle",
     "save_page",

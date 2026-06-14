@@ -1,6 +1,6 @@
 # tests/test_wiki_backfill.py
 from __future__ import annotations
-from pathlib import Path
+
 import synapse_memory.wiki.backfill as bf
 from synapse_memory.wiki.backfill import run_backfill
 from synapse_memory.wiki.ingest import IngestResult
@@ -13,12 +13,15 @@ def test_backfill_loops_until_drained(tmp_path, monkeypatch) -> None:
         IngestResult(source="claude-code", docs_processed=0),
     ]
     calls = {"n": 0}
+
     def fake_ingest(source, **kw):
         assert kw.get("checkpoint_each") is True
         assert kw.get("min_age_seconds") is None
         assert kw.get("limit") == 2
-        r = seq[calls["n"]]; calls["n"] += 1
+        r = seq[calls["n"]]
+        calls["n"] += 1
         return r
+
     monkeypatch.setattr(bf, "ingest_source", fake_ingest)
     result = run_backfill(source="claude-code", vault_path=tmp_path, batch_size=2)
     assert result.batches == 3
