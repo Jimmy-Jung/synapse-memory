@@ -13,6 +13,7 @@ from __future__ import annotations
 import plistlib
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from synapse_memory.storage.l0 import l0_root
@@ -41,7 +42,13 @@ def plist_path(*, home: Path | None = None) -> Path:
 
 def _launchctl(*args: str) -> None:
     """유일한 subprocess seam — 테스트는 이 함수를 monkeypatch한다."""
-    subprocess.run(["launchctl", *args], check=False, capture_output=True)
+    result = subprocess.run(["launchctl", *args], check=False, capture_output=True)
+    if result.returncode != 0:
+        print(
+            f"warning: launchctl {args} failed (rc={result.returncode}): "
+            f"{result.stderr.decode(errors='replace').strip()}",
+            file=sys.stderr,
+        )
 
 
 def install_watch(

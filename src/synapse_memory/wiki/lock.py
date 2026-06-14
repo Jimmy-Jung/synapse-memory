@@ -49,15 +49,30 @@ class FileLock:
         return self._path
 
     def acquire(self) -> FileLock:
-        if self._path.exists():
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            fd = os.open(str(self._path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            # 기존 락 — holder 생존 확인
             holder = self._read_pid()
             if holder is not None and _pid_alive(holder):
                 raise LockHeldError(
-                    f"락 보유 중 (pid={holder}): {self._path}"
+                    f"ingest already running (pid {holder})"
+                ) from None
+            # stale: 제거 후 1회 재시도
+            self._path.unlink(missing_ok=True)
+            try:
+                fd = os.open(
+                    str(self._path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
                 )
-            # stale(죽은 PID 또는 파싱 실패) → 덮어쓴다.
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(str(os.getpid()), encoding="utf-8")
+            except FileExistsError as exc:
+                raise LockHeldError(
+                    "lock 경쟁 — 다른 프로세스가 방금 획득"
+                ) from exc
+        try:
+            os.write(fd, str(os.getpid()).encode())
+        finally:
+            os.close(fd)
         return self
 
     def release(self) -> None:
