@@ -2,6 +2,43 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.17.0] — 2026-06-15
+
+Karpathy의 "LLM-maintained wiki" 패턴을 따르는 v2 엔진을 도입했다. 어떤 AI 툴(Claude/Codex 등)에서 대화하든 그 기록을 자동으로 인식해, 사람이 매일 수동 갱신하지 않아도 Obsidian vault에 상호 링크된 wiki를 구축·유지한다. 설계·구현 계획은 `specs/019-llm-wiki-redesign/`와 `docs/superpowers/plans/`에 있다.
+
+### Added — Wiki Foundation (P0)
+
+- `synapse_memory.wiki.page`: 6개 타입(project/company/person/concept/profile/insight)을 단일 frozen `WikiPage`로 표현하는 통합 페이지 모델 — frontmatter serialize/parse, 디스크 I/O(`save_page`/`load_page`/`list_pages`), slugify, 위키링크 헬퍼(`extract_wikilinks`/`with_related`).
+- vault 루트 `SCHEMA.md` 생성기 — 어떤 에이전트든 읽고 wiki 유지법(ingest/query/lint 규약)을 알 수 있는 "wiki의 CLAUDE.md".
+- config: `maintenance`(유지엔진 `claude`/`codex`, `idle_minutes`)와 `vault_folders.wiki`(Entities/Concepts/Profile/Insights) 설정.
+
+### Added — Ingest Engine (P1)
+
+- `synapse-memory ingest --now`: claude-code 대화 raw → 관련 기존 페이지 선별(이름매칭 + 링크 1-hop) → `complete_structured`로 통합(integrate-not-index) → `save_page` 적용 + 양방향 링크 + `log.md` 기록.
+- 소스별 watermark로 증분 처리, per-doc 체크포인트로 중단-재개 지원.
+
+### Added — Wiki-first Search + Write-back (P2)
+
+- wiki 페이지를 RAG에 인덱싱하고, 관련페이지 선별에 의미유사도 top-k를 결합(이름+의미+링크 하이브리드).
+- `synapse-memory wiki ask`: wiki 페이지 근거로 답하고 각 주장에 `[[페이지]]` 인용, 가치 있는 답은 Insight 페이지로 환원(write-back) → 다음 질문에 재사용. `synapse-memory wiki reindex`.
+
+### Added — Automated Watch Daemon (P3)
+
+- `synapse-memory watch run|install|uninstall|status`: launchd `WatchPaths`(네이티브 FSEvents)가 raw 변화 시 깨우면, 단일 동시성 락 아래 유휴(settled) 파일만 자동 ingest. 진행 중 대화의 부분 로그는 건너뛴다.
+
+### Added — Lint (P4)
+
+- `synapse-memory lint --now`: 구조 결함(끊긴 역링크·죽은 링크·고아)은 자동 수정하고, 진위 판단이 필요한 것(낡음 의심·병합 후보)은 `index.md` 검토 큐에 쌓는다("구조는 자동, 진실은 사람"). 마커 기반이라 사용자 편집 보존.
+
+### Added — Backfill (P5)
+
+- `synapse-memory backfill`: 빈 vault에서 전체 대화 이력을 재개 가능한 배치로 한 번에 구축. 전부 실패하는 배치를 감지해 무한루프를 방지한다.
+
+### Removed — Local LLM + Redaction (apfel)
+
+- Apple FoundationModels(apfel) 로컬 게이트와 2-pass redaction 서브시스템을 완전히 제거했다(v2는 raw를 클라우드 CLI에 직접 전달하는 것을 신뢰 전제로 한다).
+- `redact`/`redactlist`/`redact-file` CLI 명령, redaction config 키, PII golden eval을 제거했다. `estimate_tokens`는 `llm/tokens.py`로 이전했다.
+
 ## [1.16.2] — 2026-06-12
 
 ### Added — Codex Hook Support
