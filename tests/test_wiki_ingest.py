@@ -56,3 +56,25 @@ def test_ingest_dry_run_writes_nothing(tmp_path, monkeypatch) -> None:
     assert result.pages_written == []
     assert not (tmp_path / "Concepts" / "rag.md").exists()
     assert load_watermark("claude-code", path=state) is None
+
+
+def test_ingest_error_isolation(tmp_path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "aaa", "first doc")
+    _write_session(raw_root, "bbb", "second doc")
+    state = tmp_path / "state.json"
+    calls = {"n": 0}
+
+    def flaky(prompt, *, system=None, model=None, json_schema=None, env=None, timeout=120, **kw):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("boom")
+        return {"operations": [
+            {"op": "create", "type": "concept", "slug": "ok", "title": "OK", "body": "b"}]}
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", flaky)
+    result = ingest_source("claude-code", vault_path=tmp_path, raw_root=raw_root,
+                           watermark_path=state, ai_env=None, today="2026-06-14")
+    assert result.docs_processed == 2
+    assert len(result.errors) == 1
+    assert "ok" in result.pages_written

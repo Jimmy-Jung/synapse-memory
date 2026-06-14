@@ -759,7 +759,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         print(f"  errors: {len(result.errors)}")
         for e in result.errors:
             print(f"    - {e}")
-    return 0
+    return 1 if result.errors else 0
 
 
 def cmd_daily(args: argparse.Namespace) -> int:

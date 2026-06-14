@@ -14,6 +14,7 @@ from pathlib import Path
 
 from synapse_memory.wiki.integration import PageOp
 from synapse_memory.wiki.page import (
+    VALID_TYPES,
     WikiPage,
     extract_wikilinks,
     load_page,
@@ -33,7 +34,7 @@ def _add_back_links(page: WikiPage, *, vault_path: Path | None) -> None:
     """page가 가리키는 각 대상에 page로의 역링크 추가 (대상 존재 시만)."""
     back = f"[[{page.slug}]]"
     for target_slug in _link_targets(page):
-        for ptype in ("project", "company", "person", "concept", "profile"):
+        for ptype in VALID_TYPES:
             try:
                 target = load_page(ptype, target_slug, vault_path=vault_path)
             except (FileNotFoundError, ValueError):
