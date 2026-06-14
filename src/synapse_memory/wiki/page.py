@@ -78,6 +78,7 @@ def _frontmatter_dict(page: WikiPage) -> dict[str, Any]:
     if page.updated:
         d["updated"] = page.updated
     d["status"] = page.status
+    # tags는 Obsidian 필터용 자동 생성 필드 — WikiPage 모델엔 없고 parse 시 무시됨(write-only).
     d["tags"] = ["node/wiki", f"node/{page.type}"]
     return d
 
@@ -126,13 +127,20 @@ def parse_page(text: str) -> WikiPage:
     if not title:
         raise ValueError("필수 필드 누락: title")
 
+    updated_str = str(meta.get("updated") or "")
+    if updated_str:
+        try:
+            date.fromisoformat(updated_str)
+        except ValueError as exc:
+            raise ValueError(f"updated 형식 오류 (YYYY-MM-DD 필요): {updated_str!r}") from exc
+
     return WikiPage(
         type=str(page_type),
         slug=str(slug),
         title=str(title),
         related=tuple(str(x) for x in (meta.get("related") or [])),
         sources=tuple(str(x) for x in (meta.get("sources") or [])),
-        updated=str(meta.get("updated") or ""),
+        updated=updated_str,
         status=str(meta.get("status") or "active"),
         body=m.group("body"),
     )
@@ -149,6 +157,10 @@ _TYPE_FOLDER_ATTR = {
     "concept": "concepts",
     "profile": "profile",
 }
+
+assert set(VALID_TYPES) - {"insight"} == set(_TYPE_FOLDER_ATTR), (
+    "VALID_TYPES와 _TYPE_FOLDER_ATTR 동기화 필요"
+)
 
 
 def slugify(name: str) -> str:
@@ -258,7 +270,7 @@ def extract_wikilinks(text: str) -> list[str]:
     """본문에서 [[링크]] 대상을 등장 순서로, 중복 제거해 반환."""
     seen: dict[str, None] = {}
     for match in _WIKILINK_RE.findall(text):
-        target = match.strip()
+        target = match.split("|", 1)[0].strip()
         if target and target not in seen:
             seen[target] = None
     return list(seen.keys())

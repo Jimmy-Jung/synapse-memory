@@ -128,9 +128,19 @@ def test_load_page_rejects_path_traversal(tmp_path: Path) -> None:
         load_page("concept", "../../etc/passwd", vault_path=tmp_path)
 
 
+def test_parse_rejects_quoted_bad_date() -> None:
+    text = '---\ntype: concept\nslug: x\ntitle: X\nupdated: "2026-99-99"\n---\n\nbody'
+    with pytest.raises(ValueError, match="updated"):
+        parse_page(text)
+
+
 def test_extract_wikilinks() -> None:
     body = "관련: [[rag]] 와 [[obsidian]], 그리고 또 [[rag]].\n"
     assert extract_wikilinks(body) == ["rag", "obsidian"]
+
+
+def test_extract_wikilinks_strips_alias() -> None:
+    assert extract_wikilinks("[[rag|검색증강생성]] 참고") == ["rag"]
 
 
 def test_extract_wikilinks_empty() -> None:

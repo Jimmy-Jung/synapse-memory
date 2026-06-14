@@ -436,6 +436,11 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
             f"maintenance.engine는 claude/codex 중 하나 — 현재: {cfg.maintenance.engine!r}"
         )
 
+    if cfg.maintenance.idle_minutes < 1:
+        errors.append(
+            f"maintenance.idle_minutes는 1 이상 — 현재: {cfg.maintenance.idle_minutes}"
+        )
+
     for field_name in (
         "inbox_stale_days",
         "dormant_project_days",

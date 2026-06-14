@@ -42,6 +42,7 @@ related: ["[[other-slug]]"]   # 양방향 링크 — A가 B를 링크하면 B에
 sources: ["claude_code:<날짜>/<세션>"]  # provenance: 이 내용이 어느 대화에서 왔는지
 updated: YYYY-MM-DD
 status: active|stale|review
+# tags: 자동 생성(node/wiki, node/<type>) — 직접 편집 불필요
 ---
 ```
 
