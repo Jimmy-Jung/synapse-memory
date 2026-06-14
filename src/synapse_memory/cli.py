@@ -152,9 +152,15 @@ from synapse_memory.storage.l0 import (  # noqa: E402
     l0_root,
 )
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
+from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
 from synapse_memory.wiki.index import index_wiki_pages  # noqa: E402
 from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
+from synapse_memory.wiki.launchd import (  # noqa: E402
+    install_watch,
+    uninstall_watch,
+)
 from synapse_memory.wiki.query import ask_wiki  # noqa: E402
+from synapse_memory.wiki.watermark import load_watermark  # noqa: E402
 
 OK = "✓"
 FAIL = "✗"
@@ -779,6 +785,47 @@ def cmd_wiki_reindex(args: argparse.Namespace) -> int:
     """모든 wiki 페이지를 벡터 스토어에 재인덱싱."""
     count = index_wiki_pages()
     print(f"indexed {count} pages")
+    return 0
+
+
+def cmd_watch_run(args: argparse.Namespace) -> int:
+    """watch 사이클 1회 실행 (락 + 유휴 필터 ingest)."""
+    outcome = run_watch_cycle()
+    if not outcome.ran:
+        print(f"skipped: {outcome.skipped_reason}")
+        return 0
+    result = outcome.result
+    pages = getattr(result, "pages_written", []) or []
+    docs = getattr(result, "docs_processed", 0)
+    print(f"watch run: docs={docs}, pages={len(pages)}")
+    if pages:
+        print("  written: " + ", ".join(pages))
+    return 0
+
+
+def cmd_watch_install(args: argparse.Namespace) -> int:
+    """launchd LaunchAgent 설치 (raw 변화 시 watch 실행)."""
+    path = install_watch()
+    print(f"installed: {path}")
+    return 0
+
+
+def cmd_watch_uninstall(args: argparse.Namespace) -> int:
+    """launchd LaunchAgent 제거."""
+    uninstall_watch()
+    print("uninstalled")
+    return 0
+
+
+def cmd_watch_status(args: argparse.Namespace) -> int:
+    """LaunchAgent 설치 여부 + 마지막 watermark 출력."""
+    from synapse_memory.wiki.launchd import plist_path
+
+    path = plist_path()
+    installed = path.exists()
+    print(f"installed: {installed} ({path})")
+    watermark = load_watermark("claude-code")
+    print(f"watermark: {watermark or '(none)'}")
     return 0
 
 
@@ -3636,6 +3683,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_wiki_reindex = wiki_sub.add_parser("reindex", help="모든 wiki 페이지 재인덱싱")
     p_wiki_reindex.set_defaults(func=cmd_wiki_reindex)
+
+    p_watch = sub.add_parser(
+        "watch", help="자동 통합 데몬 (launchd WatchPaths + 유휴 + 락)"
+    )
+    watch_sub = p_watch.add_subparsers(dest="action", required=True, metavar="ACTION")
+    p_watch_run = watch_sub.add_parser("run", help="watch 사이클 1회 실행")
+    p_watch_run.set_defaults(func=cmd_watch_run)
+    p_watch_install = watch_sub.add_parser("install", help="launchd LaunchAgent 설치")
+    p_watch_install.set_defaults(func=cmd_watch_install)
+    p_watch_uninstall = watch_sub.add_parser(
+        "uninstall", help="launchd LaunchAgent 제거"
+    )
+    p_watch_uninstall.set_defaults(func=cmd_watch_uninstall)
+    p_watch_status = watch_sub.add_parser("status", help="설치 여부 + watermark")
+    p_watch_status.set_defaults(func=cmd_watch_status)
 
     p_cluster = sub.add_parser(
         "cluster", help="raw에서 같은 프로젝트로 묶기"

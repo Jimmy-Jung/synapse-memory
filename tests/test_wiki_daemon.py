@@ -1,5 +1,5 @@
 from __future__ import annotations
-from pathlib import Path
+
 import synapse_memory.wiki.daemon as d
 from synapse_memory.wiki.ingest import IngestResult
 

@@ -1,6 +1,11 @@
 from __future__ import annotations
+
 from synapse_memory.wiki.launchd import (
-    LABEL, build_plist, install_watch, plist_path, uninstall_watch,
+    LABEL,
+    build_plist,
+    install_watch,
+    plist_path,
+    uninstall_watch,
 )
 
 

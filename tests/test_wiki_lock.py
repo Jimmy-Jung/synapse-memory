@@ -17,10 +17,8 @@ def test_acquire_and_release(tmp_path: Path) -> None:
 
 def test_second_acquire_fails_while_held(tmp_path: Path) -> None:
     p = tmp_path / "ingest.lock"
-    with FileLock(p):
-        with pytest.raises(LockHeldError):
-            with FileLock(p):
-                pass
+    with FileLock(p), pytest.raises(LockHeldError), FileLock(p):
+        pass
 
 
 def test_stale_lock_from_dead_pid_is_reclaimed(tmp_path: Path) -> None:
