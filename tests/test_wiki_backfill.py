@@ -34,3 +34,13 @@ def test_backfill_respects_max_batches(tmp_path, monkeypatch) -> None:
         lambda source, **kw: IngestResult(source=source, docs_processed=kw["limit"], pages_written=["x"]))
     result = run_backfill(source="claude-code", vault_path=tmp_path, batch_size=5, max_batches=2)
     assert result.batches == 2
+
+
+def test_backfill_breaks_on_all_failed_batch(tmp_path, monkeypatch) -> None:
+    # 매 배치가 docs_processed>0 이지만 전부 errors → watermark 전진 없음 → stall break
+    def fake_ingest(source, **kw):
+        return IngestResult(source=source, docs_processed=kw["limit"],
+                            pages_written=[], errors=["x"] * kw["limit"])
+    monkeypatch.setattr(bf, "ingest_source", fake_ingest)
+    result = run_backfill(source="claude-code", vault_path=tmp_path, batch_size=3)  # max_batches=None
+    assert result.batches == 1  # 첫 배치 전부 실패 → 즉시 중단 (무한루프 아님)

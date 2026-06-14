@@ -35,7 +35,9 @@ def test_checkpoint_advances_watermark_midway(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", flaky)
     ingest_source("claude-code", vault_path=tmp_path, raw_root=root,
                   watermark_path=state, ai_env=None, today="2026-06-15", checkpoint_each=True)
-    assert load_watermark("claude-code", path=state) is not None  # 첫 doc 후 체크포인트
+    from datetime import datetime
+    expected = datetime.fromtimestamp(1_700_000_000).isoformat(timespec="seconds")
+    assert load_watermark("claude-code", path=state) == expected
 
 
 def test_without_checkpoint_saves_once_at_end(tmp_path, monkeypatch) -> None:

@@ -54,6 +54,9 @@ def run_backfill(
         result.docs_processed += batch.docs_processed
         result.pages_written.extend(batch.pages_written)
         result.errors.extend(batch.errors)
+        # 진전 없음(배치 전부 실패) → 무한루프 방지
+        if batch.docs_processed > 0 and len(batch.errors) >= batch.docs_processed:
+            break
         if batch.docs_processed == 0:
             break
         if max_batches is not None and result.batches >= max_batches:
