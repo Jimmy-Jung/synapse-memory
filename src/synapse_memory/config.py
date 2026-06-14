@@ -431,6 +431,11 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
     if cfg.ai_provider not in ("claude", "codex", "auto"):
         errors.append(f"ai_provider는 claude/codex/auto 중 하나 — 현재: {cfg.ai_provider!r}")
 
+    if cfg.maintenance.engine not in ("claude", "codex"):
+        errors.append(
+            f"maintenance.engine는 claude/codex 중 하나 — 현재: {cfg.maintenance.engine!r}"
+        )
+
     for field_name in (
         "inbox_stale_days",
         "dormant_project_days",
@@ -559,6 +564,7 @@ def render_config(cfg: SynapseConfig, *, show_advanced: bool = False) -> str:
         "interactive_guard",
         "hook",
         "automation",
+        "maintenance",
         "advanced",
     ):
         if top not in sections:

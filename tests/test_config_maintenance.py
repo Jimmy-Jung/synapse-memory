@@ -6,13 +6,19 @@ from pathlib import Path
 from synapse_memory.config import get_config
 
 
-def test_maintenance_defaults() -> None:
+def test_maintenance_defaults(tmp_path: Path, monkeypatch) -> None:
+    import synapse_memory.config as config_module
+
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "no_config.yaml")
     cfg = get_config(refresh=True)
     assert cfg.maintenance.engine == "claude"
     assert cfg.maintenance.idle_minutes == 3
 
 
-def test_wiki_folder_defaults() -> None:
+def test_wiki_folder_defaults(tmp_path: Path, monkeypatch) -> None:
+    import synapse_memory.config as config_module
+
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "no_config.yaml")
     cfg = get_config(refresh=True)
     w = cfg.vault_folders.wiki
     assert w.projects == "Entities/Projects"
