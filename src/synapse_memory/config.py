@@ -9,8 +9,7 @@
   interactive_guard.*, automation.*
 - C (advanced — 경고 후 변경): advanced.rag.*, advanced.llm.*
 - D (보안 핵심 — config 노출 X, set 시도 시 차단):
-  ``storage.l0_permissions``, ``redaction.pass1_patterns``,
-  ``redaction.pass2_enabled``, ``cleanup.protected_paths``
+  ``storage.l0_permissions``, ``cleanup.protected_paths``
 
 저자: JunyoungJung
 작성일: 2026-05-13
@@ -265,8 +264,6 @@ ADVANCED_PREFIXES: tuple[str, ...] = ("advanced.",)
 
 PROTECTED_PREFIXES: tuple[str, ...] = (
     "storage.l0_permissions",
-    "redaction.pass1_patterns",
-    "redaction.pass2_enabled",
     "cleanup.protected_paths",
 )
 

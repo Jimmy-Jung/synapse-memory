@@ -4,8 +4,7 @@
 
     1. classify된 project/company cluster 가져옴
     2. cluster의 모든 obsidian 노트 read
-    3. redact_full (Pass 1+2) → redacted text
-    4. cluster meta + redacted → AI provider → yaml frontmatter + body 초안
+    3. cluster meta + raw text → AI provider → yaml frontmatter + body 초안
     5. parse → ProjectCard/CompanyCard
     6. status="draft", confidence=0.7로 vault에 저장 (검토 후 promote)
 

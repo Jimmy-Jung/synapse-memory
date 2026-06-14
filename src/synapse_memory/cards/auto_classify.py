@@ -3,8 +3,8 @@
 흐름::
 
     cluster의 sample notes (3-5개)
-        ↓ redact_full (Pass 1+2 통과 — 외부 API에 raw 노출 금지)
-        ↓ AI provider (ai_api.complete_structured)
+        ↓ AI provider (ai_api.complete_structured) — D4: raw 텍스트 전달
+
     ClusterClassification (kind / candidate_name / rationale)
 
 분류 카테고리:
@@ -265,7 +265,7 @@ def classify_cluster(
 ) -> ClusterClassification:
     """단일 cluster 분류.
 
-    sample (vault notes + codex user messages) → redact_full → AI provider
+    sample (vault notes + codex user messages) → AI provider
     → ClusterClassification.
 
     Args:

@@ -5,8 +5,8 @@ M1b: `persona ingest --file <path>` 의 백엔드. 지인 기획자 use case
 
 흐름::
 
-    paths → L0 raw mirror (0600) → redact_full → combined_redacted 문자열
-                                                  └─→ extract_profile_facts(extra_text=...)
+    paths → L0 raw mirror (0600) → combined 문자열 (D4: raw passthrough)
+                                    └─→ extract_profile_facts(extra_text=...)
 
 raw 텍스트는 ``~/.synapse/private/persona/<sha-prefix>/<filename>`` 에만 저장된다.
 vault 에는 redacted 요약과 AI 추출 후보만 들어가는 게 contract.

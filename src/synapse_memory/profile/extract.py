@@ -4,7 +4,7 @@
 
 흐름::
 
-    history.jsonl 마지막 N entry → redact_full → AI provider → JSON → ProfileFact 리스트
+    history.jsonl 마지막 N entry → AI provider → JSON → ProfileFact 리스트
     → MemoryInbox/Profile-YYYY-MM-DD.md에 저장 (사용자 승인 후 vault 진실원본)
 
 저자: Synapse Memory Maintainers
