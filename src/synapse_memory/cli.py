@@ -152,6 +152,7 @@ from synapse_memory.storage.l0 import (  # noqa: E402
     l0_root,
 )
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
+from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
 
 OK = "✓"
 FAIL = "✗"
@@ -742,6 +743,22 @@ def cmd_me_decide(args: argparse.Namespace) -> int:
     print(f"참고 Card ({len(result.source_ids)}):")
     for cid in result.source_ids:
         print(f"  - {cid}")
+    return 0
+
+
+def cmd_ingest(args: argparse.Namespace) -> int:
+    """wiki ingest 엔진 1회 실행."""
+    dry = bool(getattr(args, "dry_run", False))
+    result = ingest_source(args.source, dry_run=dry, limit=args.limit)
+    label = "(dry-run) " if dry else ""
+    print(f"{label}ingest {result.source}: docs={result.docs_processed}, "
+          f"pages={len(result.pages_written)}")
+    if result.pages_written:
+        print("  written: " + ", ".join(result.pages_written))
+    if result.errors:
+        print(f"  errors: {len(result.errors)}")
+        for e in result.errors:
+            print(f"    - {e}")
     return 0
 
 
@@ -3907,6 +3924,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_daily.add_argument("--dry-run", action="store_true", help="실행 안 하고 단계만")
     p_daily.set_defaults(func=cmd_daily)
+
+    p_ingest = sub.add_parser("ingest", help="wiki ingest 엔진 (raw 대화 → wiki 통합)")
+    p_ingest.add_argument("--now", action="store_true", help="즉시 1회 ingest")
+    p_ingest.add_argument("--source", default="claude-code", choices=["claude-code"],
+                          help="ingest 소스 (P1a: claude-code)")
+    p_ingest.add_argument("--dry-run", action="store_true", help="적용 없이 결과만 표시")
+    p_ingest.add_argument("--limit", type=int, default=None, help="처리할 최대 doc 수")
+    p_ingest.set_defaults(func=cmd_ingest)
 
     p_daily_status = sub.add_parser(
         "daily-status",
