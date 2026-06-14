@@ -22,7 +22,6 @@ from synapse_memory.llm.apfel import (
     complete_structured,
     complete_with_input,
     detect_environment,
-    estimate_tokens,
 )
 from synapse_memory.llm.claude import (
     ClaudeEnvironment,
@@ -36,6 +35,7 @@ from synapse_memory.llm.codex import (
     CodexUnavailableError,
     detect_codex_environment,
 )
+from synapse_memory.llm.tokens import estimate_tokens
 
 __all__ = [
     "AIEnvironment",
