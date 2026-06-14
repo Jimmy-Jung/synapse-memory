@@ -71,7 +71,10 @@ def _frontmatter_dict(page: WikiPage) -> dict[str, Any]:
 
 
 def serialize_page(page: WikiPage) -> str:
-    """WikiPage → markdown 문자열 (yaml frontmatter + body)."""
+    """WikiPage → markdown 문자열 (yaml frontmatter + body).
+
+    body의 leading newline은 직렬화 시 제거(정규화)된다.
+    """
     if page.type not in VALID_TYPES:
         raise ValueError(f"알 수 없는 type: {page.type!r}")
     fm = _frontmatter_dict(page)
@@ -96,7 +99,7 @@ def parse_page(text: str) -> WikiPage:
         raise ValueError("frontmatter (--- ... ---) 없음")
     try:
         meta = yaml.safe_load(m.group("yaml")) or {}
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, ValueError) as exc:
         raise ValueError(f"frontmatter yaml 파싱 실패: {exc}") from exc
     if not isinstance(meta, dict):
         raise ValueError(f"frontmatter가 dict 아님: {type(meta).__name__}")
@@ -117,7 +120,7 @@ def parse_page(text: str) -> WikiPage:
         title=str(title),
         related=tuple(str(x) for x in (meta.get("related") or [])),
         sources=tuple(str(x) for x in (meta.get("sources") or [])),
-        updated=str(meta.get("updated", "")),
-        status=str(meta.get("status", "active")),
+        updated=str(meta.get("updated") or ""),
+        status=str(meta.get("status") or "active"),
         body=m.group("body"),
     )
