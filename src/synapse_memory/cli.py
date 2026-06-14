@@ -4,8 +4,6 @@
     synapse-memory doctor                       환경 진단 + L0 setup
     synapse-memory collect claude-code          Claude Code 로그 → L0 mirror
     synapse-memory collect obsidian             Obsidian vault → L0 mirror
-    synapse-memory redact backfill claude-code  L0 raw → redacted/ (Pass 1+2)
-    synapse-memory eval golden                  골든셋 정확도 측정 (P/R/F1)
     synapse-memory card list                    Project Card 목록
     synapse-memory card show <id>               Project Card 내용
     synapse-memory card new <id> <name>         Project Card 빈 템플릿 생성
@@ -99,11 +97,6 @@ from synapse_memory.endpoints.persona import (  # noqa: E402
     draft_resume,
     what_did_i_think,
 )
-from synapse_memory.eval.golden import (  # noqa: E402
-    default_synthetic_path,
-    evaluate,
-    load_golden_set,
-)
 from synapse_memory.feedback.events import (  # noqa: E402
     FeedbackAction,
     append_feedback_event,
@@ -116,7 +109,6 @@ from synapse_memory.feedback.targets import (  # noqa: E402
     resolve_pattern_target,
 )
 from synapse_memory.llm import AIError, detect_ai_environment  # noqa: E402
-from synapse_memory.llm.apfel import MIN_MACOS_MAJOR, detect_environment  # noqa: E402
 from synapse_memory.profile.extract import (  # noqa: E402
     extract_decision_patterns,
     extract_profile_facts,
@@ -137,18 +129,10 @@ from synapse_memory.rag.embeddings import (  # noqa: E402
     EmbeddingUnavailableError,
 )
 from synapse_memory.rag.vector_store import VectorStoreError  # noqa: E402
-from synapse_memory.redaction import redact_full  # noqa: E402
-from synapse_memory.redaction.redactlist import (  # noqa: E402
-    add_redactlist_item,
-    load_redactlist,
-    remove_redactlist_item,
-)
 from synapse_memory.status import DailyAlreadyRunningError  # noqa: E402
 from synapse_memory.storage.l0 import (  # noqa: E402
     L0_DIR_MODE,
-    L0_FILE_MODE,
     ensure_l0_root_secure,
-    ensure_secure_dir,
     l0_root,
 )
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
@@ -369,40 +353,14 @@ def run_doctor_fix_config(*, assume_yes: bool = False) -> int:
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
-    """환경 진단 — apfel/macOS/Apple Silicon."""
+    """환경 진단 — vault/config/hook/AI provider."""
     if getattr(args, "fix_config", False):
         return run_doctor_fix_config(assume_yes=bool(getattr(args, "yes", False)))
     if getattr(args, "fix", False):
         return run_doctor_fix(assume_yes=bool(getattr(args, "yes", False)))
 
-    env = detect_environment()
-
     print("Synapse Memory 환경 진단")
     print("=" * 44)
-
-    # apfel
-    if env.apfel_path is not None:
-        print(f"{OK} apfel 설치: {env.apfel_path}")
-        if env.apfel_version:
-            print(f"  버전: {env.apfel_version}")
-    else:
-        print(f"{FAIL} apfel 미설치")
-        print("  설치: brew install Arthur-Ficial/tap/apfel")
-
-    # Apple Silicon
-    if env.is_apple_silicon:
-        print(f"{OK} Apple Silicon (arm64)")
-    else:
-        print(f"{FAIL} Apple Silicon 아님 — FoundationModels 사용 불가")
-
-    # macOS
-    major = env.macos_major
-    if major is not None and major >= MIN_MACOS_MAJOR:
-        print(f"{OK} macOS {env.macos_version} (Tahoe+)")
-    elif major is not None:
-        print(f"{FAIL} macOS {env.macos_version} — Tahoe(26)+ 필요")
-    else:
-        print(f"{FAIL} macOS 버전 확인 실패: {env.macos_version!r}")
 
     # L0 setup — ~/.synapse/private 디렉토리 생성 + 권한 0700 강제
     l0 = ensure_l0_root_secure()
@@ -490,12 +448,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"  - {reason}")
 
     print("=" * 44)
-    if env.ready:
+    if ai_env.ready:
         print("✓ 준비 완료")
         return 0
 
     print("환경 미충족:")
-    for reason in env.reasons_unavailable():
+    for reason in ai_env.reasons_unavailable():
         print(f"  - {reason}")
     return 1
 
@@ -2249,267 +2207,6 @@ def cmd_cluster_scan(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_redactlist_show(_args: argparse.Namespace) -> int:
-    """현재 redact-list 항목 출력."""
-    items = load_redactlist()
-    if not items:
-        print("(redact-list 비어있음)")
-        print("`synapse-memory redactlist add <NAME>`로 추가")
-        return 0
-    print("Redact-list (case-insensitive 강제 마스킹):")
-    for item in items:
-        print(f"  - {item}")
-    print(f"\n총 {len(items)}개")
-    return 0
-
-
-def cmd_redactlist_add(args: argparse.Namespace) -> int:
-    if add_redactlist_item(args.item):
-        print(f"{OK} 추가: {args.item!r}")
-    else:
-        print(f"이미 있음: {args.item!r}")
-    return 0
-
-
-def cmd_redactlist_remove(args: argparse.Namespace) -> int:
-    if remove_redactlist_item(args.item):
-        print(f"{OK} 제거: {args.item!r}")
-    else:
-        print(f"항목 없음: {args.item!r}")
-        return 1
-    return 0
-
-
-def cmd_eval_golden(args: argparse.Namespace) -> int:
-    """골든셋 평가 — precision/recall/F1 카테고리별."""
-    path: Path = args.set or default_synthetic_path()
-    if not path.exists():
-        print(f"{FAIL} 골든셋 파일 없음: {path}", file=sys.stderr)
-        return 2
-
-    env = detect_environment()
-    if not env.ready:
-        print(f"{FAIL} apfel 사용 불가:", file=sys.stderr)
-        for r in env.reasons_unavailable():
-            print(f"  - {r}", file=sys.stderr)
-        return 2
-
-    samples = load_golden_set(path)
-    print(f"평가: {len(samples)} samples ← {path.name}")
-
-    def _progress(i: int, total: int) -> None:
-        # 매 5개마다 점, 매 25개마다 카운터
-        if i % 5 == 0:
-            print(".", end="", flush=True)
-        if i % 25 == 0:
-            print(f"{i}", end="", flush=True)
-
-    t0 = time.monotonic()
-    result = evaluate(samples, env=env, on_progress=_progress)
-    elapsed = time.monotonic() - t0
-    print(f"  ({elapsed:.1f}s)")
-
-    print()
-    print(
-        f"{'카테고리':<22} {'TP':>4} {'FP':>4} {'FN':>4} "
-        f"{'P':>6} {'R':>6} {'F1':>6}"
-    )
-    print("-" * 60)
-    for cat, m in sorted(result.per_category.items()):
-        print(
-            f"{cat:<22} {m.tp:>4} {m.fp:>4} {m.fn:>4} "
-            f"{m.precision:>6.2f} {m.recall:>6.2f} {m.f1:>6.2f}"
-        )
-    print("-" * 60)
-    o = result.overall
-    print(
-        f"{'OVERALL':<22} {o.tp:>4} {o.fp:>4} {o.fn:>4} "
-        f"{o.precision:>6.2f} {o.recall:>6.2f} {o.f1:>6.2f}"
-    )
-
-    print(
-        f"\n완벽한 sample: {result.samples_perfect}/{result.samples_total} "
-        f"({result.samples_perfect / result.samples_total * 100:.1f}%)"
-    )
-
-    if args.show_failures and result.failures:
-        limit = args.show_failures
-        print(f"\n=== 실패 sample {len(result.failures)} (처음 {limit}) ===")
-        for f in result.failures[:limit]:
-            print(f"\n[{f.sample_id}] {f.text!r}")
-            for c, v in f.fp:
-                print(f"  +FP {c}: {v!r}")
-            for c, v in f.fn:
-                print(f"  -FN {c}: {v!r}")
-
-    return 0
-
-
-def cmd_redact_backfill_claude_code(args: argparse.Namespace) -> int:
-    """L0 mirror된 Claude Code raw에 redact_full 적용 → redacted/ 저장."""
-    src_root = (l0_root() / "raw" / "claude-code").expanduser().resolve()
-    dst_root = (l0_root() / "redacted" / "claude-code").expanduser().resolve()
-
-    if not src_root.is_dir():
-        print(f"{FAIL} 백필 소스 없음: {src_root}", file=sys.stderr)
-        print(
-            "먼저 `synapse-memory collect claude-code` 실행 필요",
-            file=sys.stderr,
-        )
-        return 2
-
-    env = detect_environment()
-    if not env.ready:
-        print(f"{FAIL} apfel 사용 불가:", file=sys.stderr)
-        for r in env.reasons_unavailable():
-            print(f"  - {r}", file=sys.stderr)
-        return 2
-
-    ensure_l0_root_secure()
-    ensure_secure_dir(dst_root)
-
-    files = sorted(src_root.rglob("*.jsonl"))
-    if args.limit and args.limit > 0:
-        files = files[: args.limit]
-
-    if args.resume:
-        files = [
-            f
-            for f in files
-            if not (dst_root / f.relative_to(src_root)).exists()
-        ]
-        print(f"--resume: 기존 결과 skip, {len(files)} 파일 남음")
-
-    if not files:
-        print("처리할 파일 없음 (이미 모두 백필됨)")
-        return 0
-
-    print(f"백필 시작: {len(files)} 파일 → {dst_root}")
-    if args.limit:
-        print(f"  --limit {args.limit} 적용")
-
-    total_counts: dict[str, int] = {}
-    failed: list[tuple[Path, str]] = []
-    started = time.monotonic()
-
-    for i, src_file in enumerate(files, 1):
-        rel = src_file.relative_to(src_root)
-        size_kb = src_file.stat().st_size / 1024
-        print(
-            f"[{i}/{len(files)}] {rel} ({size_kb:.0f} KB) ",
-            end="",
-            flush=True,
-        )
-
-        # 청크별 진행 표시 — dot 출력 (10청크마다 카운터)
-        chunk_state = {"shown": 0}
-
-        def _on_chunk(
-            current: int,
-            total: int,
-            *,
-            state: dict[str, int] = chunk_state,
-        ) -> None:
-            print(".", end="", flush=True)
-            if current % 10 == 0:
-                print(f"{current}", end="", flush=True)
-            state["shown"] = total
-
-        try:
-            text = src_file.read_text(encoding="utf-8", errors="replace")
-            if args.max_bytes_per_file > 0:
-                text = text[: args.max_bytes_per_file]
-            t0 = time.monotonic()
-            result = redact_full(text, env=env, on_chunk=_on_chunk)
-            elapsed = time.monotonic() - t0
-
-            dst_file = dst_root / rel
-            ensure_secure_dir(dst_file.parent)
-            dst_file.write_text(result.redacted, encoding="utf-8")
-            with contextlib.suppress(OSError):
-                os.chmod(dst_file, L0_FILE_MODE)
-
-            for cat, n in result.category_counts().items():
-                total_counts[cat] = total_counts.get(cat, 0) + n
-
-            print(
-                f" → {chunk_state['shown']}청크, "
-                f"{len(result.detections)}건, {elapsed:.1f}s"
-            )
-        except Exception as exc:
-            failed.append((src_file, str(exc)))
-            print(f" → 실패: {exc}", file=sys.stderr)
-
-    total_elapsed = time.monotonic() - started
-
-    print("=" * 50)
-    print(f"총 시간: {total_elapsed:.1f}s ({total_elapsed/60:.1f}분)")
-    print("카테고리별 검출 합계:")
-    if not total_counts:
-        print("  (검출 0)")
-    for cat, n in sorted(total_counts.items(), key=lambda x: -x[1]):
-        print(f"  {cat}: {n}")
-    print(f"실패 파일: {len(failed)}")
-    return 1 if failed else 0
-
-
-_REDACT_FILE_MAX_BYTES = 1 * 1024 * 1024
-
-
-def cmd_redact_file(args: argparse.Namespace) -> int:
-    """단일 파일을 Pass 1+2로 redact해 stdout 또는 --out 경로에 기록."""
-    from synapse_memory.redaction import (
-        DEFAULT_PATTERNS,
-        build_redactlist_patterns,
-        load_redactlist,
-        redact_full,
-    )
-    from synapse_memory.redaction.pass1 import redact as pass1_redact
-
-    path = Path(args.path).expanduser().resolve()
-    if not path.is_file():
-        print(f"{FAIL} 파일이 없습니다: {path}", file=sys.stderr)
-        return 2
-    size = path.stat().st_size
-    if size > _REDACT_FILE_MAX_BYTES:
-        print(
-            f"{FAIL} 입력이 1 MB를 초과했습니다 ({size} bytes). 분할 처리 권장.",
-            file=sys.stderr,
-        )
-        return 2
-    try:
-        text = path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        print(
-            f"{FAIL} UTF-8 텍스트가 아닙니다 (binary 파일은 skip): {path}",
-            file=sys.stderr,
-        )
-        return 2
-
-    env = detect_environment()
-    if env.apfel_path is None:
-        print(
-            "[warn] apfel 미설치 — Pass 1 (regex + redactlist)만 적용한 결과를 출력합니다.",
-            file=sys.stderr,
-        )
-        items = load_redactlist()
-        extra_patterns = build_redactlist_patterns(items)
-        patterns = list(DEFAULT_PATTERNS) + list(extra_patterns)
-        result = pass1_redact(text, patterns=patterns)
-        redacted = result.redacted
-    else:
-        result = redact_full(text, env=env)
-        redacted = result.redacted
-
-    if args.out:
-        out_path = Path(args.out).expanduser().resolve()
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(redacted, encoding="utf-8")
-    else:
-        sys.stdout.write(redacted)
-    return 0
-
-
 def _setup_vault_path() -> Path:
     """vault 경로 resolver (테스트에서 monkeypatch 가능)."""
     from synapse_memory.config import get_config
@@ -3293,7 +2990,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="cmd", required=True, metavar="COMMAND")
 
-    p_doctor = sub.add_parser("doctor", help="환경 진단 (apfel/macOS/Apple Silicon)")
+    p_doctor = sub.add_parser("doctor", help="환경 진단 (vault/config/AI provider)")
     p_doctor.add_argument("--fix", action="store_true", help="whitelist 기반 자동 복구")
     p_doctor.add_argument(
         "--fix-config",
@@ -3343,49 +3040,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="L0 mirror 루트 (기본: ~/.synapse/private/raw/obsidian)",
     )
     p_obs.set_defaults(func=cmd_collect_obsidian)
-
-    p_redact = sub.add_parser("redact", help="Pass 1+2 redaction 도구")
-    redact_sub = p_redact.add_subparsers(
-        dest="action", required=True, metavar="ACTION"
-    )
-    p_backfill = redact_sub.add_parser(
-        "backfill", help="L0 raw 전체에 redaction 적용"
-    )
-    backfill_sub = p_backfill.add_subparsers(
-        dest="source", required=True, metavar="SOURCE"
-    )
-    p_bf_cc = backfill_sub.add_parser(
-        "claude-code", help="Claude Code raw 백필"
-    )
-    p_bf_cc.add_argument(
-        "--limit",
-        type=int,
-        default=0,
-        help="처리할 파일 수 제한 (0=무제한, 점진 테스트용)",
-    )
-    p_bf_cc.add_argument(
-        "--max-bytes-per-file",
-        type=int,
-        default=0,
-        help="파일당 처리 최대 바이트 (0=전체). 분포 측정 샘플링용.",
-    )
-    p_bf_cc.add_argument(
-        "--resume",
-        action="store_true",
-        help="이미 백필된 파일 skip",
-    )
-    p_bf_cc.set_defaults(func=cmd_redact_backfill_claude_code)
-
-    p_redact_file = redact_sub.add_parser(
-        "file", help="단일 파일을 Pass 1+2로 redact해 stdout/--out에 출력"
-    )
-    p_redact_file.add_argument("path", help="redact할 입력 파일 경로")
-    p_redact_file.add_argument(
-        "--out",
-        default=None,
-        help="결과 저장 경로 (미지정 시 stdout)",
-    )
-    p_redact_file.set_defaults(func=cmd_redact_file)
 
     p_setup = sub.add_parser(
         "setup",
@@ -3629,25 +3283,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="실제 promote 없이 후보만 출력",
     )
     p_review_awaiting.set_defaults(func=cmd_profile_review_awaiting)
-
-    p_eval = sub.add_parser("eval", help="평가/측정")
-    eval_sub = p_eval.add_subparsers(dest="kind", required=True, metavar="KIND")
-    p_golden = eval_sub.add_parser(
-        "golden", help="골든셋 정확도 측정 (P/R/F1)"
-    )
-    p_golden.add_argument(
-        "--set",
-        type=Path,
-        default=None,
-        help=f"골든셋 JSON 파일 (기본: {default_synthetic_path()})",
-    )
-    p_golden.add_argument(
-        "--show-failures",
-        type=int,
-        default=10,
-        help="실패 sample을 N개까지 출력 (0=숨김)",
-    )
-    p_golden.set_defaults(func=cmd_eval_golden)
 
     p_card = sub.add_parser("card", help="Project/Company Card 관리")
     card_sub = p_card.add_subparsers(dest="action", required=True, metavar="ACTION")
@@ -4180,19 +3815,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_cleanup_apply.add_argument("--memory-inbox-days", type=int, default=60)
     p_cleanup_apply.add_argument("--report-days", type=int, default=90)
     p_cleanup_apply.set_defaults(func=cmd_cleanup_apply)
-
-    p_rl = sub.add_parser(
-        "redactlist", help="NDA 회사/프로젝트 강제 마스킹 리스트 관리"
-    )
-    rl_sub = p_rl.add_subparsers(dest="action", required=True, metavar="ACTION")
-    p_rl_show = rl_sub.add_parser("show", help="현재 항목 출력")
-    p_rl_show.set_defaults(func=cmd_redactlist_show)
-    p_rl_add = rl_sub.add_parser("add", help="항목 추가")
-    p_rl_add.add_argument("item", help="회사명/프로젝트명/키워드")
-    p_rl_add.set_defaults(func=cmd_redactlist_add)
-    p_rl_rm = rl_sub.add_parser("remove", help="항목 제거")
-    p_rl_rm.add_argument("item", help="제거할 항목 (정확히 일치)")
-    p_rl_rm.set_defaults(func=cmd_redactlist_remove)
 
     p_migrate = sub.add_parser(
         "migrate-folders",
