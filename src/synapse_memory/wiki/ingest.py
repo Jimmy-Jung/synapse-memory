@@ -59,10 +59,15 @@ def ingest_source(
     limit: int | None = None,
     today: str | None = None,
     min_age_seconds: float | None = None,
+    checkpoint_each: bool = False,
 ) -> IngestResult:
     """source의 새 RawDoc을 ingest. dry_run이면 적용/watermark/로그 생략.
 
     ``min_age_seconds``는 settled 필터로 ``iter_new_raw``에 그대로 전달된다.
+
+    ``checkpoint_each``가 True면 doc 처리가 성공할 때마다 watermark를 저장해
+    중단 후 재실행 시 남은 doc부터 이어 처리한다(재개 가능). 예외가 난 doc은
+    watermark를 전진시키지 않으므로 재실행 시 재시도된다.
     """
     since = load_watermark(source, path=watermark_path)
     docs = iter_new_raw(
@@ -100,9 +105,14 @@ def ingest_source(
                     vault_path=vault_path,
                 )
         except Exception as exc:
+            # 실패한 doc은 watermark를 전진시키지 않는다 → 재실행 시 재시도.
             result.errors.append(f"{doc.ref}: {exc}")
+            continue
+        # 성공 경로에서만 watermark 후보를 전진시킨다.
         if max_mtime is None or doc.mtime_iso > max_mtime:
             max_mtime = doc.mtime_iso
+        if checkpoint_each and not dry_run and max_mtime:
+            save_watermark(source, max_mtime, path=watermark_path)
 
     if not dry_run and max_mtime and max_mtime != since:
         save_watermark(source, max_mtime, path=watermark_path)
