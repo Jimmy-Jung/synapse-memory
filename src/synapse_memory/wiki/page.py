@@ -10,7 +10,7 @@ dataclass로 표현. cards/project.py 패턴을 일반화. 사람이 Obsidian에
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -38,6 +38,9 @@ _FRONTMATTER_RE = re.compile(
 
 # slug에 허용하지 않는 문자(영숫자·한글 음절·하이픈 외)를 ``-``로 치환.
 _SLUG_RE = re.compile(r"[^0-9a-z가-힣-]+")
+
+# 본문 내 [[링크]] 위키링크 대상 추출.
+_WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 @dataclass(frozen=True)
@@ -244,3 +247,28 @@ def list_pages(
         except (ValueError, OSError):
             continue
     return sorted(pages, key=lambda pg: pg.slug)
+
+
+# ---------------------------------------------------------------------------
+# 링크 그래프 헬퍼
+# ---------------------------------------------------------------------------
+
+
+def extract_wikilinks(text: str) -> list[str]:
+    """본문에서 [[링크]] 대상을 등장 순서로, 중복 제거해 반환."""
+    seen: dict[str, None] = {}
+    for match in _WIKILINK_RE.findall(text):
+        target = match.strip()
+        if target and target not in seen:
+            seen[target] = None
+    return list(seen.keys())
+
+
+def with_related(page: WikiPage, link: str) -> WikiPage:
+    """related에 link를 추가한 새 WikiPage 반환 (불변, 중복 무시).
+
+    link는 "[[slug]]" 형식을 권장.
+    """
+    if link in page.related:
+        return page
+    return replace(page, related=(*page.related, link))

@@ -7,6 +7,7 @@ import pytest
 
 from synapse_memory.wiki.page import (
     WikiPage,
+    extract_wikilinks,
     list_pages,
     load_page,
     page_dir,
@@ -14,6 +15,7 @@ from synapse_memory.wiki.page import (
     save_page,
     serialize_page,
     slugify,
+    with_related,
 )
 
 
@@ -124,3 +126,22 @@ def test_load_page_rejects_path_traversal(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="slug"):
         load_page("concept", "../../etc/passwd", vault_path=tmp_path)
+
+
+def test_extract_wikilinks() -> None:
+    body = "관련: [[rag]] 와 [[obsidian]], 그리고 또 [[rag]].\n"
+    assert extract_wikilinks(body) == ["rag", "obsidian"]
+
+
+def test_extract_wikilinks_empty() -> None:
+    assert extract_wikilinks("링크 없음") == []
+
+
+def test_with_related_adds_and_dedupes() -> None:
+    page = WikiPage(type="concept", slug="rag", title="RAG", related=("[[obsidian]]",))
+    updated = with_related(page, "[[bm25]]")
+    assert updated.related == ("[[obsidian]]", "[[bm25]]")
+    # 원본 불변 확인
+    assert page.related == ("[[obsidian]]",)
+    # 중복 추가는 무시
+    assert with_related(updated, "[[obsidian]]").related == ("[[obsidian]]", "[[bm25]]")

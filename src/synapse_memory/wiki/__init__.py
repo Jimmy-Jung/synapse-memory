@@ -4,6 +4,7 @@ from __future__ import annotations
 from synapse_memory.wiki.page import (
     VALID_TYPES,
     WikiPage,
+    extract_wikilinks,
     list_pages,
     load_page,
     page_dir,
@@ -12,11 +13,13 @@ from synapse_memory.wiki.page import (
     save_page,
     serialize_page,
     slugify,
+    with_related,
 )
 
 __all__ = [
     "VALID_TYPES",
     "WikiPage",
+    "extract_wikilinks",
     "list_pages",
     "load_page",
     "page_dir",
@@ -25,4 +28,5 @@ __all__ = [
     "save_page",
     "serialize_page",
     "slugify",
+    "with_related",
 ]
