@@ -54,7 +54,6 @@ from synapse_memory.rag.vector_store import (
     VectorStore,
     open_vector_store,
 )
-from synapse_memory.redaction import redact_full
 
 PREFIX_PROJECT = "card_project:"
 PREFIX_COMPANY = "card_company:"
@@ -427,7 +426,7 @@ def _build_raw_records(
                     source.path,
                     source_kind=source.source_kind,
                     root_path=source.root_path,
-                    redact=lambda text: redact_full(text).redacted,
+                    redact=lambda text: text,
                 )
             )
         except Exception as exc:

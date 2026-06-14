@@ -30,7 +30,6 @@ from synapse_memory.clusters.identify import ProjectCluster
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.redaction import redact_full
 from synapse_memory.storage.l0 import l0_root
 
 VALID_KINDS = ("project", "company", "domain", "life", "skip")
@@ -283,12 +282,8 @@ def classify_cluster(
     cx_root = (codex_root or (l0_root() / "raw" / "codex")).expanduser().resolve()
     codex_sample = _gather_codex_sample(cluster, cx_root, used_chars=len(raw_sample))
     combined_sample = raw_sample + codex_sample
-    redacted_sample = ""
-    if combined_sample:
-        result = redact_full(combined_sample, env=apfel_env)
-        redacted_sample = result.redacted
 
-    user_prompt = _build_user_prompt(cluster, redacted_sample)
+    user_prompt = _build_user_prompt(cluster, combined_sample)
 
     # json_schema 안 씀 — sonnet에서 빈 응답 만드는 케이스 발견됨.
     # system prompt + complete_structured fallback parser가 처리.

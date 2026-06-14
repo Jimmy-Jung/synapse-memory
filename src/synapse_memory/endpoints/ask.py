@@ -38,7 +38,6 @@ from synapse_memory.rag import (
     open_vector_store,
 )
 from synapse_memory.rag.indexer import index_insight_card
-from synapse_memory.redaction import redact_full
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     new_answer_reference,
@@ -182,16 +181,14 @@ def ask(
 def save_insight_from_ask(result: AskResult) -> Path:
     """AskResult를 InsightCard로 저장하고 best-effort로 인덱싱한다."""
     created = datetime.now().astimezone().isoformat(timespec="seconds")
-    redacted_query = redact_full(result.query).redacted
-    redacted_answer = redact_full(result.answer).redacted
     related = list(dict.fromkeys(source.card_id for source in result.sources))
     card = InsightCard(
-        insight_id=new_insight_id(redacted_query),
-        question=redacted_query,
+        insight_id=new_insight_id(result.query),
+        question=result.query,
         command="ask",
         created=created,
         related=related,
-        body=redacted_answer,
+        body=result.answer,
     )
     path = save_insight_card(card)
     with contextlib.suppress(Exception):

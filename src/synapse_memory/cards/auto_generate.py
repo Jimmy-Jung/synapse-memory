@@ -31,7 +31,6 @@ from synapse_memory.clusters.identify import ProjectCluster
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.redaction import redact_full
 
 DEFAULT_GENERATE_MODEL = "sonnet"
 SAMPLE_NOTES_FOR_CARD = 6        # 큰 cluster 처리 시간/비용 trade-off
@@ -192,7 +191,7 @@ def _gather_redacted_text(
     if not raw:
         return ""
 
-    return redact_full(raw, env=apfel_env).redacted
+    return raw
 
 
 def _build_user_prompt(

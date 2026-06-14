@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, TypeAlias
 
-from synapse_memory.redaction.pass1 import redact
 from synapse_memory.storage.l0 import (
     L0_FILE_MODE,
     ensure_l0_root_secure,
@@ -186,7 +185,7 @@ def _sanitize_reason(reason: str | None) -> str | None:
     stripped = reason.strip()
     if not stripped:
         return None
-    return redact(stripped[:MAX_REASON_CHARS]).redacted
+    return stripped[:MAX_REASON_CHARS]
 
 
 def _as_target_kind(value: object) -> FeedbackTargetKind:
