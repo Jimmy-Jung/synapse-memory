@@ -58,10 +58,16 @@ def ingest_source(
     dry_run: bool = False,
     limit: int | None = None,
     today: str | None = None,
+    min_age_seconds: float | None = None,
 ) -> IngestResult:
-    """source의 새 RawDoc을 ingest. dry_run이면 적용/watermark/로그 생략."""
+    """source의 새 RawDoc을 ingest. dry_run이면 적용/watermark/로그 생략.
+
+    ``min_age_seconds``는 settled 필터로 ``iter_new_raw``에 그대로 전달된다.
+    """
     since = load_watermark(source, path=watermark_path)
-    docs = iter_new_raw(source, since=since, root=raw_root)
+    docs = iter_new_raw(
+        source, since=since, root=raw_root, min_age_seconds=min_age_seconds
+    )
     if limit is not None:
         docs = docs[:limit]
 

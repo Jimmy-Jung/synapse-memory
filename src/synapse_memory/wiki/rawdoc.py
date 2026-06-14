@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -73,8 +74,13 @@ def iter_new_raw(
     *,
     since: str | None,
     root: Path | None = None,
+    min_age_seconds: float | None = None,
+    now: float | None = None,
 ) -> list[RawDoc]:
     """source의 새 RawDoc 목록 (mtime > since). ref 정렬.
+
+    ``min_age_seconds``가 주어지면 ``(now or time.time()) - min_age_seconds``보다
+    최근에 수정된 파일(=진행 중)은 건너뛴다. ``None``이면 기존 동작 그대로.
 
     Raises:
         ValueError: 미지원 source.
@@ -85,12 +91,20 @@ def iter_new_raw(
     if not base.is_dir():
         return []
     since_ts = datetime.fromisoformat(since).timestamp() if since else None
+    settled_before = (
+        (now if now is not None else time.time()) - min_age_seconds
+        if min_age_seconds is not None
+        else None
+    )
     docs: list[RawDoc] = []
     for path in sorted(base.rglob("*.jsonl")):
         # 워터마크는 초 단위(timespec="seconds")로 저장되므로 비교도 초로 절삭해야
         # 동일 파일이 재처리되지 않는다.
         mtime = float(int(path.stat().st_mtime))
         if since_ts is not None and mtime <= since_ts:
+            continue
+        # settled 필터: 너무 최근에 변경된 파일(진행 중 대화)은 건너뛴다.
+        if settled_before is not None and mtime > settled_before:
             continue
         text = _file_text(path)
         if not text:
