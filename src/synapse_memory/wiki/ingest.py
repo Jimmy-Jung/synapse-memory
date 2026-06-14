@@ -87,7 +87,7 @@ def ingest_source(
                     f"({', '.join(written)}) from {doc.ref}",
                     vault_path=vault_path,
                 )
-        except Exception as exc:  # noqa: BLE001 — 한 doc 실패가 전체를 막지 않음
+        except Exception as exc:
             result.errors.append(f"{doc.ref}: {exc}")
         if max_mtime is None or doc.mtime_iso > max_mtime:
             max_mtime = doc.mtime_iso
