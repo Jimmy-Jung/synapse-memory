@@ -122,6 +122,21 @@ class VaultSystemFoldersConfig:
 
 
 @dataclass
+class VaultWikiFoldersConfig:
+    """v2 wiki 페이지 폴더 — vault root 기준 상대 경로.
+
+    Karpathy LLM-wiki 패턴의 entity/concept/profile/insight 페이지 저장 위치.
+    """
+
+    projects: str = "Entities/Projects"
+    companies: str = "Entities/Companies"
+    people: str = "Entities/People"
+    concepts: str = "Concepts"
+    profile: str = "Profile"
+    insights: str = "Insights"
+
+
+@dataclass
 class VaultFoldersConfig:
     """vault 내부 폴더 경로.
 
@@ -135,6 +150,7 @@ class VaultFoldersConfig:
     life: str = "40_Life"
     archive: str = "40_Archive"
     system: VaultSystemFoldersConfig = field(default_factory=VaultSystemFoldersConfig)
+    wiki: VaultWikiFoldersConfig = field(default_factory=VaultWikiFoldersConfig)
 
 
 @dataclass
@@ -199,6 +215,18 @@ class AutomationConfig:
 
 
 @dataclass
+class MaintenanceConfig:
+    """v2 wiki 자동 유지엔진 설정.
+
+    engine: wiki 통합/lint를 수행할 CLI ("claude" | "codex"). 설치 시 선택.
+    idle_minutes: watch 데몬이 "대화 종료"로 간주하는 무변경 임계값(분).
+    """
+
+    engine: str = "claude"
+    idle_minutes: int = 3
+
+
+@dataclass
 class AdvancedRagConfig:
     rrf_k: int = 60
     embedding_model: str = "bge-m3"  # 변경 시 색인 재생성 필요
@@ -229,6 +257,7 @@ class SynapseConfig:
     interactive_guard: InteractiveGuardConfig = field(default_factory=InteractiveGuardConfig)
     hook: HookConfig = field(default_factory=HookConfig)
     automation: AutomationConfig = field(default_factory=AutomationConfig)
+    maintenance: MaintenanceConfig = field(default_factory=MaintenanceConfig)
     advanced: AdvancedConfig = field(default_factory=AdvancedConfig)
 
 
