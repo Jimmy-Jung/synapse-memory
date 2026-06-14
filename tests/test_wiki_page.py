@@ -155,3 +155,11 @@ def test_with_related_adds_and_dedupes() -> None:
     assert page.related == ("[[obsidian]]",)
     # 중복 추가는 무시
     assert with_related(updated, "[[obsidian]]").related == ("[[obsidian]]", "[[bm25]]")
+
+
+def test_with_related_dedupes_by_target_ignoring_alias() -> None:
+    page = WikiPage(type="concept", slug="x", title="X", related=("[[a|A Title]]",))
+    # 같은 대상 a를 별칭 없이 추가 시도 → 중복 안 만듦
+    assert with_related(page, "[[a]]").related == ("[[a|A Title]]",)
+    # 다른 대상은 정상 추가
+    assert with_related(page, "[[b]]").related == ("[[a|A Title]]", "[[b]]")

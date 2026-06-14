@@ -277,10 +277,14 @@ def extract_wikilinks(text: str) -> list[str]:
 
 
 def with_related(page: WikiPage, link: str) -> WikiPage:
-    """related에 link를 추가한 새 WikiPage 반환 (불변, 중복 무시).
+    """related에 link를 추가한 새 WikiPage 반환 (불변, target 기준 중복 무시).
 
-    link는 "[[slug]]" 형식을 권장.
+    link는 "[[slug]]" 형식 권장. 이미 같은 대상(별칭 포함)을 링크하면 no-op.
     """
-    if link in page.related:
-        return page
+    new_targets = extract_wikilinks(link) or [link.strip("[]").strip()]
+    new_target = new_targets[0] if new_targets else link
+    for existing in page.related:
+        existing_targets = extract_wikilinks(existing) or [existing.strip("[]").strip()]
+        if new_target in existing_targets:
+            return page
     return replace(page, related=(*page.related, link))
