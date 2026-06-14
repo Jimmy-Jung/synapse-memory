@@ -12,7 +12,9 @@ R3 원칙: "구조는 자동, 진실은 사람".
 from __future__ import annotations
 
 import dataclasses
+import difflib
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from pathlib import Path
 
 from synapse_memory.wiki.page import (
@@ -162,3 +164,58 @@ def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
             report.backlinks_added += 1
 
     return report
+
+
+# ---------------------------------------------------------------------------
+# 검토 큐 휴리스틱 (자동 수정 안 함 — index.md에 나열만)
+# ---------------------------------------------------------------------------
+
+
+def stale_candidates(
+    pages: list[WikiPage],
+    *,
+    today: str | None = None,
+    max_age_days: int = 180,
+) -> list[str]:
+    """낡음 의심 페이지 slug. type=="insight"는 skip.
+
+    updated 없으면 flag; 있으면 updated < today - max_age_days면 flag.
+    today 미지정 → 오늘.
+    """
+    today_date = date.fromisoformat(today) if today else date.today()
+    cutoff = today_date - timedelta(days=max_age_days)
+    flagged: list[str] = []
+    for page in pages:
+        if page.type == "insight":
+            continue
+        if not page.updated:
+            flagged.append(page.slug)
+            continue
+        try:
+            updated_date = date.fromisoformat(page.updated)
+        except ValueError:
+            flagged.append(page.slug)
+            continue
+        if updated_date < cutoff:
+            flagged.append(page.slug)
+    return flagged
+
+
+def merge_candidates(
+    pages: list[WikiPage],
+    *,
+    threshold: float = 0.9,
+) -> list[tuple[str, str]]:
+    """같은 type 페이지쌍 중 제목 유사도 >= threshold인 (slug1, slug2)."""
+    pairs: list[tuple[str, str]] = []
+    for i in range(len(pages)):
+        for j in range(i + 1, len(pages)):
+            p1, p2 = pages[i], pages[j]
+            if p1.type != p2.type:
+                continue
+            ratio = difflib.SequenceMatcher(
+                None, p1.title.lower(), p2.title.lower()
+            ).ratio()
+            if ratio >= threshold:
+                pairs.append((p1.slug, p2.slug))
+    return pairs
