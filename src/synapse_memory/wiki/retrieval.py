@@ -102,11 +102,9 @@ def find_related_pages(
     반환 순서: 이름매칭 먼저, 그다음 의미 top-k, 그다음 1-hop 이웃.
     slug 기준 dedup. max_pages 상한.
     """
-    resolved_semantic: SemanticFn | None
-    if semantic_fn is _DEFAULT:
-        resolved_semantic = _default_semantic
-    else:
-        resolved_semantic = semantic_fn
+    resolved_semantic: SemanticFn | None = (
+        _default_semantic if semantic_fn is _DEFAULT else semantic_fn
+    )
 
     haystack = text.lower()
     all_pages = _all_pages(vault_path)

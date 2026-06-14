@@ -152,7 +152,9 @@ from synapse_memory.storage.l0 import (  # noqa: E402
     l0_root,
 )
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
+from synapse_memory.wiki.index import index_wiki_pages  # noqa: E402
 from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
+from synapse_memory.wiki.query import ask_wiki  # noqa: E402
 
 OK = "✓"
 FAIL = "✗"
@@ -760,6 +762,24 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         for e in result.errors:
             print(f"    - {e}")
     return 1 if result.errors else 0
+
+
+def cmd_wiki_ask(args: argparse.Namespace) -> int:
+    """wiki-first 질의 → 합성 답변 + 인용 (선택적 insight write-back)."""
+    res = ask_wiki(args.query, save=getattr(args, "save", False))
+    print(res.answer)
+    if res.sources:
+        print("\n출처: " + ", ".join(f"[[{s}]]" for s in res.sources))
+    if res.saved_slug:
+        print(f"{OK} insight 저장: {res.saved_slug}")
+    return 0
+
+
+def cmd_wiki_reindex(args: argparse.Namespace) -> int:
+    """모든 wiki 페이지를 벡터 스토어에 재인덱싱."""
+    count = index_wiki_pages()
+    print(f"indexed {count} pages")
+    return 0
 
 
 def cmd_daily(args: argparse.Namespace) -> int:
@@ -3603,6 +3623,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="기존 Card 덮어쓰기"
     )
     p_card_gen.set_defaults(func=cmd_card_generate)
+
+    p_wiki = sub.add_parser("wiki", help="wiki-first 검색 + 답변 환원")
+    wiki_sub = p_wiki.add_subparsers(dest="action", required=True, metavar="ACTION")
+
+    p_wiki_ask = wiki_sub.add_parser("ask", help="wiki 근거 질의 (인용 포함)")
+    p_wiki_ask.add_argument("query", help="자연어 질의")
+    p_wiki_ask.add_argument(
+        "--save", action="store_true", help="답변을 insight 페이지로 환원"
+    )
+    p_wiki_ask.set_defaults(func=cmd_wiki_ask)
+
+    p_wiki_reindex = wiki_sub.add_parser("reindex", help="모든 wiki 페이지 재인덱싱")
+    p_wiki_reindex.set_defaults(func=cmd_wiki_reindex)
 
     p_cluster = sub.add_parser(
         "cluster", help="raw에서 같은 프로젝트로 묶기"

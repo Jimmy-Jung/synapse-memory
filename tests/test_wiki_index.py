@@ -13,11 +13,16 @@ from synapse_memory.wiki.page import WikiPage, save_page
 
 
 class FakeStore:
-    def __init__(self): self.records = []
-    def upsert(self, records): self.records.extend(records); return len(records)
+    def __init__(self):
+        self.records = []
+
+    def upsert(self, records):
+        self.records.extend(records)
+        return len(records)
 
 
-def _embed(texts): return [[float(len(t))] for t in texts]
+def _embed(texts):
+    return [[float(len(t))] for t in texts]
 
 
 def test_page_to_text_includes_title_and_body() -> None:
