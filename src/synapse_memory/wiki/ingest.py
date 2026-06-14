@@ -8,11 +8,13 @@
 """
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from synapse_memory.llm import ai_api
 from synapse_memory.wiki.apply import apply_ops
+from synapse_memory.wiki.index import index_one_page
 from synapse_memory.wiki.integration import (
     INTEGRATION_SCHEMA,
     INTEGRATION_SYSTEM,
@@ -81,6 +83,10 @@ def ingest_source(
                 continue
             written = apply_ops(ops, vault_path=vault_path, today=today)
             result.pages_written.extend(written)
+            # 변경 페이지 재인덱싱 — best-effort. rag 부재해도 ingest 성공 유지.
+            for op in ops:
+                with contextlib.suppress(Exception):
+                    index_one_page(op.page)
             if written:
                 append_log(
                     f"ingest {source}: {len(written)} pages "
