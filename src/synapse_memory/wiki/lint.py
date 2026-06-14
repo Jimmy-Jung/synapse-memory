@@ -11,7 +11,18 @@ R3 원칙: "구조는 자동, 진실은 사람".
 """
 from __future__ import annotations
 
-from synapse_memory.wiki.page import WikiPage, extract_wikilinks
+import dataclasses
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from synapse_memory.wiki.page import (
+    VALID_TYPES,
+    WikiPage,
+    extract_wikilinks,
+    list_pages,
+    save_page,
+    with_related,
+)
 
 
 def _targets(page: WikiPage) -> list[str]:
@@ -23,6 +34,12 @@ def _targets(page: WikiPage) -> list[str]:
             if target and target not in seen:
                 seen[target] = None
     return list(seen.keys())
+
+
+def _link_target(link: str) -> str:
+    """단일 related 링크 문자열에서 slug 대상 추출."""
+    extracted = extract_wikilinks(link) or [link.strip("[]").strip()]
+    return extracted[0] if extracted else ""
 
 
 def find_broken_backlinks(pages: list[WikiPage]) -> list[tuple[str, str]]:
@@ -79,3 +96,69 @@ def find_orphans(pages: list[WikiPage]) -> list[str]:
         for p in pages
         if p.slug not in has_outbound and p.slug not in has_inbound
     ]
+
+
+# ---------------------------------------------------------------------------
+# 구조 자동 수정
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LintReport:
+    """lint 1회 실행 결과 요약."""
+
+    backlinks_added: int = 0
+    dead_links_removed: int = 0
+    orphans: list[str] = field(default_factory=list)
+    review_items: list[dict] = field(default_factory=list)
+
+
+def _all_pages(*, vault_path: Path | None = None) -> list[WikiPage]:
+    """전 타입 페이지 수집 (slug 알파벳순 — list_pages 보장)."""
+    pages: list[WikiPage] = []
+    for page_type in VALID_TYPES:
+        pages.extend(list_pages(page_type, vault_path=vault_path))
+    return pages
+
+
+def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
+    """죽은 링크 제거 + 누락 역링크 보강. 멱등.
+
+    순서: ① 죽은 링크 먼저 제거(곧 삭제할 링크의 역링크를 만들지 않도록),
+    ② 그 다음 누락 역링크 보강.
+    """
+    report = LintReport()
+
+    # ① 죽은 링크 제거
+    pages = _all_pages(vault_path=vault_path)
+    dead = set(find_dead_links(pages))
+    dead_targets_by_slug: dict[str, set[str]] = {}
+    for src, target in dead:
+        dead_targets_by_slug.setdefault(src, set()).add(target)
+    for page in pages:
+        bad = dead_targets_by_slug.get(page.slug)
+        if not bad:
+            continue
+        kept = tuple(
+            link for link in page.related if _link_target(link) not in bad
+        )
+        removed = len(page.related) - len(kept)
+        if removed:
+            save_page(dataclasses.replace(page, related=kept), vault_path=vault_path)
+            report.dead_links_removed += removed
+
+    # ② 누락 역링크 보강 (죽은 링크 제거 후 재수집)
+    pages = _all_pages(vault_path=vault_path)
+    by_slug = {p.slug: p for p in pages}
+    broken = find_broken_backlinks(pages)
+    for needs_backlink, link_to in broken:
+        page = by_slug.get(needs_backlink)
+        if page is None:
+            continue
+        updated = with_related(page, f"[[{link_to}]]")
+        if updated is not page and updated.related != page.related:
+            save_page(updated, vault_path=vault_path)
+            by_slug[needs_backlink] = updated
+            report.backlinks_added += 1
+
+    return report
