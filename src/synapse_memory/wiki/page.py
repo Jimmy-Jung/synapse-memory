@@ -156,6 +156,12 @@ def slugify(name: str) -> str:
     return s or "untitled"
 
 
+def _insight_base(vault_path: Path | None = None) -> Path:
+    """Insights 루트 (연/월 하위폴더 없이)."""
+    vault = (vault_path or get_vault_path()).expanduser().resolve()
+    return vault / get_config().vault_folders.wiki.insights
+
+
 def page_dir(
     page_type: str,
     *,
@@ -165,11 +171,10 @@ def page_dir(
     """페이지 타입별 저장 디렉토리. insight는 연/월 하위폴더 사용."""
     if page_type not in VALID_TYPES:
         raise ValueError(f"알 수 없는 type: {page_type!r}")
-    vault = (vault_path or get_vault_path()).expanduser().resolve()
-    wiki = get_config().vault_folders.wiki
     if page_type == "insight":
-        return year_month_path(vault / wiki.insights, when or date.today())
-    sub = getattr(wiki, _TYPE_FOLDER_ATTR[page_type])
+        return year_month_path(_insight_base(vault_path), when or date.today())
+    vault = (vault_path or get_vault_path()).expanduser().resolve()
+    sub = getattr(get_config().vault_folders.wiki, _TYPE_FOLDER_ATTR[page_type])
     return vault / sub
 
 
@@ -209,6 +214,8 @@ def load_page(
     Raises:
         FileNotFoundError: 해당 페이지 없음.
     """
+    if "/" in slug or "\\" in slug:
+        raise ValueError(f"잘못된 slug (경로 구분자 포함): {slug!r}")
     path = page_dir(page_type, vault_path=vault_path, when=when) / f"{slug}.md"
     if not path.is_file():
         raise FileNotFoundError(f"wiki 페이지 없음: {path}")
@@ -225,16 +232,13 @@ def list_pages(
     insight는 연/월 하위폴더를 재귀 탐색한다.
     """
     if page_type == "insight":
-        base = (
-            (vault_path or get_vault_path()).expanduser().resolve()
-            / get_config().vault_folders.wiki.insights
-        )
+        base = _insight_base(vault_path)
     else:
         base = page_dir(page_type, vault_path=vault_path)
     if not base.is_dir():
         return []
     pages: list[WikiPage] = []
-    for p in sorted(base.rglob("*.md")):
+    for p in base.rglob("*.md"):
         try:
             pages.append(parse_page(p.read_text(encoding="utf-8")))
         except (ValueError, OSError):

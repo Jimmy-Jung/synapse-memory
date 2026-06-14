@@ -117,3 +117,10 @@ def test_list_pages_sorted_and_skips_bad(tmp_path: Path) -> None:
     (tmp_path / "Concepts" / "broken.md").write_text("no frontmatter", encoding="utf-8")
     pages = list_pages("concept", vault_path=tmp_path)
     assert [p.slug for p in pages] == ["alpha", "zeta"]
+
+
+def test_load_page_rejects_path_traversal(tmp_path: Path) -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="slug"):
+        load_page("concept", "../../etc/passwd", vault_path=tmp_path)
