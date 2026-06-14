@@ -54,18 +54,6 @@ def test_cmd_doctor_reports_hook_install_status(
     l0.chmod(0o700)
     ok_diag = DiagnosticResult("test", DiagnosticStatus.OK, "ok")
 
-    monkeypatch.setattr(
-        cli_mod,
-        "detect_environment",
-        lambda: SimpleNamespace(
-            apfel_path=Path("/usr/local/bin/apfel"),
-            apfel_version="1.0",
-            is_apple_silicon=True,
-            macos_major=26,
-            macos_version="26.0",
-            ready=True,
-        ),
-    )
     monkeypatch.setattr(cli_mod, "ensure_l0_root_secure", lambda: l0)
     monkeypatch.setattr(
         cli_mod,

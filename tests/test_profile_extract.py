@@ -14,7 +14,6 @@ import pytest
 
 import synapse_memory.profile.extract as ex_mod
 from synapse_memory.llm.ai_api import AIError
-from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.profile.extract import (
     MEMORY_INBOX_SUBPATH,
@@ -36,8 +35,6 @@ def _ai_env() -> ClaudeEnvironment:
     )
 
 
-def _apfel_disabled() -> ApfelEnvironment:
-    return ApfelEnvironment(None, None, "0", False)
 
 
 # ---------------------------------------------------------------------------
@@ -111,7 +108,6 @@ class TestExtractProfileFacts:
             facts = extract_profile_facts(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert len(facts) == 2
         assert facts[0].category == "work_style"
@@ -134,7 +130,6 @@ class TestExtractProfileFacts:
             facts = extract_profile_facts(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert len(facts) == 1
         assert facts[0].category == "tech"
@@ -154,7 +149,6 @@ class TestExtractProfileFacts:
             facts = extract_profile_facts(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert facts[0].confidence == 1.0
 
@@ -165,7 +159,6 @@ class TestExtractProfileFacts:
                 codex_history_path=tmp_path / "missing_codex.jsonl",
                 codex_sessions_path=tmp_path / "missing_codex_sessions",
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
 
     def test_empty_facts_returned(self, tmp_path: Path) -> None:
@@ -179,7 +172,6 @@ class TestExtractProfileFacts:
             facts = extract_profile_facts(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert facts == []
 
@@ -194,7 +186,6 @@ class TestExtractProfileFacts:
             extract_profile_facts(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
 
 
@@ -224,7 +215,6 @@ class TestExtractDecisionPatterns:
             patterns = extract_decision_patterns(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert len(patterns) == 1
         assert patterns[0].trigger == "큰 작업 시작"
@@ -252,7 +242,6 @@ class TestExtractDecisionPatterns:
             patterns = extract_decision_patterns(
                 history_path=history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert len(patterns) == 1
         assert patterns[0].trigger == "valid"

@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -447,7 +446,7 @@ class TestIndexCards:
 
         assert run_once() == run_once()
 
-    def test_include_raw_redacts_before_upsert(
+    def test_include_raw_passes_text_through_unredacted(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
@@ -461,11 +460,6 @@ class TestIndexCards:
         with patch(
             "synapse_memory.rag.indexer.embed_texts",
             side_effect=lambda texts, **_kwargs: [[0.1] * 1024 for _ in texts],
-        ), patch(
-            "synapse_memory.rag.indexer.redact_full",
-            side_effect=lambda text: SimpleNamespace(
-                redacted=text.replace("user@example.com", "[EMAIL_1]")
-            ),
         ):
             index_cards(
                 store=store,
@@ -476,5 +470,4 @@ class TestIndexCards:
 
         raw_records = [record for record in captured if record.id.startswith("raw_")]
         assert raw_records
-        assert "user@example.com" not in raw_records[0].document
-        assert "[EMAIL_1]" in raw_records[0].document
+        assert "user@example.com" in raw_records[0].document
