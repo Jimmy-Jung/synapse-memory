@@ -1,6 +1,6 @@
 {
   "name": "sm",
-  "version": "1.17.0",
+  "version": "1.17.1",
   "description": "개인용 AI 비서 / 세컨드 브레인 / 클론 — vault 위 RAG + 자동 메모리 시스템.",
   "author": {
     "name": "Synapse Memory Maintainers",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Synapse Memory",
     "shortDescription": "vault 기반 RAG + 자동 메모리 / 이력서 / 의사결정 코파일럿.",
-    "longDescription": "Synapse Memory는 Obsidian vault와 Claude Code 활동 로그를 안전하게 mirror·redact한 뒤, 자동으로 Project / Company Card를 추출하고, 자연어 질의(ask) / 시간순 회상(recall) / 의사결정(decide) / 회사 맞춤 이력서(resume) / 일일 통합(daily) 워크플로를 제공합니다. 모든 raw 데이터는 ~/.synapse/private/ (0700)에 격리되고 외부 LLM 입력은 항상 redacted 처리됩니다.",
+    "longDescription": "Synapse Memory는 Obsidian vault와 Claude Code 활동 로그를 안전하게 mirror한 뒤, 자동으로 Project / Company Card를 추출하고, 자연어 질의(ask) / 시간순 회상(recall) / 의사결정(decide) / 회사 맞춤 이력서(resume) / 일일 통합(daily) 워크플로를 제공합니다. 모든 raw 데이터는 ~/.synapse/private/ (0700)에 격리됩니다.",
     "developerName": "Synapse Memory Maintainers",
     "category": "Productivity",
     "capabilities": [
@@ -30,8 +30,7 @@
       "Resume drafting per company",
       "Topic recall over time",
       "Decision copilot",
-      "Daily ingest pipeline",
-      "PII redaction (F1=0.92)"
+      "Daily ingest pipeline"
     ],
     "websiteURL": "https://github.com/Jimmy-Jung/synapse-memory",
     "privacyPolicyURL": "https://github.com/Jimmy-Jung/synapse-memory/blob/main/docs/privacy-and-cost.md",

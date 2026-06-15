@@ -353,7 +353,7 @@ def extract_profile_facts(
         codex_sessions_path: codex sessions 디렉터리 override. 기본
             ``<l0>/raw/codex/sessions``. Codex 0.131+ 에서 사용자 신호의
             진짜 원본 — history.jsonl 누락분을 메운다.
-        extra_text: 이미 redacted 된 외부 자료. history 와 함께 사용 가능.
+        extra_text: 외부 첨부 자료. history 와 함께 사용 가능.
 
     Raises:
         AIError: AI provider 호출 실패.
@@ -375,37 +375,31 @@ def extract_profile_facts(
     if sample_lines > 0:
         raw_history = _read_history_tail(history, sample_lines)
         if raw_history:
-            redacted_history = raw_history
-            if redacted_history:
-                sections.append(
-                    f"## claude-code history (최근 {sample_lines}건, redacted)\n\n"
-                    f"{redacted_history}"
-                )
-                source_ids.append("claude-code/history.jsonl")
+            sections.append(
+                f"## claude-code history (최근 {sample_lines}건)\n\n"
+                f"{raw_history}"
+            )
+            source_ids.append("claude-code/history.jsonl")
         raw_codex = _read_codex_history_tail(codex_history, sample_lines)
         if raw_codex:
-            redacted_codex = raw_codex
-            if redacted_codex:
-                sections.append(
-                    f"## codex history (최근 {sample_lines}건, redacted)\n\n"
-                    f"{redacted_codex}"
-                )
-                source_ids.append("codex/history.jsonl")
+            sections.append(
+                f"## codex history (최근 {sample_lines}건)\n\n"
+                f"{raw_codex}"
+            )
+            source_ids.append("codex/history.jsonl")
         raw_codex_sessions = _read_codex_sessions_tail(
             codex_sessions, max_messages=sample_lines
         )
         if raw_codex_sessions:
-            redacted_sessions = raw_codex_sessions
-            if redacted_sessions:
-                sections.append(
-                    f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
-                    f"최대 {sample_lines}개 user message, redacted)\n\n"
-                    f"{redacted_sessions}"
-                )
-                source_ids.append("codex/sessions/")
+            sections.append(
+                f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
+                f"최대 {sample_lines}개 user message)\n\n"
+                f"{raw_codex_sessions}"
+            )
+            source_ids.append("codex/sessions/")
 
     if extra_text:
-        sections.append(f"## 외부 첨부 자료 (redacted)\n\n{extra_text}")
+        sections.append(f"## 외부 첨부 자료\n\n{extra_text}")
         source_ids.append("persona-ingest")
 
     if not sections:
@@ -496,34 +490,28 @@ def extract_decision_patterns(
     examples: list[str] = []
     cc_text = _read_history_tail(history, sample_lines)
     if cc_text:
-        redacted = cc_text
-        if redacted:
-            sections.append(
-                f"## claude-code history (최근 {sample_lines}건, redacted)\n\n"
-                f"{redacted}"
-            )
-            examples.append("claude-code/history.jsonl")
+        sections.append(
+            f"## claude-code history (최근 {sample_lines}건)\n\n"
+            f"{cc_text}"
+        )
+        examples.append("claude-code/history.jsonl")
     codex_text = _read_codex_history_tail(codex_history, sample_lines)
     if codex_text:
-        redacted_cx = codex_text
-        if redacted_cx:
-            sections.append(
-                f"## codex history (최근 {sample_lines}건, redacted)\n\n"
-                f"{redacted_cx}"
-            )
-            examples.append("codex/history.jsonl")
+        sections.append(
+            f"## codex history (최근 {sample_lines}건)\n\n"
+            f"{codex_text}"
+        )
+        examples.append("codex/history.jsonl")
     codex_sessions_text = _read_codex_sessions_tail(
         codex_sessions, max_messages=sample_lines
     )
     if codex_sessions_text:
-        redacted_sess = codex_sessions_text
-        if redacted_sess:
-            sections.append(
-                f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
-                f"최대 {sample_lines}개 user message, redacted)\n\n"
-                f"{redacted_sess}"
-            )
-            examples.append("codex/sessions/")
+        sections.append(
+            f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
+            f"최대 {sample_lines}개 user message)\n\n"
+            f"{codex_sessions_text}"
+        )
+        examples.append("codex/sessions/")
 
     if not sections:
         raise FileNotFoundError(

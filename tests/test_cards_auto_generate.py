@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from synapse_memory.cards.auto_generate import (
-    _gather_redacted_text,
+    _gather_sample_text,
     _strip_outer_fence,
     generate_company_card,
     generate_project_card,
@@ -59,13 +59,13 @@ class TestGatherRedacted:
         for i in range(3):
             (obs_root / f"n{i}.md").write_text(f"내용 {i}", encoding="utf-8")
         cluster = _make_cluster("x", [f"n{i}.md" for i in range(3)])
-        text = _gather_redacted_text(cluster, obs_root)
+        text = _gather_sample_text(cluster, obs_root)
         for i in range(3):
             assert f"내용 {i}" in text
 
     def test_empty_when_no_files(self, obs_root: Path) -> None:
         cluster = _make_cluster("x", [])
-        text = _gather_redacted_text(cluster, obs_root)
+        text = _gather_sample_text(cluster, obs_root)
         assert text == ""
 
 

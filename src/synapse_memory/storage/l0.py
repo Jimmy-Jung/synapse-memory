@@ -5,9 +5,10 @@
 - 위치: ``~/.synapse/private/`` (사용자 홈, vault 외부, iCloud sync 제외)
 - 디렉토리 권한: 0700 (소유자 전용)
 - 파일 권한: 0600
-- 외부 LLM(Claude/GPT 등)에 절대 노출 금지 — 모든 cloud 호출은 redacted L1 이후만
-- vault CLAUDE.md 원칙: "raw conversations, transcripts, API keys, tokens, redaction
-  reports를 90_System/AI 또는 iCloud-synced Vault 노트에 쓰지 않습니다"
+- 로컬 격리: iCloud sync 제외, 0700/0600. v2는 raw를 클라우드 CLI(Claude Code/Codex)에
+  직접 전달하는 것을 신뢰 전제로 한다 (별도 redaction 레이어 없음).
+- vault CLAUDE.md 원칙: "raw conversations, transcripts, API keys, tokens를
+  90_System/AI 또는 iCloud-synced Vault 노트에 쓰지 않습니다"
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10

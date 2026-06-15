@@ -1,11 +1,11 @@
 ---
-description: 비용/토큰 요약 — Claude/apfel 호출 cost.jsonl 집계
+description: 비용/토큰 요약 — Claude 호출 cost.jsonl 집계
 argument-hint: summary --days 30 --by command | summary --by model --json
 ---
 
 !`SYNAPSE_FROM_AGENT=1 synapse-memory cost $ARGUMENTS`
 
-Claude Code CLI 와 apfel 호출이 기록한 로컬 private cost log 를 집계합니다. 기본은 최근 30일 command 별 표 출력입니다.
+Claude Code CLI 호출이 기록한 로컬 private cost log 를 집계합니다. 기본은 최근 30일 command 별 표 출력입니다.
 
 예시:
 - `summary`

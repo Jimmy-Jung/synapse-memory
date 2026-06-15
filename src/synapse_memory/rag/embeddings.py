@@ -4,7 +4,7 @@
 - 백엔드: sentence-transformers (Apple Silicon은 MPS 자동)
 - 캐싱: 모델은 lazy 로드, 한 번 로드 후 모듈 전역 보관
 
-**v2 보안**: 입력은 redacted 텍스트만. raw 임베드 금지 (caller 책임).
+**v2**: 입력 텍스트를 그대로 임베드한다 (별도 redaction 레이어 없음).
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -73,7 +73,7 @@ def embed_texts(
     """텍스트 리스트 → 임베딩 벡터 리스트.
 
     Args:
-        texts: 인코딩 대상 (redacted 권장).
+        texts: 인코딩 대상.
         model_name: HF model id.
         batch_size: GPU/CPU에 맞춰 조정.
         normalize: cosine 유사도 사용 시 True (dense 정규화).

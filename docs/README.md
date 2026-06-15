@@ -25,18 +25,11 @@
    모았습니다. v0.9.0 이후 추가된 흐름도 같은 문서에 정리돼 있습니다.
 
    - 기존 vault를 새 폴더 구조로 옮기기 (`migrate-folders`, v0.9.0)
-   - 개인 메모를 외부 AI에 안전 전달 (`/sm:redact`, v0.10.0)
    - 다른 프로젝트에서 sm 컨텍스트 활용 (`/sm:setup`, `/sm:sync`, v0.11.0)
    - Profile 후보 GUI 승인 (`/sm:apply-profile`, v0.12.0)
    - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
    - apply 중복 질문 5중 차단 + codex 통합 + 관찰성 (v0.14.0)
    - 외부 데이터 수집기 13종 확장 — shell history, Cursor / Continue / Aider 세션, Apple Notes, Day One, VS Code Local History, iMessage, Gmail, Calendar, 브라우저 history, Screen Time, Apple Health (v0.15.0)
-
-4. [로컬 LLM (apfel) 동작 원리와 설계](local-llm.md)
-
-   Apple FoundationModels을 감싼 로컬 LLM 계층의 mermaid 다이어그램, 호출 흐름,
-   설계 이유를 정리했습니다. "왜 외부 LLM에 raw 데이터가 절대 안 나가는가" 가
-   궁금하다면 이 문서가 출발점입니다.
 
 ## 한 문장으로 이해하기
 

@@ -1,6 +1,6 @@
 ---
 name: cost
-description: Use when the user asks "내가 synapse-memory에 얼마 썼지?", "토큰 사용량", "비용 요약", "Claude/apfel 호출 cost". Aggregates cost.jsonl by command / model / date.
+description: Use when the user asks "내가 synapse-memory에 얼마 썼지?", "토큰 사용량", "비용 요약", "Claude 호출 cost". Aggregates cost.jsonl by command / model / date.
 ---
 
 # /sm:cost — 비용·토큰 요약

@@ -1,4 +1,4 @@
-"""외부 markdown/txt 파일 → L0 private mirror → redacted 텍스트 반환.
+"""외부 markdown/txt 파일 → L0 private mirror → raw 텍스트 반환.
 
 M1b: `persona ingest --file <path>` 의 백엔드. 지인 기획자 use case
 (회고록/일기 흡수) 와 본인 wedge use case (기술 스택 추출) 의 공통 입력 경로다.
@@ -9,7 +9,7 @@ M1b: `persona ingest --file <path>` 의 백엔드. 지인 기획자 use case
                                     └─→ extract_profile_facts(extra_text=...)
 
 raw 텍스트는 ``~/.synapse/private/persona/<sha-prefix>/<filename>`` 에만 저장된다.
-vault 에는 redacted 요약과 AI 추출 후보만 들어가는 게 contract.
+vault 에는 요약과 AI 추출 후보만 들어가는 게 contract.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-13
@@ -35,9 +35,9 @@ class IngestedFile:
 
     source_path: Path
     private_path: Path
-    redacted_text: str
+    text: str
     content_sha256: str
-    skipped_reason: str | None = None  # None / "unsupported" / "empty_redacted"
+    skipped_reason: str | None = None  # None / "unsupported" / "empty"
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,7 @@ class IngestResult:
     """`persona ingest` 1회 호출 집계."""
 
     files: list[IngestedFile] = field(default_factory=list)
-    combined_redacted: str = ""
+    combined_text: str = ""
 
     @property
     def accepted_count(self) -> int:
@@ -66,14 +66,14 @@ def ingest_files(
     *,
     l0_root_override: Path | None = None,
 ) -> IngestResult:
-    """외부 파일들을 L0 private 에 mirror 후 redacted 텍스트로 묶어 반환.
+    """외부 파일들을 L0 private 에 mirror 후 raw 텍스트로 묶어 반환.
 
     Args:
         paths: 흡수할 파일 경로 리스트.
         l0_root_override: L0 root 강제 지정 (테스트용). None 이면 ``l0_root()``.
 
     Returns:
-        IngestResult. unsupported 확장자나 redaction 결과 비면 skipped 로 표시.
+        IngestResult. unsupported 확장자나 내용이 비면 skipped 로 표시.
 
     Raises:
         FileNotFoundError: 경로에 파일이 없음.
@@ -92,7 +92,7 @@ def ingest_files(
                 IngestedFile(
                     source_path=path,
                     private_path=path,  # placeholder — 안 씀
-                    redacted_text="",
+                    text="",
                     content_sha256="",
                     skipped_reason="unsupported",
                 )
@@ -102,20 +102,20 @@ def ingest_files(
         raw_text = path.read_text(encoding="utf-8", errors="replace")
         sha = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
 
-        # L0 private mirror (raw 보존 — 사용자가 redactlist 조정 후 재처리 가능)
+        # L0 private mirror (raw 보존 — 필요 시 재처리 가능)
         private_path = _make_private_path(root, sha, path.name)
         secure_write_text(private_path, raw_text)
 
         # D4: raw 텍스트를 그대로 사용 (cloud 도구 신뢰 — redaction 제거)
-        redacted = raw_text
-        if not redacted.strip():
+        text = raw_text
+        if not text.strip():
             results.append(
                 IngestedFile(
                     source_path=path,
                     private_path=private_path,
-                    redacted_text="",
+                    text="",
                     content_sha256=sha,
-                    skipped_reason="empty_redacted",
+                    skipped_reason="empty",
                 )
             )
             continue
@@ -124,11 +124,11 @@ def ingest_files(
             IngestedFile(
                 source_path=path,
                 private_path=private_path,
-                redacted_text=redacted,
+                text=text,
                 content_sha256=sha,
             )
         )
-        combined_parts.append(f"## [{path.name}]\n\n{redacted}")
+        combined_parts.append(f"## [{path.name}]\n\n{text}")
 
-    combined_redacted = "\n\n".join(combined_parts)
-    return IngestResult(files=results, combined_redacted=combined_redacted)
+    combined_text = "\n\n".join(combined_parts)
+    return IngestResult(files=results, combined_text=combined_text)

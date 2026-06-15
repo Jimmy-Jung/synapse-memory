@@ -158,7 +158,7 @@ class CardGenerationResult:
 # ---------------------------------------------------------------------------
 
 
-def _gather_redacted_text(
+def _gather_sample_text(
     cluster: ProjectCluster,
     obs_root: Path,
     *,
@@ -166,7 +166,7 @@ def _gather_redacted_text(
     chars_per_note: int = NOTE_CHARS_FOR_CARD,
     max_total: int = MAX_RAW_TEXT_FOR_CARD,
 ) -> str:
-    """cluster 노트들 → redacted 단일 텍스트."""
+    """cluster 노트들 → 단일 샘플 텍스트."""
     parts: list[str] = []
     used = 0
     for rel in cluster.obsidian_files[:max_notes]:
@@ -192,7 +192,7 @@ def _gather_redacted_text(
 
 
 def _build_user_prompt(
-    cluster: ProjectCluster, redacted: str, candidate_name: str
+    cluster: ProjectCluster, sample: str, candidate_name: str
 ) -> str:
     folders = ", ".join(sorted(cluster.vault_folders)) or "(없음)"
     cwds = ", ".join(sorted(cluster.cwd_paths)) or "(없음)"
@@ -206,8 +206,8 @@ def _build_user_prompt(
         f"- 태그: {tags}\n"
         f"- 노트 수: {len(cluster.obsidian_files)}\n"
         f"\n"
-        f"# Sample notes (redacted)\n"
-        f"{redacted if redacted else '(노트 없음)'}\n"
+        f"# Sample notes\n"
+        f"{sample if sample else '(노트 없음)'}\n"
         f"\n"
         f"위 정보로 Card를 생성하세요."
     )
@@ -232,8 +232,8 @@ def generate_project_card(
         AIError: 호출 실패 또는 응답 형식 오류.
         ValueError: yaml 파싱 실패.
     """
-    redacted = _gather_redacted_text(cluster, obs_root)
-    user_prompt = _build_user_prompt(cluster, redacted, candidate_name)
+    sample = _gather_sample_text(cluster, obs_root)
+    user_prompt = _build_user_prompt(cluster, sample, candidate_name)
 
     text = ai_api.complete(
         user_prompt,
@@ -273,8 +273,8 @@ def generate_company_card(
     ai_env: AIEnvironment,
     model: str = DEFAULT_GENERATE_MODEL,
 ) -> CompanyCard:
-    redacted = _gather_redacted_text(cluster, obs_root)
-    user_prompt = _build_user_prompt(cluster, redacted, candidate_name)
+    sample = _gather_sample_text(cluster, obs_root)
+    user_prompt = _build_user_prompt(cluster, sample, candidate_name)
 
     text = ai_api.complete(
         user_prompt,

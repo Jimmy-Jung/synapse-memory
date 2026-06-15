@@ -33,7 +33,7 @@ from synapse_memory.storage.l0 import l0_root
 
 VALID_KINDS = ("project", "company", "domain", "life", "skip")
 SAMPLE_NOTES = 5
-SAMPLE_NOTE_CHARS = 1500   # 노트당 최대 문자 (redact 전)
+SAMPLE_NOTE_CHARS = 1500   # 노트당 최대 문자 (샘플 추출 상한)
 MAX_RAW_TEXT = 8000         # AI provider 입력 총량 제한
 DEFAULT_CLASSIFY_MODEL = "haiku"  # 단순 분류 작업 — haiku로 비용 1/3
 
@@ -232,7 +232,7 @@ def _extract_user_messages(
 
 
 def _build_user_prompt(
-    cluster: ProjectCluster, redacted_sample: str
+    cluster: ProjectCluster, sample: str
 ) -> str:
     folders = ", ".join(sorted(cluster.vault_folders)) or "(없음)"
     cwds = ", ".join(sorted(cluster.cwd_paths)) or "(없음)"
@@ -248,8 +248,8 @@ def _build_user_prompt(
         f"- codex rollout 수: {len(cluster.codex_jsonl)}\n"
         f"- 태그: {tags}\n"
         f"\n"
-        f"# Sample (redacted — vault 노트 + codex user message)\n"
-        f"{redacted_sample if redacted_sample else '(자료 없음)'}\n"
+        f"# Sample (vault 노트 + codex user message)\n"
+        f"{sample if sample else '(자료 없음)'}\n"
         f"\n"
         f"위 cluster의 카테고리는?"
     )

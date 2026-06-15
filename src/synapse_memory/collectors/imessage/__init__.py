@@ -7,8 +7,7 @@
 바이너리)에 권한 부여해야 chat.db 가 읽힌다.
 
 ⚠ **PII 매우 무거움** — 본 컬렉터는 기본 활성이지만, 사용자가 비활성화하려면
-``SYNAPSE_IMESSAGE_DISABLE=1`` 환경변수 설정. 후속 redact 단계가 더 강한
-스크러빙 필요.
+``SYNAPSE_IMESSAGE_DISABLE=1`` 환경변수 설정.
 
 저자: Synapse Memory Maintainers
 """

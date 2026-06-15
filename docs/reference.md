@@ -324,22 +324,6 @@ vault 안에 외부 AI가 직접 읽으면 안 되는 개인 메모가 있다면
 
 `synapse-memory doctor` 가 자동으로 점검합니다. Private 폴더가 있는데 위 세 deny 패턴이 빠지면 ⚠ 경고가 표시됩니다.
 
-외부 AI에 일부 내용을 공유해야 한다면 `synapse-memory redact file` 로 로컬에서 미리 마스킹한 결과만 전달합니다.
-
-```bash
-# stdout에 redacted 결과 출력
-synapse-memory redact file 90_System/Private/personalmemory.md
-
-# 파일로 저장
-synapse-memory redact file 90_System/Private/personalmemory.md --out /tmp/redacted.md
-```
-
-- Pass 1 (regex + redactlist) + Pass 2 (apfel 로컬 LLM) 적용
-- 원본 파일은 변경되지 않습니다
-- 단일 파일 1 MB 한도, UTF-8 텍스트만
-- apfel 미설치 환경에서는 Pass 1 only fallback (자유형 PII는 검출 못 함 → 결과 재확인 권장)
-- 종료 코드: `0` = 정상 / `2` = 입력 무효
-
 ### Codex 격리 정책
 
 Codex CLI 는 Claude Code 의 `permissions.deny` 와 동등한 차단 매커니즘이 없습니다. 다음 두 가지 정책 기반 가드를 권장합니다.

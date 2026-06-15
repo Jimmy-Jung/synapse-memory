@@ -1,6 +1,6 @@
 """토큰 추정 휴리스틱 (provider-neutral).
 
-apfel 등 특정 백엔드에 묶이지 않은 순수 함수. claude/codex 어댑터가 사용한다.
+특정 백엔드에 묶이지 않은 순수 함수. claude/codex 어댑터가 사용한다.
 """
 
 # 토큰 추정 휴리스틱 (실측 후 calibrate 가능)

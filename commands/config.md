@@ -99,7 +99,7 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 
 - ❌ 한 번에 여러 키를 묶어서 set 호출
 - ❌ 사용자 동의 없이 set 실행 (자연어 *매핑*만 보여주고 동의 후 실행)
-- ❌ 보호된 키(`storage.l0_permissions`, `redaction.pass1_patterns`, `redaction.pass2_enabled`, `cleanup.protected_paths`)를 set 시도 — CLI가 차단하지만 슬래시도 사용자에게 "보안 핵심 키 — 코드 PR로만 변경" 안내
+- ❌ 보호된 키(`storage.l0_permissions`, `cleanup.protected_paths`)를 set 시도 — CLI가 차단하지만 슬래시도 사용자에게 "보안 핵심 키 — 코드 PR로만 변경" 안내
 - ❌ vault 변경 시 기존 데이터를 임의로 옮기기 (이동은 사용자 몫)
 - ❌ advanced 키를 일반 동의로 진행
 
