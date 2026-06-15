@@ -5,7 +5,8 @@
 - retrieval (W4 후반): hybrid search (dense + BM25 + RRF)
 - indexer (W4 후반): Card → 임베딩 → DB
 
-핵심 보안 원칙: raw 텍스트는 임베드 안 함. **redacted 또는 검증된 Card만 인덱싱.**
+인덱싱 대상: 검증된 Card + (옵션) raw 소스. raw는 ``~/.synapse/private`` (0700)에
+격리되며, v2는 별도 redaction 레이어 없이 클라우드 CLI에 직접 전달한다.
 
 저자: Synapse Memory Maintainers
 """

@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "synapse-memory"
-version = "1.17.0"
+version = "1.17.1"
 description = "Personal LLM-maintained wiki — auto-builds a second brain from your AI conversations"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Synapse Memory Maintainers" },
 ]
-keywords = ["personal-knowledge", "rag", "apple-silicon", "foundationmodels", "obsidian"]
+keywords = ["personal-knowledge", "rag", "apple-silicon", "obsidian"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Operating System :: MacOS :: MacOS X",

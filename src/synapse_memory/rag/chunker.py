@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -84,7 +83,7 @@ def discover_raw_sources(
     vault_path: Path | None = None,
     l0_path: Path | None = None,
 ) -> list[RawSource]:
-    """Obsidian active notes and redacted Claude Code files를 찾는다."""
+    """Obsidian active notes and raw Claude Code files를 찾는다."""
     sources: list[RawSource] = []
 
     if vault_path is not None:
@@ -100,7 +99,7 @@ def discover_raw_sources(
             )
 
     l0_resolved = (l0_path or l0_root()).expanduser().resolve()
-    claude_root = l0_resolved / "redacted" / "claude-code"
+    claude_root = l0_resolved / "raw" / "claude-code"
     if claude_root.is_dir():
         sources.extend(
             RawSource("raw_claude_code", path, l0_resolved)
@@ -116,11 +115,10 @@ def raw_chunks_from_file(
     *,
     source_kind: RawSourceKind,
     root_path: Path,
-    redact: Callable[[str], str],
     max_tokens: int = DEFAULT_CHUNK_TOKENS,
     overlap: int = DEFAULT_CHUNK_OVERLAP,
 ) -> list[RawChunk]:
-    """파일 하나를 읽어 redacted raw chunks로 변환한다."""
+    """파일 하나를 읽어 raw chunks로 변환한다."""
     source_path = path.expanduser().resolve()
     raw_text = source_path.read_text(encoding="utf-8")
     effective_overlap = min(overlap, max_tokens - 1)
@@ -136,8 +134,8 @@ def raw_chunks_from_file(
     created = _mtime_iso(source_path)
     chunks: list[RawChunk] = []
     for index, chunk in enumerate(raw_chunks):
-        redacted = redact(chunk).strip()
-        if not redacted:
+        text = chunk.strip()
+        if not text:
             continue
         chunks.append(
             RawChunk(
@@ -145,7 +143,7 @@ def raw_chunks_from_file(
                 source_kind=source_kind,
                 path=relative_path,
                 chunk_index=index,
-                text=redacted,
+                text=text,
                 created=created,
                 display_name=source_path.name,
             )

@@ -387,16 +387,16 @@ class TestIndexCards:
         assert any(record_id.startswith(PREFIX_INSIGHT) for record_id in ids)
         assert stats.bm25_documents == 4
 
-    def test_include_raw_indexes_obsidian_and_redacted_claude(
+    def test_include_raw_indexes_obsidian_and_raw_claude(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, vault: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
         raw_note = vault / "10_Active" / "raw-note.md"
         raw_note.parent.mkdir(parents=True)
         raw_note.write_text("당근마켓 raw memo", encoding="utf-8")
-        claude_log = tmp_path / "private" / "redacted" / "claude-code" / "session.jsonl"
+        claude_log = tmp_path / "private" / "raw" / "claude-code" / "session.jsonl"
         claude_log.parent.mkdir(parents=True)
-        claude_log.write_text('{"text":"카카오뱅크 redacted memo"}', encoding="utf-8")
+        claude_log.write_text('{"text":"카카오뱅크 raw memo"}', encoding="utf-8")
 
         store = self._fake_store()
         captured: list[VectorRecord] = []

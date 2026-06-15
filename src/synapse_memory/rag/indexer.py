@@ -426,7 +426,6 @@ def _build_raw_records(
                     source.path,
                     source_kind=source.source_kind,
                     root_path=source.root_path,
-                    redact=lambda text: text,
                 )
             )
         except Exception as exc:

@@ -12,7 +12,7 @@
 때문이다. partial-line / rotation / atomic offset 보장 동일.
 
 zsh 의 ``HIST_REDUCE_BLANKS`` / ``HIST_IGNORE_DUPS`` 같은 옵션은 source 측에서
-처리되므로 mirror 는 단순 byte-copy. 형식 파싱은 후속 redact/classify 단계에서.
+처리되므로 mirror 는 단순 byte-copy. 형식 파싱은 후속 classify 단계에서.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-18

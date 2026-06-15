@@ -351,7 +351,7 @@ def complete(
     """Claude Code CLI 단일 호출 → 응답 텍스트.
 
     Args:
-        prompt: 사용자 프롬프트 (redacted여야).
+        prompt: 사용자 프롬프트.
         system: 시스템 프롬프트.
         model: 모델 alias (sonnet/opus/haiku) 또는 full 이름.
         json_schema: 응답 JSON schema 강제 (Claude 자체 검증).

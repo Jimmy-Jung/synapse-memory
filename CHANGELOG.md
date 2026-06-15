@@ -2,6 +2,25 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.17.1] — 2026-06-15
+
+1.17.0에서 apfel/redaction 제거 후 남은 레거시 잔재를 정리하고, 그 과정에서 raw 색인 버그를 수정했다.
+
+### Fixed
+
+- `rag index --include-raw`가 더 이상 존재하지 않는 `<L0>/redacted/claude-code`를 읽어 Claude Code raw chunk를 조용히 0개로 누락하던 버그 수정 — collector가 mirror하는 `<L0>/raw/claude-code`를 읽도록 정정.
+- doctor 진단에서 제거된 apfel/L0-private 항목을 빼고 v2 wiki 파이프라인(페이지·watch 데몬·maintenance engine) 점검을 추가.
+
+### Removed
+
+- 고아 문서/스킬 삭제: `docs/local-llm.md`, `skills/redact/`(`/sm:redact`), `commands/redact.md`.
+- `CostProvider` enum과 pricing 분기에서 `apfel` 제거.
+
+### Changed
+
+- 죽은 redaction 스캐폴딩 제거: `raw_chunks_from_file`의 항등 `redact` 콜백, `IngestResult`/`IngestedFile`의 `*_redacted` 필드명을 raw passthrough 현실에 맞게 정리.
+- redaction/apfel을 전제하던 stale 주석·문서·스킬·매니페스트 텍스트를 v2 raw-passthrough 기준으로 갱신.
+
 ## [1.17.0] — 2026-06-15
 
 Karpathy의 "LLM-maintained wiki" 패턴을 따르는 v2 엔진을 도입했다. 어떤 AI 툴(Claude/Codex 등)에서 대화하든 그 기록을 자동으로 인식해, 사람이 매일 수동 갱신하지 않아도 Obsidian vault에 상호 링크된 wiki를 구축·유지한다. 설계·구현 계획은 `specs/019-llm-wiki-redesign/`와 `docs/superpowers/plans/`에 있다.

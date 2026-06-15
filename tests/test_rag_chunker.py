@@ -40,7 +40,7 @@ def test_chunk_text_rejects_invalid_overlap() -> None:
         chunk_text("a b c", max_tokens=3, overlap=3)
 
 
-def test_discover_raw_sources_finds_active_and_redacted_claude(
+def test_discover_raw_sources_finds_active_and_raw_claude(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     vault = tmp_path / "vault"
@@ -51,9 +51,9 @@ def test_discover_raw_sources_finds_active_and_redacted_claude(
     (vault / "90_System" / "ignored.md").write_text("ignore", encoding="utf-8")
 
     l0_root = tmp_path / "private"
-    claude_dir = l0_root / "redacted" / "claude-code"
+    claude_dir = l0_root / "raw" / "claude-code"
     claude_dir.mkdir(parents=True)
-    (claude_dir / "session.jsonl").write_text('{"text":"redacted"}', encoding="utf-8")
+    (claude_dir / "session.jsonl").write_text('{"text":"raw"}', encoding="utf-8")
     monkeypatch.setenv("SYNAPSE_L0_ROOT", str(l0_root))
 
     sources = discover_raw_sources(vault_path=vault)
@@ -63,7 +63,7 @@ def test_discover_raw_sources_finds_active_and_redacted_claude(
     assert sources[1].path == claude_dir / "session.jsonl"
 
 
-def test_raw_chunks_from_file_builds_stable_redacted_metadata(tmp_path: Path) -> None:
+def test_raw_chunks_from_file_builds_stable_metadata(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     note = vault / "10_Active" / "memo.md"
     note.parent.mkdir(parents=True)
@@ -73,7 +73,6 @@ def test_raw_chunks_from_file_builds_stable_redacted_metadata(tmp_path: Path) ->
         note,
         source_kind="raw_obsidian",
         root_path=vault,
-        redact=lambda text: text.replace("user@example.com", "[EMAIL_1]"),
         max_tokens=10,
     )
 
@@ -83,10 +82,9 @@ def test_raw_chunks_from_file_builds_stable_redacted_metadata(tmp_path: Path) ->
             source_kind="raw_obsidian",
             path="10_Active/memo.md",
             chunk_index=0,
-            text="email [EMAIL_1] 당근마켓",
+            text="email user@example.com 당근마켓",
             created=chunks[0].created,
             display_name="memo.md",
         )
     ]
     assert chunks[0].id.startswith("raw_obsidian:")
-    assert "user@example.com" not in chunks[0].text

@@ -3,7 +3,7 @@
 ingest_files 가:
 - raw 텍스트를 L0 private 에 0600 권한으로 mirror
 - 지원하지 않는 확장자는 skipped 로 표시 (vault 누수 0)
-- raw 텍스트를 combined_redacted 로 반환 (D4 passthrough — extract_profile_facts(extra_text=...) 입력용)
+- raw 텍스트를 combined_text 로 반환 (D4 passthrough — extract_profile_facts(extra_text=...) 입력용)
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-13
@@ -102,7 +102,7 @@ class TestIngestSupportedExtensions:
         assert result.accepted_count == 0
         assert result.skipped_count == 1
         assert result.files[0].skipped_reason == "unsupported"
-        assert result.combined_redacted == ""
+        assert result.combined_text == ""
 
     def test_unsupported_files_dont_create_l0_entries(
         self, tmp_path: Path
@@ -131,16 +131,16 @@ class TestIngestBatching:
         result = ingest_files([a, b], l0_root_override=l0)
 
         assert result.accepted_count == 2
-        assert "Swift" in result.combined_redacted
-        assert "uv" in result.combined_redacted
+        assert "Swift" in result.combined_text
+        assert "uv" in result.combined_text
 
     def test_combined_includes_source_marker(
         self, diary_file: Path, tmp_path: Path
     ) -> None:
-        """combined_redacted 에 출처 파일명 헤더가 포함되어야 한다."""
+        """combined_text 에 출처 파일명 헤더가 포함되어야 한다."""
         l0 = tmp_path / "l0"
         result = ingest_files([diary_file], l0_root_override=l0)
-        assert "diary-2026.md" in result.combined_redacted
+        assert "diary-2026.md" in result.combined_text
 
 
 class TestIngestErrors:
@@ -159,7 +159,7 @@ class TestIngestErrors:
 
         result = ingest_files([p], l0_root_override=l0)
 
-        assert result.files[0].skipped_reason == "empty_redacted"
+        assert result.files[0].skipped_reason == "empty"
         # Raw 는 그래도 L0 에 남아야 함 (사용자가 재시도 가능)
         assert result.files[0].private_path.is_file()
 
@@ -172,7 +172,7 @@ class TestIngestResultShape:
         result = ingest_files([diary_file], l0_root_override=l0)
         assert isinstance(result, IngestResult)
         assert isinstance(result.files, list)
-        assert isinstance(result.combined_redacted, str)
+        assert isinstance(result.combined_text, str)
 
     def test_supported_extensions_constant(self) -> None:
         """공개 상수 — SKILL.md / docs 에서 사용 가능."""

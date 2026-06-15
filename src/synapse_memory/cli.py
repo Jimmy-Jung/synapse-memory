@@ -1400,14 +1400,13 @@ def cmd_persona_ingest(args: argparse.Namespace) -> int:
                 f"(지원: {ext_list})",
                 file=sys.stderr,
             )
-        elif f.skipped_reason == "empty_redacted":
+        elif f.skipped_reason == "empty":
             print(
-                f"  SKIPPED (redaction empty): {f.source_path.name} "
-                f"— raw 는 L0 에 보존됨, redactlist 조정 후 재시도",
+                f"  SKIPPED (빈 파일): {f.source_path.name} — raw 는 L0 에 보존됨",
                 file=sys.stderr,
             )
 
-    if not result.combined_redacted:
+    if not result.combined_text:
         print(f"{FAIL} 흡수 가능한 텍스트 없음", file=sys.stderr)
         return 1
 
@@ -1428,7 +1427,7 @@ def cmd_persona_ingest(args: argparse.Namespace) -> int:
             sample_lines=0,  # history 무시 — ingest 가 자료의 출처
             model=args.model,
             ai_env=ai_env,
-            extra_text=result.combined_redacted,
+            extra_text=result.combined_text,
         )
         print(f"  → {len(facts)} fact 추출")
     except AIError as exc:
@@ -3408,7 +3407,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rag_idx.add_argument(
         "--include-raw",
         action="store_true",
-        help="10_Active와 redacted Claude Code raw chunks까지 인덱싱",
+        help="10_Active와 Claude Code raw chunks까지 인덱싱",
     )
     p_rag_idx.set_defaults(func=cmd_rag_index)
 
