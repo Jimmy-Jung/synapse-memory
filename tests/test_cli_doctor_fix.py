@@ -49,12 +49,8 @@ def test_cmd_doctor_reports_hook_install_status(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    l0 = tmp_path / ".synapse" / "private"
-    l0.mkdir(parents=True)
-    l0.chmod(0o700)
     ok_diag = DiagnosticResult("test", DiagnosticStatus.OK, "ok")
 
-    monkeypatch.setattr(cli_mod, "ensure_l0_root_secure", lambda: l0)
     monkeypatch.setattr(
         cli_mod,
         "detect_ai_environment",
@@ -68,12 +64,13 @@ def test_cmd_doctor_reports_hook_install_status(
     )
     monkeypatch.setattr(
         "synapse_memory.config.load_config",
-        lambda: SimpleNamespace(vault=str(tmp_path)),
+        lambda: SimpleNamespace(
+            vault=str(tmp_path),
+            maintenance=SimpleNamespace(engine="claude"),
+        ),
     )
-    monkeypatch.setattr(
-        "synapse_memory.doctor.diagnose_private_folder_deny",
-        lambda _vault: ok_diag,
-    )
+    monkeypatch.setattr(cli_mod, "diagnose_wiki_pages", lambda _vault: ok_diag)
+    monkeypatch.setattr(cli_mod, "diagnose_wiki_maintenance", lambda: ok_diag)
     monkeypatch.setattr(
         "synapse_memory.doctor.diagnose_dataview_plugin",
         lambda _vault: ok_diag,

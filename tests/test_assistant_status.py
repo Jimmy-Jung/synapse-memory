@@ -32,9 +32,9 @@ def _make_vault(tmp_path: Path) -> Path:
 
 def _mock_ok_diag():
     return mock.patch(
-        "synapse_memory.assistant_status.diagnose_private_permissions",
+        "synapse_memory.assistant_status.diagnose_runtime_shim",
         return_value=DiagnosticResult(
-            check_id="private_permissions",
+            check_id="runtime_shim",
             status=DiagnosticStatus.OK,
             message="ok",
         ),
@@ -127,21 +127,21 @@ def test_gather_status_handles_missing_vault(tmp_path):
     assert status.company_card_count == 0
 
 
-def test_gather_status_includes_doctor_issue_when_permission_bad(tmp_path):
+def test_gather_status_includes_doctor_issue_when_shim_missing(tmp_path):
     vault = _make_vault(tmp_path)
 
     with _mock_no_status(), mock.patch(
-        "synapse_memory.assistant_status.diagnose_private_permissions",
+        "synapse_memory.assistant_status.diagnose_runtime_shim",
         return_value=DiagnosticResult(
-            check_id="private_permissions",
+            check_id="runtime_shim",
             status=DiagnosticStatus.FAIL,
-            message="권한이 0755입니다. 0700이 필요합니다.",
+            message="command shim 없음",
         ),
     ):
         status = gather_status(vault_path=vault)
 
     assert status.doctor_ok is False
-    assert any("0700" in m for m in status.doctor_issues)
+    assert any("shim" in m for m in status.doctor_issues)
 
 
 def test_recommend_actions_doctor_issue_first():

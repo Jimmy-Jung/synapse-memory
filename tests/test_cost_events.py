@@ -135,14 +135,14 @@ def test_command_context_restores_previous_env(monkeypatch: pytest.MonkeyPatch) 
     assert current_command() == "outer"
 
 
-def test_price_usage_local_unpriced() -> None:
+def test_price_usage_unknown_when_no_provider_cost() -> None:
     priced = price_usage(
-        provider="apfel",
-        model="apple-foundationmodel",
+        provider="codex",
+        model="gpt-5",
         input_tokens=100,
         output_tokens=50,
     )
 
     assert priced.usd == 0.0
-    assert priced.pricing_source == "local_unpriced"
+    assert priced.pricing_source == "unknown"
 

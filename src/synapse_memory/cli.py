@@ -34,7 +34,6 @@ import contextlib  # noqa: E402
 import datetime  # noqa: E402
 import json  # noqa: E402
 import os  # noqa: E402
-import stat  # noqa: E402
 import threading  # noqa: E402
 import time  # noqa: E402
 from collections.abc import Iterable, Iterator  # noqa: E402
@@ -86,9 +85,10 @@ from synapse_memory.doctor import (  # noqa: E402
     DiagnosticStatus,
     apply_fix_actions,
     apply_set_config_vault,
-    diagnose_private_permissions,
     diagnose_runtime_shim,
     diagnose_vault_config_consistency,
+    diagnose_wiki_maintenance,
+    diagnose_wiki_pages,
     planned_fix_actions,
 )
 from synapse_memory.endpoints.ask import ask  # noqa: E402
@@ -130,11 +130,7 @@ from synapse_memory.rag.embeddings import (  # noqa: E402
 )
 from synapse_memory.rag.vector_store import VectorStoreError  # noqa: E402
 from synapse_memory.status import DailyAlreadyRunningError  # noqa: E402
-from synapse_memory.storage.l0 import (  # noqa: E402
-    L0_DIR_MODE,
-    ensure_l0_root_secure,
-    l0_root,
-)
+from synapse_memory.storage.l0 import l0_root  # noqa: E402
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
@@ -285,10 +281,8 @@ def _runtime_ai_provider() -> str | None:
 
 def run_doctor_fix(*, assume_yes: bool = False) -> int:
     """Whitelisted repair flow for non-developer onboarding drift."""
-    private_root = l0_root()
     shim_path = Path.home() / ".synapse" / "bin" / "synapse-memory"
     diagnostics = [
-        diagnose_private_permissions(private_root),
         diagnose_runtime_shim(shim_path),
     ]
     actions = planned_fix_actions(diagnostics)
@@ -362,14 +356,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print("Synapse Memory 환경 진단")
     print("=" * 44)
 
-    # L0 setup — ~/.synapse/private 디렉토리 생성 + 권한 0700 강제
-    l0 = ensure_l0_root_secure()
-    actual_mode = stat.S_IMODE(os.stat(l0).st_mode)
-    if actual_mode == L0_DIR_MODE:
-        print(f"{OK} L0 루트: {l0} (0{L0_DIR_MODE:o})")
-    else:
-        print(f"{FAIL} L0 루트 권한 갱신 실패: {l0} (현재 0{actual_mode:o})")
-
     # vault config 일관성 — config.yaml vault vs 실제 detection
     try:
         from synapse_memory.config import load_config
@@ -385,23 +371,36 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ vault config 진단 실패: {exc}")
 
-    # vault `90_System/Private/` deny 일관성 — 외부 AI 차단 점검
+    # v2 wiki 페이지 점검 — entity/concept/profile/insight 존재 여부
     try:
         from synapse_memory.config import load_config
-        from synapse_memory.doctor import diagnose_private_folder_deny
 
-        pf_cfg = load_config()
-        if pf_cfg.vault is None:
+        wp_cfg = load_config()
+        if wp_cfg.vault is None:
             raise ValueError("config.yaml vault 미설정")
-        pf_result = diagnose_private_folder_deny(pf_cfg.vault)
-        if pf_result.status == DiagnosticStatus.OK:
-            print(f"{OK} {pf_result.message}")
-        elif pf_result.status == DiagnosticStatus.WARN:
-            print(f"⚠ {pf_result.message}")
+        wp_result = diagnose_wiki_pages(wp_cfg.vault)
+        if wp_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {wp_result.message}")
+        elif wp_result.status == DiagnosticStatus.WARN:
+            print(f"⚠ {wp_result.message}")
         else:
-            print(f"{FAIL} {pf_result.message}")
+            print(f"{FAIL} {wp_result.message}")
     except Exception as exc:
-        print(f"⚠ Private 폴더 deny 진단 실패: {exc}")
+        print(f"⚠ wiki 페이지 진단 실패: {exc}")
+
+    # v2 wiki 자동 유지 데몬 점검 — launchd watch LaunchAgent + maintenance engine
+    try:
+        from synapse_memory.config import load_config
+
+        wm_result = diagnose_wiki_maintenance()
+        if wm_result.status == DiagnosticStatus.OK:
+            print(f"{OK} {wm_result.message}")
+        else:
+            print(f"⚠ {wm_result.message}")
+        engine = load_config().maintenance.engine
+        print(f"{OK} wiki maintenance engine: {engine}")
+    except Exception as exc:
+        print(f"⚠ wiki 유지 데몬 진단 실패: {exc}")
 
     # Dataview 플러그인 점검 — MOC 동적 인덱스 의존성
     try:

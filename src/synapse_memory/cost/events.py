@@ -21,7 +21,7 @@ from synapse_memory.storage.l0 import (
     l0_root,
 )
 
-CostProvider: TypeAlias = Literal["claude", "codex", "apfel"]
+CostProvider: TypeAlias = Literal["claude", "codex"]
 CostStatus: TypeAlias = Literal["success", "error", "timeout", "unavailable"]
 
 COST_FILENAME = "cost.jsonl"
@@ -236,7 +236,7 @@ def _reject_prohibited_fields(data: dict[str, object]) -> None:
 
 
 def _as_provider(value: object) -> CostProvider:
-    if value in {"claude", "codex", "apfel"}:
+    if value in {"claude", "codex"}:
         return value  # type: ignore[return-value]
     raise ValueError(f"unknown provider: {value}")
 

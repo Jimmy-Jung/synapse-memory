@@ -4,7 +4,7 @@
 "오늘 추천 작업"을 제안할 수 있도록 가벼운 read-only API를 제공한다.
 
 수집 항목:
-- environment: doctor private-permissions 결과 (apfel 등 외부 의존성은 호출하지 않음 — fast read-only)
+- environment: doctor runtime-shim 결과 (외부 CLI는 호출하지 않음 — fast read-only)
 - inbox_pending: MemoryInbox 검토 대기 파일 수와 가장 최근 경로
 - draft_cards: status=draft인 카드 수 (project, company 각각)
 - empty_companies: positions가 비어 있는 회사 카드 수 (이력서 매칭에 영향)
@@ -29,10 +29,10 @@ from synapse_memory.cards.company import list_company_cards
 from synapse_memory.cards.project import list_project_cards
 from synapse_memory.cleanup import scan_cleanup_candidates
 from synapse_memory.config import get_config
-from synapse_memory.doctor import DiagnosticStatus, diagnose_private_permissions
+from synapse_memory.doctor import DiagnosticStatus, diagnose_runtime_shim
 from synapse_memory.status import read_status
 
-PRIVATE_ROOT = Path.home() / ".synapse" / "private"
+RUNTIME_SHIM = Path.home() / ".synapse" / "bin" / "synapse-memory"
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,7 @@ def gather_status(*, vault_path: Path | None = None) -> AssistantStatus:
     doctor_issues: list[str] = []
     doctor_ok = True
     try:
-        result = diagnose_private_permissions(PRIVATE_ROOT)
+        result = diagnose_runtime_shim(RUNTIME_SHIM)
         if result.status != DiagnosticStatus.OK:
             doctor_ok = False
             doctor_issues.append(result.message)
@@ -269,7 +269,7 @@ def render_status(status: AssistantStatus) -> str:
     else:
         lines.append("마지막 daily: 실행 기록 없음")
     if status.doctor_ok:
-        lines.append("doctor: ✓ OK (private permissions)")
+        lines.append("doctor: ✓ OK (runtime shim)")
     else:
         lines.append("doctor: ⚠ 문제 있음")
         for issue in status.doctor_issues:

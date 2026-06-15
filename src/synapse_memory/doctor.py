@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -47,91 +46,53 @@ class FixAction:
     apply: Callable[[], FixResult]
 
 
-def diagnose_private_permissions(private_root: Path) -> DiagnosticResult:
-    root = private_root.expanduser()
-    if not root.exists():
+def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
+    """v2 wiki 페이지 존재 점검 — entity/concept/profile/insight 합산 카운트."""
+    from synapse_memory.wiki.page import VALID_TYPES, list_pages
+
+    vault_root = Path(vault).expanduser()
+    total = 0
+    for page_type in VALID_TYPES:
+        total += len(list_pages(page_type, vault_path=vault_root))
+
+    if total == 0:
         return DiagnosticResult(
-            check_id="private_permissions",
-            status=DiagnosticStatus.FAIL,
-            message=f"{root} 없음",
-            fixable=True,
-            fix_action_id="fix_private_permissions",
-            target=root,
-        )
-    mode = stat.S_IMODE(root.stat().st_mode)
-    if mode != 0o700:
-        return DiagnosticResult(
-            check_id="private_permissions",
-            status=DiagnosticStatus.FAIL,
-            message=f"{root} 권한이 0{mode:o}입니다. 0700이 필요합니다.",
-            fixable=True,
-            fix_action_id="fix_private_permissions",
-            target=root,
+            check_id="wiki_pages",
+            status=DiagnosticStatus.WARN,
+            message=(
+                "v2 wiki 페이지 0개 — 아직 생성되지 않음. "
+                "`synapse-memory daily` 또는 `/sm:daily`로 wiki를 구축하세요."
+            ),
+            target=vault_root,
         )
     return DiagnosticResult(
-        check_id="private_permissions",
+        check_id="wiki_pages",
         status=DiagnosticStatus.OK,
-        message=f"{root} 권한 정상",
-        target=root,
+        message=f"v2 wiki 페이지 {total}개",
+        target=vault_root,
     )
 
 
-_PRIVATE_FOLDER_DENY_REQUIRED = (
-    "Read(./90_System/Private/**)",
-    "Glob(./90_System/Private/**)",
-    "Write(./90_System/Private/**)",
-)
+def diagnose_wiki_maintenance(*, home: Path | None = None) -> DiagnosticResult:
+    """v2 wiki 자동 유지 watch 데몬(launchd LaunchAgent) 설치 점검."""
+    from synapse_memory.wiki.launchd import plist_path
 
-
-def diagnose_private_folder_deny(vault: Path | str) -> DiagnosticResult:
-    """vault `90_System/Private/`가 있으면 `.claude/settings.json`의 permissions.deny 검사."""
-    vault_root = Path(vault).expanduser()
-    private = vault_root / "90_System" / "Private"
-    if not private.is_dir():
+    path = plist_path(home=home)
+    if path.is_file():
         return DiagnosticResult(
-            check_id="private_folder_deny",
+            check_id="wiki_maintenance",
             status=DiagnosticStatus.OK,
-            message="vault에 Private 폴더 없음 — 추가 차단 설정 불필요",
-            target=private,
+            message=f"wiki watch 데몬 설치됨: {path}",
+            target=path,
         )
-
-    settings = vault_root / ".claude" / "settings.json"
-    if not settings.is_file():
-        return DiagnosticResult(
-            check_id="private_folder_deny",
-            status=DiagnosticStatus.WARN,
-            message=(
-                f"Private 폴더 있음, 그러나 {settings} 없음. "
-                "permissions.deny로 Read/Glob/Write 셋 다 차단 필요."
-            ),
-            target=settings,
-        )
-
-    try:
-        data = json.loads(settings.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return DiagnosticResult(
-            check_id="private_folder_deny",
-            status=DiagnosticStatus.FAIL,
-            message=f"{settings} 파싱 실패: {exc}",
-            target=settings,
-        )
-
-    deny = set(data.get("permissions", {}).get("deny", []))
-    missing = [rule for rule in _PRIVATE_FOLDER_DENY_REQUIRED if rule not in deny]
-    if missing:
-        return DiagnosticResult(
-            check_id="private_folder_deny",
-            status=DiagnosticStatus.WARN,
-            message="permissions.deny에 누락된 항목: " + ", ".join(missing),
-            target=settings,
-        )
-
     return DiagnosticResult(
-        check_id="private_folder_deny",
-        status=DiagnosticStatus.OK,
-        message="Private 폴더 차단 정상 (Read/Glob/Write 셋 다 deny)",
-        target=settings,
+        check_id="wiki_maintenance",
+        status=DiagnosticStatus.WARN,
+        message=(
+            f"wiki watch 데몬 미설치 ({path} 없음) — 자동 유지 비활성. "
+            "설치: `synapse-memory watch install`."
+        ),
+        target=path,
     )
 
 
@@ -226,17 +187,7 @@ def planned_fix_actions(results: list[DiagnosticResult]) -> list[FixAction]:
     for result in results:
         if not result.fixable or result.fix_action_id is None:
             continue
-        if result.fix_action_id == "fix_private_permissions" and result.target is not None:
-            target = result.target
-            actions.append(
-                FixAction(
-                    id="fix_private_permissions",
-                    description=f"{target} 권한을 0700으로 복구",
-                    risk="low",
-                    apply=_make_private_permission_fix(target),
-                )
-            )
-        elif result.fix_action_id == "recreate_runtime_shim" and result.target is not None:
+        if result.fix_action_id == "recreate_runtime_shim" and result.target is not None:
             target = result.target
             actions.append(
                 FixAction(
@@ -251,23 +202,6 @@ def planned_fix_actions(results: list[DiagnosticResult]) -> list[FixAction]:
 
 def apply_fix_actions(actions: list[FixAction]) -> list[FixResult]:
     return [action.apply() for action in actions]
-
-
-def _fix_private_permissions(target: Path) -> FixResult:
-    target.mkdir(parents=True, exist_ok=True)
-    os.chmod(target, 0o700)
-    return FixResult(
-        action_id="fix_private_permissions",
-        status="success",
-        summary=f"{target} 권한을 0700으로 복구",
-    )
-
-
-def _make_private_permission_fix(target: Path) -> Callable[[], FixResult]:
-    def apply() -> FixResult:
-        return _fix_private_permissions(target)
-
-    return apply
 
 
 def _runtime_rerun_guidance(target: Path) -> FixResult:
