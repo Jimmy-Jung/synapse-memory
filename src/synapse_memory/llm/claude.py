@@ -114,6 +114,12 @@ def _build_cmd(
     인증은 그대로 유지. ``--strict-mcp-config`` — MCP 서버 미로드(사서는 tool 불필요).
     ``--exclude-dynamic-system-prompt-sections`` — system-prompt 명시와 함께 동적
     섹션 제거로 cache 추가 절감.
+
+    ``--settings '{"verbose":false}'`` — 사용자 전역 ``~/.claude.json``의
+    ``verbose:true``를 inline override. verbose가 켜져 있으면 ``--output-format json``이
+    단일 result 객체 대신 stream-json 배열을 내보내 envelope 파싱이 깨진다.
+    ``--setting-sources ""``는 user/project/local settings만 차단할 뿐 ``~/.claude.json``은
+    덮지 못하므로 별도 override가 필요하다.
     """
     assert env.claude_path is not None
     cmd: list[str] = [
@@ -127,6 +133,10 @@ def _build_cmd(
         "--setting-sources", "",
         "--strict-mcp-config",  # MCP 서버 미로드 (사서는 tool 안 씀)
         "--exclude-dynamic-system-prompt-sections",  # cache 추가 절감
+        # ~/.claude.json verbose:true inline override — verbose면 --output-format
+        # json이 stream-json 배열을 내보내 envelope 파싱이 깨진다 (setting-sources로
+        # 차단 안 됨). 단일 result 객체 보장.
+        "--settings", '{"verbose":false}',
         "--model", model or env.model,
         # 항상 system-prompt 명시 (없으면 minimal fallback) — default 시스템 prompt 회피
         "--system-prompt", system or _MINIMAL_SYSTEM_FALLBACK,
@@ -350,6 +360,33 @@ def _normalize_envelope(envelope: Any) -> dict[str, Any]:
     raise ClaudeError(f"envelope이 dict/list 아님: {type(envelope).__name__}")
 
 
+def _complete_envelope(
+    prompt: str,
+    *,
+    system: str | None,
+    model: str | None,
+    json_schema: dict[str, Any] | None,
+    max_budget_usd: float | None,
+    timeout: int,
+    env: ClaudeEnvironment | None,
+) -> dict[str, Any]:
+    """공통 준비(env 진단 + cmd 빌드) + CLI 호출 → normalized envelope dict.
+
+    ``complete``(텍스트)와 ``complete_structured``(structured_output) 양쪽이
+    동일 호출 경로를 공유하도록 추출.
+    """
+    env = env or detect_claude_environment(model or DEFAULT_MODEL)
+    _ensure_ready(env)
+    cmd = _build_cmd(
+        env,
+        system=system,
+        model=model,
+        json_schema=json_schema,
+        max_budget_usd=max_budget_usd,
+    )
+    return _run_claude(cmd, prompt=prompt, timeout=timeout)
+
+
 def complete(
     prompt: str,
     *,
@@ -374,18 +411,15 @@ def complete(
     Returns:
         envelope.result 텍스트.
     """
-    env = env or detect_claude_environment(model or DEFAULT_MODEL)
-    _ensure_ready(env)
-
-    cmd = _build_cmd(
-        env,
+    envelope = _complete_envelope(
+        prompt,
         system=system,
         model=model,
         json_schema=json_schema,
         max_budget_usd=max_budget_usd,
+        timeout=timeout,
+        env=env,
     )
-    envelope = _run_claude(cmd, prompt=prompt, timeout=timeout)
-
     content = envelope.get("result", "")
     if not isinstance(content, str):
         raise ClaudeError(
@@ -409,7 +443,7 @@ def complete_structured(
     Raises:
         ClaudeError: 호출 실패 또는 JSON 추출 실패.
     """
-    text = complete(
+    envelope = _complete_envelope(
         prompt,
         system=system or _DEFAULT_STRUCTURED_SYSTEM,
         model=model,
@@ -418,7 +452,18 @@ def complete_structured(
         timeout=timeout,
         env=env,
     )
-    return _parse_json_with_fallback(text)
+    # json_schema 명시 시 CLI가 schema-검증한 객체를 ``structured_output``에 채운다.
+    # 모델이 ``result``에 산문으로 답해도(긴/모호한 프롬프트에서 발생) 검증된
+    # structured_output을 우선 사용 — 파싱 실패 없이 dict 반환.
+    structured = envelope.get("structured_output")
+    if structured is not None:
+        return structured
+    content = envelope.get("result", "")
+    if not isinstance(content, str):
+        raise ClaudeError(
+            f"envelope.result가 string 아님: {type(content).__name__}"
+        )
+    return _parse_json_with_fallback(content)
 
 
 _DEFAULT_STRUCTURED_SYSTEM = (

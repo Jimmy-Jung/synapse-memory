@@ -25,6 +25,7 @@ from synapse_memory.wiki.integration import (
 from synapse_memory.wiki.log import append_log
 from synapse_memory.wiki.rawdoc import iter_new_raw
 from synapse_memory.wiki.retrieval import find_related_pages
+from synapse_memory.wiki.schema import ensure_schema
 from synapse_memory.wiki.watermark import load_watermark, save_watermark
 
 
@@ -77,6 +78,10 @@ def ingest_source(
         docs = docs[:limit]
 
     result = IngestResult(source=source)
+    # SCHEMA.md(wiki의 CLAUDE.md) 보장 — 어떤 에이전트든 wiki 유지 규약을 읽을 수
+    # 있도록. ensure_schema는 idempotent(존재 시 보존). dry_run이면 디스크 미변경.
+    if not dry_run:
+        ensure_schema(vault_path=vault_path)
     max_mtime = since
     for doc in docs:
         result.docs_processed += 1
