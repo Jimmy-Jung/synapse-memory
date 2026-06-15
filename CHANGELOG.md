@@ -2,6 +2,18 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.17.2] — 2026-06-15
+
+사용자가 SessionStart hook(예: caveman plugin)을 켠 상태에서 ingest/watch/backfill이 전부 깨지던 문제를 수정했다.
+
+### Fixed
+
+- ingest 내부 `claude --print` subprocess(사서)가 사용자 settings를 상속해 SessionStart hook의 주입 컨텍스트를 받으면, 사서가 JSON 대신 압축 텍스트로 응답해 파싱이 실패하고 0 페이지로 끝나거나 재시도가 반복돼 hang하던 버그 수정. `_build_cmd`에 `--setting-sources ""`(user/project/local settings 미로드 → hook·plugin 주입 차단)를 추가해 격리. `--bare`와 달리 OAuth/keychain 인증은 그대로 유지된다.
+
+### Changed
+
+- 사서 subprocess에 `--strict-mcp-config`(MCP 서버 미로드)와 `--exclude-dynamic-system-prompt-sections`(동적 시스템 프롬프트 섹션 제거)를 추가해 불필요한 컨텍스트와 cache 생성을 절감.
+
 ## [1.17.1] — 2026-06-15
 
 1.17.0에서 apfel/redaction 제거 후 남은 레거시 잔재를 정리하고, 그 과정에서 raw 색인 버그를 수정했다.

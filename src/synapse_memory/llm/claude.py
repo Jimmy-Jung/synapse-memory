@@ -107,6 +107,13 @@ def _build_cmd(
 
     ``--system-prompt`` 항상 설정 — 사용자 CLAUDE.md/memory/plugins/dynamic sections이
     cache로 들어가는 것 방지 (cache_creation 35K → 0).
+
+    ``--setting-sources ""`` — user/project/local settings 전부 미로드. 사용자
+    SessionStart hook(예: caveman plugin)이 이 subprocess에 주입돼 사서 응답을
+    JSON 대신 압축 텍스트로 오염시키는 것 방지. ``--bare``와 달리 OAuth/keychain
+    인증은 그대로 유지. ``--strict-mcp-config`` — MCP 서버 미로드(사서는 tool 불필요).
+    ``--exclude-dynamic-system-prompt-sections`` — system-prompt 명시와 함께 동적
+    섹션 제거로 cache 추가 절감.
     """
     assert env.claude_path is not None
     cmd: list[str] = [
@@ -115,6 +122,11 @@ def _build_cmd(
         "--output-format", "json",
         "--no-session-persistence",
         "--permission-mode", "bypassPermissions",  # tool 안 씀, 권한 묻기 skip
+        # settings 미로드 → user/project hook·plugin(caveman 등) 주입 차단.
+        # OAuth/keychain 인증은 setting-sources와 무관하게 유지됨.
+        "--setting-sources", "",
+        "--strict-mcp-config",  # MCP 서버 미로드 (사서는 tool 안 씀)
+        "--exclude-dynamic-system-prompt-sections",  # cache 추가 절감
         "--model", model or env.model,
         # 항상 system-prompt 명시 (없으면 minimal fallback) — default 시스템 prompt 회피
         "--system-prompt", system or _MINIMAL_SYSTEM_FALLBACK,

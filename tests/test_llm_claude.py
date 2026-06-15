@@ -128,6 +128,21 @@ class TestBuildCmd:
         )
         assert "--bare" not in cmd
 
+    def test_settings_isolated_from_user_hooks(self) -> None:
+        """user/project SessionStart hook(caveman 등) 주입 차단 — 사서 JSON 오염 방지.
+
+        --setting-sources "" 는 settings 미로드, --strict-mcp-config 는 MCP 미로드.
+        OAuth/keychain 인증은 setting-sources와 무관하므로 --bare와 달리 유지된다.
+        """
+        cmd = _build_cmd(
+            _ready_env(),
+            system=None, model=None, json_schema=None, max_budget_usd=None,
+        )
+        i = cmd.index("--setting-sources")
+        assert cmd[i + 1] == ""
+        assert "--strict-mcp-config" in cmd
+        assert "--exclude-dynamic-system-prompt-sections" in cmd
+
     def test_system_prompt(self) -> None:
         cmd = _build_cmd(
             _ready_env(),
