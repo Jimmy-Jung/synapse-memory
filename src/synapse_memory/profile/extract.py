@@ -4,7 +4,7 @@
 
 흐름::
 
-    history.jsonl 마지막 N entry → redact_full → AI provider → JSON → ProfileFact 리스트
+    history.jsonl 마지막 N entry → AI provider → JSON → ProfileFact 리스트
     → MemoryInbox/Profile-YYYY-MM-DD.md에 저장 (사용자 승인 후 vault 진실원본)
 
 저자: Synapse Memory Maintainers
@@ -22,13 +22,11 @@ from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.config import get_config
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment, AIError
-from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.profile.schema import (
     PROFILE_CATEGORIES,
     DecisionPattern,
     ProfileFact,
 )
-from synapse_memory.redaction import redact_full
 from synapse_memory.storage.l0 import l0_root
 
 DEFAULT_SAMPLE_LINES = 200       # history.jsonl 마지막 N 줄
@@ -338,7 +336,6 @@ def extract_profile_facts(
     sample_lines: int = DEFAULT_SAMPLE_LINES,
     model: str = DEFAULT_MODEL,
     ai_env: AIEnvironment | None = None,
-    apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
     codex_sessions_path: Path | None = None,
@@ -378,7 +375,7 @@ def extract_profile_facts(
     if sample_lines > 0:
         raw_history = _read_history_tail(history, sample_lines)
         if raw_history:
-            redacted_history = redact_full(raw_history, env=apfel_env).redacted
+            redacted_history = raw_history
             if redacted_history:
                 sections.append(
                     f"## claude-code history (최근 {sample_lines}건, redacted)\n\n"
@@ -387,7 +384,7 @@ def extract_profile_facts(
                 source_ids.append("claude-code/history.jsonl")
         raw_codex = _read_codex_history_tail(codex_history, sample_lines)
         if raw_codex:
-            redacted_codex = redact_full(raw_codex, env=apfel_env).redacted
+            redacted_codex = raw_codex
             if redacted_codex:
                 sections.append(
                     f"## codex history (최근 {sample_lines}건, redacted)\n\n"
@@ -398,7 +395,7 @@ def extract_profile_facts(
             codex_sessions, max_messages=sample_lines
         )
         if raw_codex_sessions:
-            redacted_sessions = redact_full(raw_codex_sessions, env=apfel_env).redacted
+            redacted_sessions = raw_codex_sessions
             if redacted_sessions:
                 sections.append(
                     f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "
@@ -479,7 +476,6 @@ def extract_decision_patterns(
     sample_lines: int = DEFAULT_SAMPLE_LINES,
     model: str = DEFAULT_MODEL,
     ai_env: AIEnvironment | None = None,
-    apfel_env: ApfelEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
     codex_sessions_path: Path | None = None,
@@ -500,7 +496,7 @@ def extract_decision_patterns(
     examples: list[str] = []
     cc_text = _read_history_tail(history, sample_lines)
     if cc_text:
-        redacted = redact_full(cc_text, env=apfel_env).redacted
+        redacted = cc_text
         if redacted:
             sections.append(
                 f"## claude-code history (최근 {sample_lines}건, redacted)\n\n"
@@ -509,7 +505,7 @@ def extract_decision_patterns(
             examples.append("claude-code/history.jsonl")
     codex_text = _read_codex_history_tail(codex_history, sample_lines)
     if codex_text:
-        redacted_cx = redact_full(codex_text, env=apfel_env).redacted
+        redacted_cx = codex_text
         if redacted_cx:
             sections.append(
                 f"## codex history (최근 {sample_lines}건, redacted)\n\n"
@@ -520,7 +516,7 @@ def extract_decision_patterns(
         codex_sessions, max_messages=sample_lines
     )
     if codex_sessions_text:
-        redacted_sess = redact_full(codex_sessions_text, env=apfel_env).redacted
+        redacted_sess = codex_sessions_text
         if redacted_sess:
             sections.append(
                 f"## codex sessions (최신 {DEFAULT_CODEX_SESSIONS_FILES}파일, "

@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from pathlib import Path
 
-__all__ = ["year_month_path", "find_candidate_files"]
+__all__ = ["find_candidate_files", "year_month_path"]
 
 
 def year_month_path(base: Path, date: datetime.date) -> Path:

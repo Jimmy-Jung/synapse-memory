@@ -3,7 +3,7 @@
 ingest_files 가:
 - raw 텍스트를 L0 private 에 0600 권한으로 mirror
 - 지원하지 않는 확장자는 skipped 로 표시 (vault 누수 0)
-- redact 결과를 combined_redacted 로 반환 (extract_profile_facts(extra_text=...) 입력용)
+- raw 텍스트를 combined_redacted 로 반환 (D4 passthrough — extract_profile_facts(extra_text=...) 입력용)
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-13
@@ -11,14 +11,11 @@ ingest_files 가:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-import synapse_memory.profile.ingest as ingest_mod
-from synapse_memory.llm.apfel import ApfelEnvironment
 import synapse_memory.profile.extract as ex_mod
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.profile.extract import extract_profile_facts
@@ -35,11 +32,6 @@ def _ai_env() -> ClaudeEnvironment:
         claude_version="2.1",
         model="sonnet",
     )
-
-
-def _apfel_disabled() -> ApfelEnvironment:
-    """redact_full 이 Pass 2 (apfel LLM) 를 시도하지 않도록 비활성."""
-    return ApfelEnvironment(None, None, "0", False)
 
 
 @pytest.fixture
@@ -62,12 +54,7 @@ class TestIngestRawToL0:
         self, diary_file: Path, tmp_path: Path
     ) -> None:
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([diary_file], l0_root_override=l0)
+        result = ingest_files([diary_file], l0_root_override=l0)
 
         assert result.accepted_count == 1
         f = result.files[0]
@@ -80,12 +67,7 @@ class TestIngestRawToL0:
         self, diary_file: Path, tmp_path: Path
     ) -> None:
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([diary_file], l0_root_override=l0)
+        result = ingest_files([diary_file], l0_root_override=l0)
 
         f = result.files[0]
         parent_mode = oct(f.private_path.parent.stat().st_mode & 0o777)
@@ -99,12 +81,7 @@ class TestIngestSupportedExtensions:
         self, diary_file: Path, tmp_path: Path
     ) -> None:
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([diary_file], l0_root_override=l0)
+        result = ingest_files([diary_file], l0_root_override=l0)
         assert result.accepted_count == 1
         assert result.skipped_count == 0
 
@@ -112,12 +89,7 @@ class TestIngestSupportedExtensions:
         p = tmp_path / "notes.txt"
         p.write_text("플레인 텍스트 메모입니다.\n", encoding="utf-8")
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([p], l0_root_override=l0)
+        result = ingest_files([p], l0_root_override=l0)
         assert result.accepted_count == 1
 
     def test_pdf_skipped_with_reason(self, tmp_path: Path) -> None:
@@ -156,12 +128,7 @@ class TestIngestBatching:
         b = tmp_path / "b.md"
         b.write_text("Python 은 uv 로 관리.\n", encoding="utf-8")
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([a, b], l0_root_override=l0)
+        result = ingest_files([a, b], l0_root_override=l0)
 
         assert result.accepted_count == 2
         assert "Swift" in result.combined_redacted
@@ -172,12 +139,7 @@ class TestIngestBatching:
     ) -> None:
         """combined_redacted 에 출처 파일명 헤더가 포함되어야 한다."""
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([diary_file], l0_root_override=l0)
+        result = ingest_files([diary_file], l0_root_override=l0)
         assert "diary-2026.md" in result.combined_redacted
 
 
@@ -189,21 +151,16 @@ class TestIngestErrors:
                 l0_root_override=tmp_path / "l0",
             )
 
-    def test_empty_redaction_skipped(self, tmp_path: Path) -> None:
-        """redact 결과가 빈 문자열이면 LLM 으로 보내지 않게 skipped."""
+    def test_empty_text_skipped(self, tmp_path: Path) -> None:
+        """본문이 공백뿐이면 LLM 으로 보내지 않게 skipped (passthrough — empty 그대로)."""
         p = tmp_path / "doc.md"
-        p.write_text("실내용\n", encoding="utf-8")
+        p.write_text("   \n\t\n", encoding="utf-8")
         l0 = tmp_path / "l0"
 
-        with patch.object(
-            ingest_mod,
-            "redact_full",
-            side_effect=lambda text, **_: type("R", (), {"redacted": ""})(),
-        ):
-            result = ingest_files([p], l0_root_override=l0)
+        result = ingest_files([p], l0_root_override=l0)
 
         assert result.files[0].skipped_reason == "empty_redacted"
-        # Raw 는 그래도 L0 에 남아야 함 (사용자가 redactlist 조정 후 재시도 가능)
+        # Raw 는 그래도 L0 에 남아야 함 (사용자가 재시도 가능)
         assert result.files[0].private_path.is_file()
 
 
@@ -212,12 +169,7 @@ class TestIngestResultShape:
         self, diary_file: Path, tmp_path: Path
     ) -> None:
         l0 = tmp_path / "l0"
-        with patch.object(
-            ingest_mod, "redact_full", side_effect=lambda text, **_: type(
-                "R", (), {"redacted": text}
-            )(),
-        ):
-            result = ingest_files([diary_file], l0_root_override=l0)
+        result = ingest_files([diary_file], l0_root_override=l0)
         assert isinstance(result, IngestResult)
         assert isinstance(result.files, list)
         assert isinstance(result.combined_redacted, str)
@@ -258,7 +210,6 @@ class TestExtractWithExtraText:
             facts = extract_profile_facts(
                 history_path=empty_history,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
                 extra_text="## [diary.md]\n\nSwift 가 좋다. 짧은 문장 선호.",
             )
         assert len(facts) == 2
@@ -274,7 +225,6 @@ class TestExtractWithExtraText:
                 codex_history_path=tmp_path / "missing_codex.jsonl",
                 sample_lines=200,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
                 extra_text=None,
             )
 
@@ -297,7 +247,6 @@ class TestExtractWithExtraText:
                 history_path=history,
                 sample_lines=0,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
                 extra_text="외부 자료 텍스트",
             )
 

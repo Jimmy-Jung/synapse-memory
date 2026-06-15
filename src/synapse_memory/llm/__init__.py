@@ -1,8 +1,8 @@
-"""로컬/원격 LLM 호출 레이어.
+"""원격 LLM 호출 레이어.
 
-- apfel : Apple FoundationModels (로컬, redaction/분류/태깅)
 - ai_api: Claude/Codex runtime facade (원격, 합성/추론).
 - claude/codex: concrete CLI adapters.
+- tokens: provider-neutral 토큰 추정 휴리스틱.
 """
 
 from synapse_memory.llm import ai_api
@@ -11,18 +11,6 @@ from synapse_memory.llm.ai_api import (
     AIError,
     AIUnavailableError,
     detect_ai_environment,
-)
-from synapse_memory.llm.apfel import (
-    ApfelEnvironment,
-    ApfelError,
-    ApfelUnavailableError,
-    chunk_by_paragraph,
-    complete,
-    complete_json,
-    complete_structured,
-    complete_with_input,
-    detect_environment,
-    estimate_tokens,
 )
 from synapse_memory.llm.claude import (
     ClaudeEnvironment,
@@ -36,14 +24,12 @@ from synapse_memory.llm.codex import (
     CodexUnavailableError,
     detect_codex_environment,
 )
+from synapse_memory.llm.tokens import estimate_tokens
 
 __all__ = [
     "AIEnvironment",
     "AIError",
     "AIUnavailableError",
-    "ApfelEnvironment",
-    "ApfelError",
-    "ApfelUnavailableError",
     "ClaudeEnvironment",
     "ClaudeError",
     "ClaudeUnavailableError",
@@ -51,14 +37,8 @@ __all__ = [
     "CodexError",
     "CodexUnavailableError",
     "ai_api",
-    "chunk_by_paragraph",
-    "complete",
-    "complete_json",
-    "complete_structured",
-    "complete_with_input",
     "detect_ai_environment",
     "detect_claude_environment",
     "detect_codex_environment",
-    "detect_environment",
     "estimate_tokens",
 ]

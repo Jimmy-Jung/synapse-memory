@@ -32,7 +32,7 @@ def test_build_reject_requires_reason() -> None:
         )
 
 
-def test_build_reject_masks_reason() -> None:
+def test_build_reject_keeps_reason_raw() -> None:
     event = build_feedback_event(
         target_kind="card",
         target_ref="dansim-ios",
@@ -40,7 +40,7 @@ def test_build_reject_masks_reason() -> None:
         reason="전화번호 010-1234-5678 관련 없음",
     )
 
-    assert "010-1234-5678" not in (event.reason or "")
+    assert event.reason == "전화번호 010-1234-5678 관련 없음"
     assert event.weight == -0.3
     assert event.action == "reject"
 

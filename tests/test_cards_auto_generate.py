@@ -21,7 +21,6 @@ from synapse_memory.cards.auto_generate import (
 )
 from synapse_memory.clusters.identify import ProjectCluster
 from synapse_memory.llm.ai_api import AIError
-from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.llm.claude import ClaudeEnvironment
 
 
@@ -31,10 +30,6 @@ def _ai_env() -> ClaudeEnvironment:
         claude_version="2.1.x",
         model="sonnet",
     )
-
-
-def _apfel_disabled() -> ApfelEnvironment:
-    return ApfelEnvironment(None, None, "0", False)
 
 
 @pytest.fixture
@@ -64,15 +59,13 @@ class TestGatherRedacted:
         for i in range(3):
             (obs_root / f"n{i}.md").write_text(f"내용 {i}", encoding="utf-8")
         cluster = _make_cluster("x", [f"n{i}.md" for i in range(3)])
-        text = _gather_redacted_text(
-            cluster, obs_root, apfel_env=_apfel_disabled()
-        )
+        text = _gather_redacted_text(cluster, obs_root)
         for i in range(3):
             assert f"내용 {i}" in text
 
     def test_empty_when_no_files(self, obs_root: Path) -> None:
         cluster = _make_cluster("x", [])
-        text = _gather_redacted_text(cluster, obs_root, apfel_env=_apfel_disabled())
+        text = _gather_redacted_text(cluster, obs_root)
         assert text == ""
 
 
@@ -160,7 +153,6 @@ class TestGenerateProjectCard:
                 candidate_name="단심",
                 obs_root=obs_root,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
 
         assert card.project_id == "dansim"
@@ -186,7 +178,6 @@ class TestGenerateProjectCard:
                 candidate_name="단심",
                 obs_root=obs_root,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert card.project_id == "dansim"
 
@@ -204,7 +195,6 @@ class TestGenerateProjectCard:
                     candidate_name="x",
                     obs_root=obs_root,
                     ai_env=_ai_env(),
-                    apfel_env=_apfel_disabled(),
                 )
 
     def test_claude_error_propagates(self, obs_root: Path) -> None:
@@ -221,7 +211,6 @@ class TestGenerateProjectCard:
                     candidate_name="x",
                     obs_root=obs_root,
                     ai_env=_ai_env(),
-                    apfel_env=_apfel_disabled(),
                 )
 
 
@@ -266,7 +255,6 @@ class TestGenerateCompanyCard:
                 candidate_name="당근마켓",
                 obs_root=obs_root,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
 
         assert card.company_id == "danggeun"

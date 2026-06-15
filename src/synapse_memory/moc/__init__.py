@@ -7,8 +7,8 @@ from pathlib import Path
 from synapse_memory.config import get_config
 
 __all__ = [
-    "MOC_MARKER_START",
     "MOC_MARKER_END",
+    "MOC_MARKER_START",
     "generate_moc_body",
     "write_or_update_moc",
 ]

@@ -15,7 +15,7 @@ from typing import Any
 
 from synapse_memory.cost.events import append_cost_event, build_cost_event
 from synapse_memory.cost.pricing import price_usage
-from synapse_memory.llm.apfel import estimate_tokens
+from synapse_memory.llm.tokens import estimate_tokens
 
 CODEX_BIN = "codex"
 DEFAULT_MODEL = "gpt-5.5"

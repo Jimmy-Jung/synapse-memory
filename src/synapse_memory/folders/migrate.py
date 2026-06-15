@@ -11,12 +11,12 @@ from pathlib import Path
 from synapse_memory.folders import year_month_path
 
 __all__ = [
-    "PROFILE_PATTERN",
     "DAILY_REPORT_PATTERN",
+    "PROFILE_PATTERN",
     "MigrationPlan",
     "MigrationResult",
-    "scan_flat_files",
     "execute_migration",
+    "scan_flat_files",
 ]
 
 

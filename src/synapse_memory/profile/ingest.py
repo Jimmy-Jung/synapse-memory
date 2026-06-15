@@ -5,8 +5,8 @@ M1b: `persona ingest --file <path>` 의 백엔드. 지인 기획자 use case
 
 흐름::
 
-    paths → L0 raw mirror (0600) → redact_full → combined_redacted 문자열
-                                                  └─→ extract_profile_facts(extra_text=...)
+    paths → L0 raw mirror (0600) → combined 문자열 (D4: raw passthrough)
+                                    └─→ extract_profile_facts(extra_text=...)
 
 raw 텍스트는 ``~/.synapse/private/persona/<sha-prefix>/<filename>`` 에만 저장된다.
 vault 에는 redacted 요약과 AI 추출 후보만 들어가는 게 contract.
@@ -21,7 +21,6 @@ import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from synapse_memory.redaction import redact_full
 from synapse_memory.storage.l0 import l0_root, secure_write_text
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({".md", ".markdown", ".txt"})
@@ -107,8 +106,8 @@ def ingest_files(
         private_path = _make_private_path(root, sha, path.name)
         secure_write_text(private_path, raw_text)
 
-        # Redaction (Pass 1 + Pass 2 if apfel 가능)
-        redacted = redact_full(raw_text).redacted
+        # D4: raw 텍스트를 그대로 사용 (cloud 도구 신뢰 — redaction 제거)
+        redacted = raw_text
         if not redacted.strip():
             results.append(
                 IngestedFile(

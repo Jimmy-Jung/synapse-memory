@@ -3,8 +3,8 @@
 흐름::
 
     cluster의 sample notes (3-5개)
-        ↓ redact_full (Pass 1+2 통과 — 외부 API에 raw 노출 금지)
-        ↓ AI provider (ai_api.complete_structured)
+        ↓ AI provider (ai_api.complete_structured) — D4: raw 텍스트 전달
+
     ClusterClassification (kind / candidate_name / rationale)
 
 분류 카테고리:
@@ -29,8 +29,6 @@ from pathlib import Path
 from synapse_memory.clusters.identify import ProjectCluster
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
-from synapse_memory.llm.apfel import ApfelEnvironment
-from synapse_memory.redaction import redact_full
 from synapse_memory.storage.l0 import l0_root
 
 VALID_KINDS = ("project", "company", "domain", "life", "skip")
@@ -262,13 +260,12 @@ def classify_cluster(
     *,
     obs_root: Path,
     ai_env: AIEnvironment,
-    apfel_env: ApfelEnvironment | None = None,
     model: str = DEFAULT_CLASSIFY_MODEL,
     codex_root: Path | None = None,
 ) -> ClusterClassification:
     """단일 cluster 분류.
 
-    sample (vault notes + codex user messages) → redact_full → AI provider
+    sample (vault notes + codex user messages) → AI provider
     → ClusterClassification.
 
     Args:
@@ -283,12 +280,8 @@ def classify_cluster(
     cx_root = (codex_root or (l0_root() / "raw" / "codex")).expanduser().resolve()
     codex_sample = _gather_codex_sample(cluster, cx_root, used_chars=len(raw_sample))
     combined_sample = raw_sample + codex_sample
-    redacted_sample = ""
-    if combined_sample:
-        result = redact_full(combined_sample, env=apfel_env)
-        redacted_sample = result.redacted
 
-    user_prompt = _build_user_prompt(cluster, redacted_sample)
+    user_prompt = _build_user_prompt(cluster, combined_sample)
 
     # json_schema 안 씀 — sonnet에서 빈 응답 만드는 케이스 발견됨.
     # system prompt + complete_structured fallback parser가 처리.

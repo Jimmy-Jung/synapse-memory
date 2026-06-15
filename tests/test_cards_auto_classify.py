@@ -23,7 +23,6 @@ from synapse_memory.cards.auto_classify import (
     save_classifications,
 )
 from synapse_memory.clusters.identify import ProjectCluster
-from synapse_memory.llm.apfel import ApfelEnvironment
 from synapse_memory.llm.claude import ClaudeEnvironment
 
 
@@ -33,11 +32,6 @@ def _ai_env() -> ClaudeEnvironment:
         claude_version="2.1.132",
         model="sonnet",
     )
-
-
-def _apfel_disabled() -> ApfelEnvironment:
-    """Pass 2 안 돌아가는 환경 (Pass 1만)."""
-    return ApfelEnvironment(None, None, "0", False)
 
 
 @pytest.fixture
@@ -113,7 +107,6 @@ class TestClassifyCluster:
                 cluster,
                 obs_root=obs_root,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert cls.cluster_id == "dansim"
         assert cls.kind == "project"
@@ -133,7 +126,6 @@ class TestClassifyCluster:
                 cluster,
                 obs_root=obs_root,
                 ai_env=_ai_env(),
-                apfel_env=_apfel_disabled(),
             )
         assert cls.kind == "skip"
 
@@ -149,7 +141,6 @@ class TestClassifyCluster:
                     cluster,
                     obs_root=obs_root,
                     ai_env=_ai_env(),
-                    apfel_env=_apfel_disabled(),
                 )
 
 

@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 __all__ = [
-    "MARKER_START",
     "MARKER_END",
+    "MARKER_START",
     "MarkerParseError",
     "extract_block",
     "inject_or_replace",

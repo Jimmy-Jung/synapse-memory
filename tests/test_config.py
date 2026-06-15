@@ -149,13 +149,13 @@ def test_set_value_protected_key_raises():
     with pytest.raises(ValueError, match="보호된 키"):
         set_value(cfg, "storage.l0_permissions", "0755")
     with pytest.raises(ValueError, match="보호된 키"):
-        set_value(cfg, "redaction.pass2_enabled", "false")
+        set_value(cfg, "cleanup.protected_paths", "x")
 
 
 def test_is_protected_path():
     assert is_protected_path("storage.l0_permissions") is True
-    assert is_protected_path("redaction.pass1_patterns") is True
-    assert is_protected_path("redaction.pass1_patterns.email") is True
+    assert is_protected_path("cleanup.protected_paths") is True
+    assert is_protected_path("cleanup.protected_paths.foo") is True
     assert is_protected_path("cleanup.inbox_stale_days") is False
     assert is_protected_path("vault") is False
 

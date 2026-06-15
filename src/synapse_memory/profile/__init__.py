@@ -4,7 +4,7 @@ vault 90_System/AI/Profile.md / DecisionPatterns.md의 후보를 raw에서 추�
 
 흐름::
 
-    L0 raw (Claude Code history) → sample → redact_full →
+    L0 raw (Claude Code history) → sample →
     Claude 분석 → ProfileFact / DecisionPattern 리스트 →
     MemoryInbox에 PR (사용자 승인 후 vault 진실원본)
 
