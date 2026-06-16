@@ -2,6 +2,16 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.17.3] — 2026-06-16
+
+wiki ingest의 librarian 호출이 Claude/Codex provider 모두에서 구조화 JSON을 안정적으로 받도록 정리했다.
+
+### Fixed
+
+- Claude provider가 `complete_structured` 호출에서 `structured_output=True`를 우선 적용하고, 명시적 verbose override를 받을 수 있게 해 JSON-only 응답 계약을 안정화.
+- Codex provider가 구조화 출력 요청에서 `codex exec --json` 이벤트 스트림을 해석해 최종 assistant 텍스트만 반환하도록 수정.
+- wiki ingest 통합 prompt가 vault의 `SCHEMA.md` 경로를 함께 전달해 사서가 현재 wiki 구조 규칙을 참조할 수 있게 보강.
+
 ## [1.17.2] — 2026-06-15
 
 사용자가 SessionStart hook(예: caveman plugin)을 켠 상태에서 ingest/watch/backfill이 전부 깨지던 문제를 수정했다.
