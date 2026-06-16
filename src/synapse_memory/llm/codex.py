@@ -197,6 +197,10 @@ def _build_cmd(
         "read-only",
         "--ephemeral",
         "--skip-git-repo-check",
+        # 사용자 ~/.codex/config.toml + rules/skill 미로드 — 사서 subprocess가
+        # 사용자 skill 로드 실패("failed to load skill")로 죽는 것 방지. auth는 유지.
+        "--ignore-user-config",
+        "--ignore-rules",
         "--output-last-message",
         str(output_path),
         "-m",
@@ -214,11 +218,31 @@ def _compose_prompt(*, prompt: str, system: str | None) -> str:
     return f"# System\n{system}\n\n# User\n{prompt}"
 
 
+def _normalize_schema_for_codex(node: Any) -> Any:
+    """JSON schema를 OpenAI structured output strict 규격으로 정규화.
+
+    codex ``--output-schema``는 OpenAI strict 규격을 강제한다(미준수 시 exit=1):
+    모든 object에 ``additionalProperties: false``, ``required``에 전체 property 키.
+    claude ``--json-schema``는 관대해 INTEGRATION_SCHEMA가 그대로 통과하지만
+    codex는 거부하므로 codex 경로에서만 변환한다.
+    """
+    if isinstance(node, dict):
+        out = {k: _normalize_schema_for_codex(v) for k, v in node.items()}
+        if out.get("type") == "object" and isinstance(out.get("properties"), dict):
+            out["additionalProperties"] = False
+            out["required"] = list(out["properties"].keys())
+        return out
+    if isinstance(node, list):
+        return [_normalize_schema_for_codex(x) for x in node]
+    return node
+
+
 def _write_schema(tmp: str, schema: dict[str, Any] | None) -> Path | None:
     if schema is None:
         return None
     path = Path(tmp) / "schema.json"
-    path.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")
+    normalized = _normalize_schema_for_codex(schema)
+    path.write_text(json.dumps(normalized, ensure_ascii=False), encoding="utf-8")
     return path
 
 
