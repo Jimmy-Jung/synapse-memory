@@ -118,23 +118,11 @@ from synapse_memory.profile.ingest import (  # noqa: E402
     SUPPORTED_EXTENSIONS,
     ingest_files,
 )
-from synapse_memory.rag import (  # noqa: E402
-    embed_query,
-    index_cards,
-    open_vector_store,
-)
-from synapse_memory.rag.bm25 import BM25IndexError  # noqa: E402
-from synapse_memory.rag.embeddings import (  # noqa: E402
-    EmbeddingError,
-    EmbeddingUnavailableError,
-)
-from synapse_memory.rag.vector_store import VectorStoreError  # noqa: E402
 from synapse_memory.status import DailyAlreadyRunningError  # noqa: E402
 from synapse_memory.storage.l0 import l0_root  # noqa: E402
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
-from synapse_memory.wiki.index import index_wiki_pages  # noqa: E402
 from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
 from synapse_memory.wiki.launchd import (  # noqa: E402
     install_watch,
@@ -570,47 +558,6 @@ def cmd_card_new(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_rag_index(args: argparse.Namespace) -> int:
-    """모든 Card를 벡터 DB에 인덱싱."""
-    include_raw = bool(getattr(args, "include_raw", False))
-    print(f"인덱싱 시작 (rebuild={args.rebuild}, include_raw={include_raw})")
-    try:
-        store = open_vector_store()
-
-        def _progress(stage: str, current: int, total: int) -> None:
-            if current == 1:
-                print(f"  [{stage}] {total}개 임베딩 중...")
-
-        stats = index_cards(
-            store=store,
-            rebuild=args.rebuild,
-            include_raw=include_raw,
-            on_progress=_progress,
-        )
-    except (EmbeddingUnavailableError, VectorStoreError) as exc:
-        print(f"{FAIL} {exc}", file=sys.stderr)
-        return 2
-    except EmbeddingError as exc:
-        print(f"{FAIL} 임베딩 실패: {exc}", file=sys.stderr)
-        return 1
-
-    print(
-        f"\n인덱싱 완료: project={stats.project_cards} "
-        f"company={stats.company_cards} "
-        f"insight={getattr(stats, 'insight_cards', 0)} "
-        f"raw_obsidian={getattr(stats, 'raw_obsidian_chunks', 0)} "
-        f"raw_claude_code={getattr(stats, 'raw_claude_code_chunks', 0)} "
-        f"bm25={getattr(stats, 'bm25_documents', 0)} "
-        f"bytes={stats.bytes_indexed}"
-    )
-    print(f"총 벡터: {open_vector_store().count()}")
-    if stats.failed:
-        for stage, msg in stats.failed:
-            print(f"  실패: {stage} — {msg}", file=sys.stderr)
-        return 1
-    return 0
-
-
 def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
     args.top_k = _arg_or_config(args.top_k, "top_k.recall", 8)
     args.model = _resolve_model(args.model, "recall")
@@ -663,13 +610,7 @@ def cmd_me_what_did_i_think(args: argparse.Namespace) -> int:
             limit=limit,
             hybrid=hybrid_flag,
         )
-    except (
-        EmbeddingUnavailableError,
-        VectorStoreError,
-        BM25IndexError,
-        AIError,
-        ValueError,
-    ) as exc:
+    except (AIError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
     print(f"주제: {result.topic}\n")
@@ -698,7 +639,7 @@ def cmd_me_decide(args: argparse.Namespace) -> int:
             model=args.model,
             ai_env=ai_env,
         )
-    except (EmbeddingUnavailableError, VectorStoreError, AIError, ValueError) as exc:
+    except (AIError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
     print(f"상황: {result.situation}")
@@ -753,13 +694,6 @@ def cmd_wiki_ask(args: argparse.Namespace) -> int:
         print("\n출처: " + ", ".join(f"[[{s}]]" for s in res.sources))
     if res.saved_slug:
         print(f"{OK} insight 저장: {res.saved_slug}")
-    return 0
-
-
-def cmd_wiki_reindex(args: argparse.Namespace) -> int:
-    """모든 wiki 페이지를 벡터 스토어에 재인덱싱."""
-    count = index_wiki_pages()
-    print(f"indexed {count} pages")
     return 0
 
 
@@ -1470,17 +1404,10 @@ def cmd_persona_design_project(args: argparse.Namespace) -> int:
         generate as recipes_generate,
     )
 
-    store = None
-    try:
-        store = open_vector_store()
-    except (VectorStoreError, EmbeddingUnavailableError):
-        store = None  # ProjectCard 없으면 Profile 만으로 진행
-
     try:
         result = recipes_generate(
             "design_project",
             inputs={"idea": args.idea},
-            store=store,
             ai_env=ai_env,
             model_override=args.model,
             top_k_override=args.top_k,
@@ -1494,7 +1421,7 @@ def cmd_persona_design_project(args: argparse.Namespace) -> int:
     except RecipeValidationError as exc:
         print(f"{FAIL} recipe 검증 실패: {exc}", file=sys.stderr)
         return 4
-    except (EmbeddingError, AIError) as exc:
+    except AIError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -1537,10 +1464,7 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     except FileNotFoundError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 2
-    except (EmbeddingUnavailableError, VectorStoreError) as exc:
-        print(f"{FAIL} {exc}", file=sys.stderr)
-        return 2
-    except (EmbeddingError, AIError, ValueError) as exc:
+    except (AIError, ValueError) as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -1570,7 +1494,6 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     _enforce_cost_cap(f"persona generate {args.recipe}")
     from synapse_memory.recipes import (
         InputValidationError,
-        RecipeHybridUnavailableError,
         RecipeNotFoundError,
         RecipePromptTooLargeError,
         RecipeValidationError,
@@ -1598,19 +1521,12 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     else:
         today_resolved = None
 
-    store = None
-    try:
-        store = open_vector_store()
-    except (VectorStoreError, EmbeddingUnavailableError):
-        store = None  # recipe 가 RAG 없이도 동작 가능
-
     t0 = time.monotonic()
     try:
         result = recipes_generate(
             args.recipe,
             inputs=inputs,
             vault_path=vault_path,
-            store=store,
             today=today_resolved,
             cli_language=args.language,
             cli_domain=args.domain,
@@ -1626,10 +1542,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     except (RecipeValidationError, RecipePromptTooLargeError) as exc:
         print(f"{FAIL} recipe 검증 실패: {exc}", file=sys.stderr)
         return 4
-    except RecipeHybridUnavailableError as exc:
-        print(f"{FAIL} {exc}", file=sys.stderr)
-        return 10
-    except (EmbeddingError, AIError) as exc:
+    except AIError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 10
 
@@ -1847,10 +1760,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
             hybrid=args.hybrid,
             save=args.save,
         )
-    except (EmbeddingUnavailableError, VectorStoreError, BM25IndexError) as exc:
-        print(f"{FAIL} {exc}", file=sys.stderr)
-        return 2
-    except (EmbeddingError, AIError) as exc:
+    except AIError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
 
@@ -1860,10 +1770,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
     print("=" * 60)
     print(f"출처 ({len(result.sources)}):")
     for s in result.sources:
-        print(
-            f"  [{s.distance:.3f}] {s.source_kind:<14} {s.card_id} "
-            f"— {s.display_name}"
-        )
+        print(f"  {s.source_kind:<14} {s.card_id} — {s.display_name}")
     if result.saved_path is not None:
         print()
         print(f"저장: {result.saved_path}")
@@ -1962,42 +1869,6 @@ def _feedback_targets(args: argparse.Namespace) -> list[FeedbackTarget]:
     if args.feedback_target == "pattern":
         return [resolve_pattern_target(str(args.target_ref), vault_path=vault_path)]
     raise ValueError(f"unknown feedback target: {args.feedback_target}")
-
-
-def cmd_rag_search(args: argparse.Namespace) -> int:
-    """벡터 DB 검색 — dense (bge-m3 cosine)."""
-    args.top_k = _arg_or_config(args.top_k, "top_k.rag_search", 5)
-    try:
-        q_vec = embed_query(args.query)
-        store = open_vector_store()
-        results = store.query(q_vec, top_k=args.top_k)
-    except (EmbeddingUnavailableError, VectorStoreError) as exc:
-        print(f"{FAIL} {exc}", file=sys.stderr)
-        return 2
-    except EmbeddingError as exc:
-        print(f"{FAIL} 임베딩 실패: {exc}", file=sys.stderr)
-        return 1
-
-    if not results:
-        print("결과 없음 — `synapse-memory rag index` 먼저 실행")
-        return 0
-
-    print(f"쿼리: {args.query!r}  (top {args.top_k}, 거리 작을수록 가까움)")
-    print("-" * 80)
-    for rec, dist in results:
-        name = rec.metadata.get("display_name", rec.id)
-        kind = rec.metadata.get("source_kind", "?")
-        feedback_score = rec.metadata.get("feedback_score")
-        feedback_label = (
-            f" feedback={float(feedback_score):.2f}"
-            if isinstance(feedback_score, (float, int))
-            else ""
-        )
-        print(f"  [{dist:.3f}] {kind:<14} {rec.id:<30} {name}{feedback_label}")
-        if args.show_snippet:
-            snippet = rec.document.replace("\n", " ")[:150]
-            print(f"    {snippet}")
-    return 0
 
 
 def cmd_card_generate(args: argparse.Namespace) -> int:
@@ -3342,9 +3213,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wiki_ask.set_defaults(func=cmd_wiki_ask)
 
-    p_wiki_reindex = wiki_sub.add_parser("reindex", help="모든 wiki 페이지 재인덱싱")
-    p_wiki_reindex.set_defaults(func=cmd_wiki_reindex)
-
     p_lint = sub.add_parser(
         "lint", help="구조 자동수정(역링크/죽은링크) + 검토 큐 + index.md"
     )
@@ -3396,28 +3264,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="AI 모델 (생략 시 config.models.classify — 기본 haiku)",
     )
     p_cl_class.set_defaults(func=cmd_cluster_classify)
-
-    p_rag = sub.add_parser("rag", help="벡터 검색 (RAG)")
-    rag_sub = p_rag.add_subparsers(dest="action", required=True, metavar="ACTION")
-
-    p_rag_idx = rag_sub.add_parser("index", help="Card → 벡터 DB 인덱싱")
-    p_rag_idx.add_argument(
-        "--rebuild", action="store_true", help="기존 collection 비우고 처음부터"
-    )
-    p_rag_idx.add_argument(
-        "--include-raw",
-        action="store_true",
-        help="10_Active와 Claude Code raw chunks까지 인덱싱",
-    )
-    p_rag_idx.set_defaults(func=cmd_rag_index)
-
-    p_rag_search = rag_sub.add_parser("search", help="자연어 query → top-k Card")
-    p_rag_search.add_argument("query", help="검색 자연어")
-    p_rag_search.add_argument("--top-k", type=int, default=None)
-    p_rag_search.add_argument(
-        "--show-snippet", action="store_true", help="결과 본문 일부 출력"
-    )
-    p_rag_search.set_defaults(func=cmd_rag_search)
 
     p_ask = sub.add_parser(
         "ask", help="자연어 질의 → RAG retrieve → AI 답변"
