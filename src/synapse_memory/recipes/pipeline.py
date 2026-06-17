@@ -18,16 +18,20 @@ import contextlib
 import datetime
 import re
 from collections import defaultdict
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
+from synapse_memory.cards.card_index import CardKind, build_card_index
+from synapse_memory.cards.card_text import (
+    company_card_to_text,
+    insight_card_to_text,
+    project_card_to_text,
+)
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.config import get_config
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
-from synapse_memory.rag.bm25 import BM25IndexError
-from synapse_memory.rag.embeddings import EmbeddingUnavailableError, embed_query
-from synapse_memory.rag.hybrid import hybrid_search
 from synapse_memory.recipes.domain import resolve_domain
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
 from synapse_memory.recipes.locale import resolve_locale
@@ -44,6 +48,7 @@ from synapse_memory.storage.last_response import (
     new_answer_reference,
     save_last_answer,
 )
+from synapse_memory.wiki.llm_retrieval import select_related
 
 _PROFILE_FILES = ("Profile.md", "DecisionPatterns.md", "DecisionQualityRegistry.md")
 _BUILTIN_DIR_DEFAULT = Path(__file__).resolve().parent / "builtin"
@@ -58,15 +63,26 @@ class RecipePromptTooLargeError(ValueError):
     """Rendered system prompt 가 32KB cap 을 초과할 때 발생 (사용자 입력 폭주 방지)."""
 
 
-class RecipeHybridUnavailableError(RuntimeError):
-    """Hybrid RAG sidecar 가 준비되지 않았을 때 발생."""
+@dataclass(frozen=True)
+class _CardMatch:
+    """provider 선별된 카드 1건 — 이전 VectorRecord 인터페이스 호환 shape.
+
+    ``metadata``(card_id/source_kind/display_name 등)·``document``(full text)·``id``를
+    노출해 ``_compose_user_prompt``/``_build_last_answer``/domain 추출이 기존 코드 그대로
+    동작한다. 거리(score)는 provider 선별이라 의미 없어 항상 0.0으로 동반된다.
+    """
+
+    id: str
+    document: str
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
-def _hybrid_unavailable_error() -> RecipeHybridUnavailableError:
-    return RecipeHybridUnavailableError(
-        "rag_mode=hybrid requires BM25 sidecar. "
-        "Run `synapse-memory rag index --include-raw` and retry."
-    )
+# rag_filter.source_kind (예 "card_project") → CardIndex kind ("project")
+_SOURCE_KIND_TO_CARD_KIND: dict[str, CardKind] = {
+    "card_project": "project",
+    "card_company": "company",
+    "card_insight": "insight",
+}
 
 
 def _load_profile_text(vault: Path) -> str:
@@ -240,58 +256,102 @@ def _resolve_rag_mode(
     return override or recipe.rag_mode
 
 
+def _kinds_for_recipe(recipe: GenerationRecipe) -> tuple[CardKind, ...]:
+    """recipe.rag_filter.source_kind → CardIndex kinds 제한. 미지정이면 전체."""
+    rag_filter = recipe.rag_filter or {}
+    source_kind = rag_filter.get("source_kind")
+    if source_kind and source_kind in _SOURCE_KIND_TO_CARD_KIND:
+        return (_SOURCE_KIND_TO_CARD_KIND[source_kind],)
+    return ("project", "company", "insight")
+
+
+def _load_card_match(
+    *, card_id: str, kind: CardKind, vault: Path
+) -> _CardMatch | None:
+    """선별된 card_id의 full text를 로드해 _CardMatch로 변환. 실패 시 None."""
+    from synapse_memory.cards.company import load_company_card
+    from synapse_memory.cards.insight import load_insight_card
+    from synapse_memory.cards.project import load_project_card
+
+    try:
+        if kind == "project":
+            card = load_project_card(card_id, vault_path=vault)
+            return _CardMatch(
+                id=card_id,
+                document=project_card_to_text(card),
+                metadata={
+                    "card_id": card.project_id,
+                    "source_kind": "card_project",
+                    "display_name": card.display_name,
+                    "status": card.status,
+                    "period_end": card.period_end or "",
+                    "created": card.created or "",
+                    "last_reviewed": card.last_reviewed or "",
+                },
+            )
+        if kind == "company":
+            company = load_company_card(card_id, vault_path=vault)
+            return _CardMatch(
+                id=card_id,
+                document=company_card_to_text(company),
+                metadata={
+                    "card_id": company.company_id,
+                    "source_kind": "card_company",
+                    "display_name": company.display_name,
+                    "status": company.status,
+                    "created": company.created or "",
+                    "last_reviewed": company.last_reviewed or "",
+                },
+            )
+        insight = load_insight_card(card_id, vault_path=vault)
+        return _CardMatch(
+            id=card_id,
+            document=insight_card_to_text(insight),
+            metadata={
+                "card_id": insight.insight_id,
+                "source_kind": "card_insight",
+                "display_name": insight.question,
+                "created": insight.created or "",
+            },
+        )
+    except (FileNotFoundError, ValueError, OSError):
+        return None
+
+
 def _retrieve_matches(
     *,
     recipe: GenerationRecipe,
     inputs: dict[str, str],
-    store: Any,
+    vault: Path,
     top_k_override: int | None,
-    rag_mode: RecipeRagMode,
 ) -> list[tuple[Any, float]]:
-    if store is None:
-        if rag_mode == "hybrid":
-            raise _hybrid_unavailable_error()
-        return []
+    """provider 선별로 관련 카드 매칭 (로컬 임베딩 제거, 020).
 
+    CardIndex 구성 → ``select_related`` 로 card_id 선별 → 선택 카드 full text 로드 →
+    ``list[tuple[_CardMatch, 0.0]]`` 반환(거리 의미 없음). 빈 인덱스/선별 0건 → [].
+    """
     rag_top_k = top_k_override or recipe.rag_top_k
     rag_query = _build_rag_query(recipe, inputs)
-    rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
+    kinds = _kinds_for_recipe(recipe)
 
-    try:
-        query_embedding = embed_query(rag_query)
-    except EmbeddingUnavailableError as exc:
-        if rag_mode == "hybrid":
-            raise
-        try:
-            # Compatibility path for tests/future stores that own query construction.
-            return list(store.query())
-        except TypeError as stub_exc:
-            raise exc from stub_exc
+    index = build_card_index(vault_path=vault, kinds=kinds)
+    if not index.entries:
+        return []
 
-    if rag_mode == "hybrid":
-        try:
-            hits = hybrid_search(
-                rag_query,
-                query_embedding=query_embedding,
-                store=store,
-                top_k=rag_top_k,
-                where=cast(dict[str, object] | None, rag_filter),
-            )
-        except BM25IndexError as exc:
-            raise _hybrid_unavailable_error() from exc
-        return [(hit.record, hit.rrf_score) for hit in hits]
+    selected = select_related(rag_query, index, max_pages=rag_top_k)
+    if not selected:
+        return []
 
-    try:
-        return list(
-            store.query(
-                query_embedding,
-                top_k=rag_top_k,
-                where=cast(dict[str, object] | None, rag_filter),
-            )
-        )
-    except TypeError:
-        # store.query signature variation tolerance (for stubs / future stores)
-        return list(store.query())
+    by_id = index.by_id()
+    matches: list[tuple[Any, float]] = []
+    for card_id in selected:
+        entry = by_id.get(card_id)
+        if entry is None:
+            continue
+        match = _load_card_match(card_id=card_id, kind=entry.kind, vault=vault)
+        if match is not None:
+            matches.append((match, 0.0))
+    return matches
 
 
 def generate(
@@ -352,15 +412,14 @@ def generate(
     matched = _retrieve_matches(
         recipe=recipe,
         inputs=inputs,
-        store=store,
+        vault=vault,
         top_k_override=top_k_override,
-        rag_mode=rag_mode,
     )
 
     if require_matched and not matched:
         raise ValueError(
             f"recipe '{recipe.name}' requires RAG matches but got 0. "
-            "`synapse-memory rag index` 먼저 실행하세요."
+            "vault에 관련 Card를 먼저 생성하세요 (`synapse-memory daily`)."
         )
 
     domain, domain_src = (
