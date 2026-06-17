@@ -322,7 +322,6 @@ class TestSaveProfileUpdateLedgerMeta:
     def test_meta_suffix_when_ledger_passed(self, tmp_path: Path) -> None:
         from synapse_memory.profile.ledger import (
             LedgerEntry,
-            _ledger_key,
             record_extraction,
         )
 
@@ -359,11 +358,12 @@ class TestSaveProfileUpdateLedgerMeta:
                 raise AssertionError(f"unexpected bullet meta line: {line!r}")
 
     def test_sort_by_ledger_peak_then_count(self, tmp_path: Path) -> None:
+        import datetime as _dt
+
         from synapse_memory.profile.ledger import (
             LedgerEntry,
             record_extraction,
         )
-        import datetime as _dt
 
         f_strong = ProfileFact(category="tech", statement="강한 신호",
                                confidence=0.7, extracted_at="2026-05-18")

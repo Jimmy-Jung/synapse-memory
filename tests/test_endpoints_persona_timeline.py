@@ -331,122 +331,115 @@ def test_kendall_tau_golden(today: _datetime.date) -> None:
     )
 
 
+
+
 # ---------------------------------------------------------------------------
-# Integration helpers — what_did_i_think() with mocked store/claude
+# Integration — what_did_i_think() (020 provider-only)
+#
+# 벡터 store 제거. time-mode 는 CardIndex.meta 에서 타임라인 메타를 읽으므로
+# ``build_card_index`` 를 controlled CardIndex 로 patch 한다. distance-mode 는
+# provider 선별 + recipes pipeline 합성이므로 실제 ProjectCard 를 vault 에 심고
+# ``select_related``/``ai_api_complete`` 를 patch 한다.
 # ---------------------------------------------------------------------------
 
-from unittest.mock import MagicMock, patch  # noqa: E402  (kept near integration tests)
+from unittest.mock import patch  # noqa: E402
 
 import synapse_memory.endpoints.persona as me_mod  # noqa: E402
+from synapse_memory.cards.card_index import (  # noqa: E402
+    CardEntry,
+    CardIndex,
+)
+from synapse_memory.cards.project import ProjectCard, save_project_card  # noqa: E402
 from synapse_memory.endpoints.persona import what_did_i_think  # noqa: E402
-from synapse_memory.rag.vector_store import VectorRecord  # noqa: E402
 
 
-def _record(card_id: str, *, meta: dict[str, str] | None = None, doc: str = "") -> VectorRecord:
+def _entry(card_id: str, *, meta: dict[str, str] | None = None, summary: str = "") -> CardEntry:
     base_meta = {
         "source_kind": "card_project",
-        "card_id": card_id,
         "display_name": card_id,
     }
     if meta:
         base_meta.update(meta)
-    return VectorRecord(
-        id=f"{base_meta['source_kind']}:{card_id}",
-        document=doc or f"# {card_id}",
-        embedding=[0.0],
-        metadata=base_meta,
+    return CardEntry(
+        card_id=card_id,
+        kind="project",
+        title=card_id,
+        summary=summary or f"# {card_id}",
+        meta=base_meta,
     )
 
 
-# ---------------------------------------------------------------------------
-# T025 — FR-011: 결과 0건 메시지 + exit 0 의도
-# ---------------------------------------------------------------------------
+def _index(*entries: CardEntry) -> CardIndex:
+    return CardIndex(entries=tuple(entries))
 
 
+def _seed_project(vault: Path, pid: str, *, doc: str = "") -> None:
+    save_project_card(
+        ProjectCard(
+            project_id=pid,
+            display_name=pid,
+            status="active",
+            body=doc or f"# {pid} body",
+        ),
+        vault_path=vault,
+    )
+
+
+# T025 — FR-011: 결과 0건 메시지 (빈 인덱스)
 def test_empty_result_message(today: _datetime.date) -> None:
-    """FR-011 — store.query 가 빈 결과 → 안내 메시지 + 빈 source_ids."""
-    store = MagicMock()
-    store.query.return_value = []
-    with patch.object(me_mod, "embed_query", return_value=[0.0]):
-        result = what_did_i_think("nothing", store=store, by="time", today=today)
+    with patch.object(me_mod, "build_card_index", return_value=_index()):
+        result = what_did_i_think("nothing", by="time", today=today)
     assert result.source_ids == []
     assert "관련 카드 없음" in result.answer
     assert "`synapse-memory daily`" in result.answer
 
 
-# ---------------------------------------------------------------------------
-# T026 — FR-012: 모든 메타 null → distance 폴백 헤더 + distance asc
-# ---------------------------------------------------------------------------
-
-
+# T026 — FR-012: 모든 메타 null → no_time_meta 폴백 헤더
 def test_all_meta_null_fallback(today: _datetime.date) -> None:
-    """FR-012 — period_end/created/last_reviewed 모두 부재 → 폴백 헤더 + distance asc."""
-    store = MagicMock()
-    store.query.return_value = [
-        (_record("c1", meta={"period_end": "", "created": "", "last_reviewed": ""}), 0.6),
-        (_record("c2", meta={"period_end": "", "created": "", "last_reviewed": ""}), 0.3),
-        (_record("c3", meta={"period_end": "", "created": "", "last_reviewed": ""}), 0.45),
-    ]
-    with patch.object(me_mod, "embed_query", return_value=[0.0]):
-        result = what_did_i_think("x", store=store, by="time", today=today)
+    index = _index(
+        _entry("c1", meta={"period_end": "", "created": "", "last_reviewed": "", "status": ""}),
+        _entry("c2", meta={"period_end": "", "created": "", "last_reviewed": "", "status": ""}),
+        _entry("c3", meta={"period_end": "", "created": "", "last_reviewed": "", "status": ""}),
+    )
+    with patch.object(me_mod, "build_card_index", return_value=index):
+        result = what_did_i_think("x", by="time", today=today)
     out = result.answer
     assert "## 시간 정보 없음 — distance 순 폴백" in out
-    # distance asc → c2 (0.3) → c3 (0.45) → c1 (0.6)
-    assert out.index("**c2**") < out.index("**c3**") < out.index("**c1**")
+    # distance 가 모두 None → 입력(card_id) 순서 보존
+    assert out.index("**c1**") < out.index("**c2**") < out.index("**c3**")
 
 
-# ---------------------------------------------------------------------------
-# T033 — FR-009: --by time 출력 == --timeline 출력 (시맨틱 일치)
-# ---------------------------------------------------------------------------
-
-
+# T033 — FR-009: by='time' 결정적 출력 (동일 인덱스 → 동일 결과)
 def test_by_time_alias(today: _datetime.date) -> None:
-    """FR-009 — by='time' 호출이 timeline 모드와 동일 결과."""
-    store = MagicMock()
-    store.query.return_value = [
-        (_record("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}), 0.5),
-        (_record("b", meta={"period_end": "2024-11-20", "created": "2024-04-01", "status": "archived"}), 0.4),
-    ]
-    with patch.object(me_mod, "embed_query", return_value=[0.0]):
-        r_by_time = what_did_i_think("x", store=store, by="time", today=today)
-    # 두 번째 호출에 새 mock — same return
-    store2 = MagicMock()
-    store2.query.return_value = [
-        (_record("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}), 0.5),
-        (_record("b", meta={"period_end": "2024-11-20", "created": "2024-04-01", "status": "archived"}), 0.4),
-    ]
-    with patch.object(me_mod, "embed_query", return_value=[0.0]):
-        r_timeline = what_did_i_think("x", store=store2, by="time", today=today)
-    assert r_by_time.answer == r_timeline.answer
+    entries = (
+        _entry("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}),
+        _entry("b", meta={"period_end": "2024-11-20", "created": "2024-04-01", "status": "archived"}),
+    )
+    with patch.object(me_mod, "build_card_index", return_value=_index(*entries)):
+        r1 = what_did_i_think("x", by="time", today=today)
+    with patch.object(me_mod, "build_card_index", return_value=_index(*entries)):
+        r2 = what_did_i_think("x", by="time", today=today)
+    assert r1.answer == r2.answer
 
 
-# ---------------------------------------------------------------------------
-# T034 — FR-009: --by distance 가 기존 cosine + Claude 거동
-# ---------------------------------------------------------------------------
-
-
-def test_by_distance_explicit(today: _datetime.date) -> None:
-    """FR-009 — by='distance' 는 기존 Claude 통합 답변 반환."""
-    store = MagicMock()
-    store.query.return_value = [
-        (_record("a", doc="# A\nbody a"), 0.5),
-    ]
+# T034 — FR-009: by='distance' 는 provider 선별 + Claude 합성
+def test_by_distance_explicit(today: _datetime.date, tmp_path: Path) -> None:
+    _seed_project(tmp_path, "a", doc="body a")
     with (
-        patch.object(me_mod, "embed_query", return_value=[0.0]),
-        patch("synapse_memory.recipes.pipeline.ai_api_complete", return_value="CLAUDE_ANSWER_DISTANCE"),
+        patch.object(me_mod, "select_related", return_value=["a"]),
+        patch("synapse_memory.recipes.pipeline.select_related", return_value=["a"]),
+        patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            return_value="CLAUDE_ANSWER_DISTANCE",
+        ),
     ):
-        result = what_did_i_think("x", store=store, by="distance", today=today)
+        result = what_did_i_think("x", by="distance", today=today, vault_path=tmp_path)
     assert result.answer == "CLAUDE_ANSWER_DISTANCE"
     assert "a" in result.source_ids
 
 
-# ---------------------------------------------------------------------------
 # T035 — FR-009: cli 충돌 검증 (--timeline + --by distance → exit 1)
-# ---------------------------------------------------------------------------
-
-
 def test_conflict_timeline_and_by_distance(capsys: pytest.CaptureFixture[str]) -> None:
-    """FR-009 — cli 레벨 --timeline + --by distance 충돌은 exit 1 + stderr."""
     import argparse
 
     from synapse_memory.cli import cmd_me_what_did_i_think
@@ -461,24 +454,19 @@ def test_conflict_timeline_and_by_distance(capsys: pytest.CaptureFixture[str]) -
     assert "conflict" in err.lower()
 
 
-# ---------------------------------------------------------------------------
-# T036 — FR-010: --limit 기본 20, 범위 [1, 100], 외 → exit 2
-# ---------------------------------------------------------------------------
-
-
+# T036 — FR-010: --limit 동작 + 범위 검증
 def test_limit_default_and_override(today: _datetime.date) -> None:
-    """FR-010 — limit 동작 (출력 카드 수) + 범위 검증."""
-    # endpoint 함수 레벨: limit=2 → 상위 2 카드만
-    store = MagicMock()
-    store.query.return_value = [
-        (_record(f"c{i}", meta={"period_end": f"2024-{12 - i:02d}-01", "created": "2024-01-01", "status": "archived"}), 0.5)
+    entries = tuple(
+        _entry(
+            f"c{i}",
+            meta={"period_end": f"2024-{12 - i:02d}-01", "created": "2024-01-01", "status": "archived"},
+        )
         for i in range(5)
-    ]
-    with patch.object(me_mod, "embed_query", return_value=[0.0]):
-        result = what_did_i_think("x", store=store, by="time", limit=2, today=today)
+    )
+    with patch.object(me_mod, "build_card_index", return_value=_index(*entries)):
+        result = what_did_i_think("x", by="time", limit=2, today=today)
     assert result.answer.count("**c") == 2
 
-    # cli 레벨: limit=0 → exit 2
     import argparse
 
     from synapse_memory.cli import cmd_me_what_did_i_think
@@ -491,55 +479,32 @@ def test_limit_default_and_override(today: _datetime.date) -> None:
     assert rc == 2
 
 
-# ---------------------------------------------------------------------------
-# T043 — FR-013 + SC-004: distance 모드 회귀 가드 (기본 호출 = v0.4 동일)
-# ---------------------------------------------------------------------------
-
-
-def test_distance_regression_default(today: _datetime.date) -> None:
-    """FR-013 — by 미지정 호출이 v0.4 와 동일하게 AI 답변을 그대로 반환.
-
-    회귀 가드: timeline 변경이 distance branch 의 동작·answer 형태를 깨지 않음.
-    """
-    store = MagicMock()
-    store.query.return_value = [
-        (_record("a", doc="# A"), 0.4),
-        (_record("b", doc="# B"), 0.5),
-    ]
+# T043 — FR-013 + SC-004: distance 모드 회귀 가드 (기본 호출 = provider 합성)
+def test_distance_regression_default(today: _datetime.date, tmp_path: Path) -> None:
+    _seed_project(tmp_path, "a")
+    _seed_project(tmp_path, "b")
     with (
-        patch.object(me_mod, "embed_query", return_value=[0.0]),
+        patch.object(me_mod, "select_related", return_value=["a", "b"]),
+        patch("synapse_memory.recipes.pipeline.select_related", return_value=["a", "b"]),
         patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="**핵심.** 자세한 정리…",
         ) as mock_ai,
     ):
-        result = what_did_i_think("x", store=store)  # by 인자 미지정 → "distance"
-    # AI provider가 정확히 한 번 호출됨 + answer 가 그대로 전달됨
+        result = what_did_i_think("x", vault_path=tmp_path)  # by 미지정 → "distance"
     assert mock_ai.call_count == 1
     assert result.answer == "**핵심.** 자세한 정리…"
-    assert result.source_ids == ["a", "b"]
+    assert set(result.source_ids) == {"a", "b"}
 
 
-# ---------------------------------------------------------------------------
-# T044 — FR-016 (헌법 §II): timeline 모드는 외부 LLM 호출 안 함
-# ---------------------------------------------------------------------------
-
-
+# T044 — FR-016: timeline 모드는 외부 LLM 호출 안 함
 def test_no_raw_in_prompt(today: _datetime.date) -> None:
-    """FR-016 — by='time' 모드는 AI wrapper 를 호출하지 않음 (자명한 prompt 차단).
-
-    AI provider 호출이 발생하면 raw PII 가 외부로 나갈 가능성이 생기지만, timeline
-    모드는 RAG 결과만 로컬에서 markdown 으로 정리하므로 호출 자체가 0.
-    """
-    store = MagicMock()
-    store.query.return_value = [
-        (_record("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}, doc="# A"), 0.5),
-    ]
+    index = _index(
+        _entry("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}),
+    )
     with (
-        patch.object(me_mod, "embed_query", return_value=[0.0]),
+        patch.object(me_mod, "build_card_index", return_value=index),
         patch("synapse_memory.recipes.pipeline.ai_api_complete") as mock_ai,
     ):
-        what_did_i_think("x", store=store, by="time", today=today)
-    assert mock_ai.call_count == 0, (
-        f"timeline mode must NOT call AI provider (got {mock_ai.call_count} call(s))"
-    )
+        what_did_i_think("x", by="time", today=today)
+    assert mock_ai.call_count == 0

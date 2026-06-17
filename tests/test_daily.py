@@ -45,10 +45,10 @@ class TestRunDaily:
         assert result.steps == []
 
     def test_dry_run_with_only(self, capsys: pytest.CaptureFixture) -> None:
-        run_daily(only={"collect_obsidian", "index"}, dry_run=True)
+        run_daily(only={"collect_obsidian", "report"}, dry_run=True)
         out = capsys.readouterr().out
         assert "[x] collect_obsidian" in out
-        assert "[x] index" in out
+        assert "[x] report" in out
         assert "[ ] collect_claude_code" in out
 
     def test_skip_works(self, capsys: pytest.CaptureFixture) -> None:
@@ -64,7 +64,7 @@ class TestRunDaily:
         assert "collect_obsidian" in STEPS
         assert "classify" in STEPS
         assert "generate" in STEPS
-        assert "index" in STEPS
+        assert "index" not in STEPS  # 020: RAG index 단계 제거
         assert "update_profile" in STEPS
         assert "report" in STEPS
 
@@ -130,10 +130,9 @@ class TestRunDaily:
         assert by_name["classify"].status == StageStatus.FAILED
         assert by_name["generate"].status == StageStatus.SKIPPED
         assert by_name["generate"].skip_reason == "requires classify"
-        assert by_name["index"].status == StageStatus.SKIPPED
         assert by_name["update_profile"].status == StageStatus.SKIPPED
         assert result.errors == 1
-        assert result.skipped == 3
+        assert result.skipped == 2
 
     def test_resume_from_marks_previous_stages_skipped(self) -> None:
         calls: list[str] = []
@@ -150,7 +149,6 @@ class TestRunDaily:
             stage_actions={
                 "classify": track("classify"),
                 "generate": track("generate"),
-                "index": track("index"),
                 "update_profile": track("update_profile"),
                 "report": track("report"),
             },
@@ -158,7 +156,7 @@ class TestRunDaily:
         )
 
         by_name = {step.name: step for step in result.steps}
-        assert calls == ["classify", "generate", "index", "update_profile", "report"]
+        assert calls == ["classify", "generate", "update_profile", "report"]
         assert by_name["collect_claude_code"].status == StageStatus.SKIPPED
         assert by_name["collect_claude_code"].skip_reason == "resume before classify"
         assert by_name["collect_obsidian"].status == StageStatus.SKIPPED
@@ -349,13 +347,6 @@ class TestHumanizeSummary:
         assert "변경 없음 1348" in out
         assert "KB" in out
 
-    def test_index_translates_card_counts(self) -> None:
-        from synapse_memory.daily import _humanize_stage_summary
-
-        out = _humanize_stage_summary("index", "project=25 company=3")
-        assert "Project Card 25개" in out
-        assert "Company Card 3개" in out
-
     def test_update_profile_preserves_path(self) -> None:
         from synapse_memory.daily import _humanize_stage_summary
 
@@ -395,7 +386,6 @@ class TestHumanizeSummary:
                 ),
                 "classify": _ok("신규 cluster 없음"),
                 "generate": _ok("신규 Card 1개 생성"),
-                "index": _ok("project=25 company=3"),
                 "update_profile": _ok(
                     "fact=13 pattern=13 → Profile-2026-05-18.md"
                 ),
@@ -409,7 +399,6 @@ class TestHumanizeSummary:
         # 사람 친화 문장이 표에 들어 있어야 함
         assert "Claude 활동 로그 2개 mirror" in text
         assert "vault 노트 5개 mirror" in text
-        assert "Project Card 25개" in text
         assert "Fact 13개" in text
         # raw 카운터는 details 블록으로 보존
         assert "<details>" in text
@@ -441,7 +430,7 @@ class TestQuickMode:
             stage_actions={
                 name: track(name) for name in (
                     "collect_claude_code", "collect_obsidian", "classify",
-                    "generate", "index", "update_profile", "report",
+                    "generate", "update_profile", "report",
                 )
             },
             on_log=lambda _line: None,
@@ -511,7 +500,7 @@ class TestQuickMode:
             stage_actions={
                 name: track(name) for name in (
                     "collect_claude_code", "collect_obsidian", "classify",
-                    "generate", "index", "update_profile", "report",
+                    "generate", "update_profile", "report",
                 )
             },
             on_log=lambda _line: None,

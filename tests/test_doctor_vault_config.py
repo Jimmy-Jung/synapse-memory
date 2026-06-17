@@ -8,9 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from synapse_memory.config import SynapseConfig, load_config, save_config
+from synapse_memory.config import SynapseConfig
 from synapse_memory.doctor import (
     DiagnosticStatus,
     apply_set_config_vault,

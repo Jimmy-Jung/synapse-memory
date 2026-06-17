@@ -15,7 +15,6 @@ from synapse_memory.wiki.ingest import ingest_source
 from synapse_memory.wiki.page import WikiPage
 from synapse_memory.wiki.page_index import PageIndex, build_page_index
 
-
 # ---------- page_index ----------
 
 def test_build_page_index_sorts_and_summarizes() -> None:
@@ -35,7 +34,7 @@ def test_page_index_render_lines() -> None:
         [WikiPage(type="concept", slug="rag", title="RAG", body="검색 증강")]
     )
     rendered = idx.render()
-    assert "[rag] RAG — 검색 증강" == rendered
+    assert rendered == "[rag] RAG — 검색 증강"
 
 
 # ---------- select_related ----------

@@ -31,7 +31,6 @@ from synapse_memory.collectors.git_self.mirror import (
 )
 from synapse_memory.storage.l0 import L0_DIR_MODE
 
-
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not installed"
 )

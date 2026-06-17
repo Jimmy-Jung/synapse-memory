@@ -200,7 +200,19 @@ class TestDesignProjectPromptContents:
         vault_with_profile: Path,
         project_store: _StoreStub,
     ) -> None:
-        """fixture Profile 내용이 LLM user prompt 에 그대로 포함."""
+        """fixture Profile 내용이 LLM user prompt 에 그대로 포함 (provider 선별)."""
+        from synapse_memory.cards.project import ProjectCard, save_project_card
+
+        save_project_card(
+            ProjectCard(
+                project_id="prj-todo-ios-2025",
+                display_name="iOS Todo 앱",
+                status="active",
+                body="SwiftUI 기반 todo. CoreData 사용. 단계별 plan 으로 진행.",
+            ),
+            vault_path=vault_with_profile,
+        )
+
         captured: dict[str, str] = {}
 
         def capture(prompt: str, *, system: str | None = None, **_kw: Any) -> str:
@@ -212,6 +224,9 @@ class TestDesignProjectPromptContents:
             "synapse_memory.recipes.pipeline.ai_api_complete",
             side_effect=capture,
         ), mock.patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["prj-todo-ios-2025"],
+        ), mock.patch(
             "synapse_memory.recipes.pipeline.save_last_answer",
             return_value=vault_with_profile / "fake_last.json",
         ):
@@ -219,7 +234,6 @@ class TestDesignProjectPromptContents:
                 "design_project",
                 inputs={"idea": "iOS Todo 앱"},
                 vault_path=vault_with_profile,
-                store=project_store,
                 builtin_dir=_BUILTIN_DIR,
             )
 

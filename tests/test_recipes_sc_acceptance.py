@@ -178,17 +178,16 @@ def test_sc_008_timeline_does_not_call_recipe_pipeline() -> None:
     """SC-008 — `persona what-did-i-think --timeline` 은 recipe pipeline 에 진입하지 않음.
 
     spec FR-013 일치: timeline 모드 호출은 ai_api_complete 가 호출되지 않음.
-    상세 byte-identical 검증은 test_endpoints_me_timeline.py 가 담당.
+    상세 byte-identical 검증은 test_endpoints_persona_timeline.py 가 담당.
     """
-    from unittest.mock import MagicMock
-
     import synapse_memory.endpoints.persona as me_mod
+    from synapse_memory.cards.card_index import CardIndex
     from synapse_memory.endpoints.persona import what_did_i_think
 
-    store = MagicMock()
-    store.query.return_value = []
     with mock.patch(
         "synapse_memory.recipes.pipeline.ai_api_complete"
-    ) as mock_pipe, mock.patch.object(me_mod, "embed_query", return_value=[0.0]):
-        what_did_i_think("x", store=store, by="time")
+    ) as mock_pipe, mock.patch.object(
+        me_mod, "build_card_index", return_value=CardIndex(entries=())
+    ):
+        what_did_i_think("x", by="time")
     assert mock_pipe.call_count == 0

@@ -46,7 +46,7 @@ def test_replace_existing_marker_idempotent(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    changed, prev = inject_or_replace(target, "new body\n")
+    _changed, prev = inject_or_replace(target, "new body\n")
 
     text = target.read_text(encoding="utf-8")
     assert "new body" in text
