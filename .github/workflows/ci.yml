@@ -23,10 +23,46 @@ jobs:
         run: python3 -m pip install -e ".[dev]"
 
       - name: Ruff
-        run: python3 -m ruff check src/synapse_memory/cost src/synapse_memory/daily.py src/synapse_memory/cli.py src/synapse_memory/llm/codex.py src/synapse_memory/rag/chunker.py src/synapse_memory/rag/bm25.py src/synapse_memory/rag/hybrid.py src/synapse_memory/rag/indexer.py src/synapse_memory/rag/__init__.py src/synapse_memory/endpoints/ask.py src/synapse_memory/endpoints/persona.py tests/test_cost_events.py tests/test_cost_summary.py tests/test_cost_cli.py tests/test_llm_claude.py tests/test_llm_codex.py tests/test_daily.py tests/test_daily_cli.py tests/test_rag_chunker.py tests/test_rag_bm25.py tests/test_rag_hybrid.py tests/test_rag_indexer.py tests/test_rag_cli.py tests/test_endpoints_ask.py tests/test_endpoints_persona_extra.py
+        run: >
+          python3 -m ruff check
+          src/synapse_memory/cost
+          src/synapse_memory/daily.py
+          src/synapse_memory/cli.py
+          src/synapse_memory/llm/codex.py
+          src/synapse_memory/rag/chunker.py
+          src/synapse_memory/rag/__init__.py
+          src/synapse_memory/cards/card_index.py
+          src/synapse_memory/cards/card_text.py
+          src/synapse_memory/wiki/llm_retrieval.py
+          src/synapse_memory/wiki/page_index.py
+          src/synapse_memory/endpoints/ask.py
+          src/synapse_memory/endpoints/persona.py
+          src/synapse_memory/recipes/pipeline.py
+          tests/test_cost_events.py
+          tests/test_cost_summary.py
+          tests/test_cost_cli.py
+          tests/test_llm_claude.py
+          tests/test_llm_codex.py
+          tests/test_daily.py
+          tests/test_daily_cli.py
+          tests/test_rag_chunker.py
+          tests/test_card_index.py
+          tests/test_provider_retrieval_020.py
+          tests/test_endpoints_ask.py
+          tests/test_endpoints_persona_extra.py
+          tests/test_recipes_pipeline.py
+          tests/test_recipes_generate.py
 
       - name: Mypy
-        run: python3 -m mypy --strict src/synapse_memory/cost src/synapse_memory/daily.py src/synapse_memory/llm/codex.py src/synapse_memory/rag/chunker.py src/synapse_memory/rag/bm25.py src/synapse_memory/rag/hybrid.py src/synapse_memory/rag/indexer.py src/synapse_memory/endpoints/ask.py src/synapse_memory/endpoints/persona.py
+        run: >
+          python3 -m mypy --strict
+          src/synapse_memory/cost
+          src/synapse_memory/daily.py
+          src/synapse_memory/llm/codex.py
+          src/synapse_memory/rag/chunker.py
+          src/synapse_memory/endpoints/ask.py
+          src/synapse_memory/endpoints/persona.py
+          src/synapse_memory/recipes/pipeline.py
 
       - name: Pytest
         run: python3 -m pytest tests/ -W ignore::DeprecationWarning

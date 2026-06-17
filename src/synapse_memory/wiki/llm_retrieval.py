@@ -11,13 +11,25 @@
 from __future__ import annotations
 
 import contextlib
+from typing import Any, Protocol
 
 from synapse_memory.llm import ai_api
-from synapse_memory.wiki.page_index import PageIndex
 
 # 프롬프트에 넣는 doc 발췌 상한 — 거대 세션 전문 통째 투입 금지(메모리/토큰 폭발 방지).
 MAX_DOC_CHARS = 6000
 DEFAULT_MAX_PAGES = 12
+
+
+class SelectableIndex(Protocol):
+    """``select_related``가 요구하는 최소 index 계약."""
+
+    @property
+    def entries(self) -> tuple[Any, ...]: ...
+
+    @property
+    def slugs(self) -> frozenset[str]: ...
+
+    def render(self) -> str: ...
 
 _SELECT_SYSTEM = (
     "당신은 지식베이스 사서입니다. 주어진 위키 페이지 인덱스에서 새 문서와 "
@@ -72,7 +84,7 @@ def _relevance_model() -> str | None:
 
 def select_related(
     doc_text: str,
-    index: PageIndex,
+    index: SelectableIndex,
     *,
     max_pages: int = DEFAULT_MAX_PAGES,
     env: object | None = None,
@@ -123,7 +135,7 @@ def select_related(
 
 def retrieve_then_answer(
     query: str,
-    index: PageIndex,
+    index: SelectableIndex,
     *,
     env: object | None = None,
     model: str | None = None,

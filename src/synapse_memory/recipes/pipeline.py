@@ -266,7 +266,7 @@ def _kinds_for_recipe(recipe: GenerationRecipe) -> tuple[CardKind, ...]:
 
 
 def _load_card_match(
-    *, card_id: str, kind: CardKind, vault: Path
+    *, card_id: str, kind: CardKind, vault: Path, created: str = ""
 ) -> _CardMatch | None:
     """선별된 card_id의 full text를 로드해 _CardMatch로 변환. 실패 시 None."""
     from synapse_memory.cards.company import load_company_card
@@ -303,7 +303,9 @@ def _load_card_match(
                     "last_reviewed": company.last_reviewed or "",
                 },
             )
-        insight = load_insight_card(card_id, vault_path=vault)
+        if not created:
+            return None
+        insight = load_insight_card(card_id, created, vault_path=vault)
         return _CardMatch(
             id=card_id,
             document=insight_card_to_text(insight),
@@ -323,15 +325,28 @@ def _retrieve_matches(
     recipe: GenerationRecipe,
     inputs: dict[str, str],
     vault: Path,
+    store: Any,
     top_k_override: int | None,
 ) -> list[tuple[Any, float]]:
     """provider 선별로 관련 카드 매칭 (로컬 임베딩 제거, 020).
+
+    ``store``가 명시적으로 주입되면 기존 테스트/호환 adapter로 취급해 provider 호출
+    없이 deterministic query 결과를 사용한다. 기본 production path는 CardIndex +
+    provider 선별이다.
 
     CardIndex 구성 → ``select_related`` 로 card_id 선별 → 선택 카드 full text 로드 →
     ``list[tuple[_CardMatch, 0.0]]`` 반환(거리 의미 없음). 빈 인덱스/선별 0건 → [].
     """
     rag_top_k = top_k_override or recipe.rag_top_k
     rag_query = _build_rag_query(recipe, inputs)
+    rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
+
+    if store is not None:
+        try:
+            return list(store.query(rag_query, top_k=rag_top_k, where=rag_filter))
+        except TypeError:
+            return list(store.query())
+
     kinds = _kinds_for_recipe(recipe)
 
     index = build_card_index(vault_path=vault, kinds=kinds)
@@ -348,7 +363,12 @@ def _retrieve_matches(
         entry = by_id.get(card_id)
         if entry is None:
             continue
-        match = _load_card_match(card_id=card_id, kind=entry.kind, vault=vault)
+        match = _load_card_match(
+            card_id=card_id,
+            kind=entry.kind,
+            vault=vault,
+            created=entry.meta.get("created", ""),
+        )
         if match is not None:
             matches.append((match, 0.0))
     return matches
@@ -413,6 +433,7 @@ def generate(
         recipe=recipe,
         inputs=inputs,
         vault=vault,
+        store=store,
         top_k_override=top_k_override,
     )
 

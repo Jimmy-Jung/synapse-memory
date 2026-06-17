@@ -88,7 +88,13 @@ def _kinds_from_where(where: dict[str, object] | None) -> tuple[CardKind, ...]:
     return ("project", "company", "insight")
 
 
-def _load_card_text(card_id: str, kind: CardKind, vault_path: Path | None) -> str:
+def _load_card_text(
+    card_id: str,
+    kind: CardKind,
+    vault_path: Path | None,
+    *,
+    created: str = "",
+) -> str:
     """선별된 card_id의 full text 로드. 실패 시 빈 문자열."""
     from synapse_memory.cards.card_text import (
         company_card_to_text,
@@ -104,7 +110,11 @@ def _load_card_text(card_id: str, kind: CardKind, vault_path: Path | None) -> st
             return project_card_to_text(load_project_card(card_id, vault_path=vault_path))
         if kind == "company":
             return company_card_to_text(load_company_card(card_id, vault_path=vault_path))
-        return insight_card_to_text(load_insight_card(card_id, vault_path=vault_path))
+        if not created:
+            return ""
+        return insight_card_to_text(
+            load_insight_card(card_id, created, vault_path=vault_path)
+        )
     except (FileNotFoundError, ValueError, OSError):
         return ""
 
@@ -157,7 +167,12 @@ def ask(
         entry = by_id.get(card_id)
         if entry is None:
             continue
-        text = _load_card_text(card_id, entry.kind, vault_path)
+        text = _load_card_text(
+            card_id,
+            entry.kind,
+            vault_path,
+            created=entry.meta.get("created", ""),
+        )
         snippet = (text or entry.summary)[:SOURCE_DOC_CHARS]
         kind_meta = entry.meta.get("source_kind", "unknown")
         name = entry.meta.get("display_name", entry.title)
