@@ -3,16 +3,16 @@
 
 흐름::
 
-    query → _retrieve_wiki(rag, where={"source_kind":"wiki"}) → 컨텍스트 →
+    query → _retrieve_wiki(provider select_related) → 컨텍스트 →
     ai_api.complete(system=ASK_WIKI_SYSTEM) → [[slug]] 인용 답변 →
-    (save=True) insight WikiPage write-back + best-effort 재인덱싱
+    (save=True) insight WikiPage write-back
 
 원칙(D4: redaction 없음)
 - 제공된 wiki 페이지**만** 근거. 각 주장에 ``[[slug]]`` 인용.
 - 자료 없으면 "자료에 없음". 한국어, 짧고 정확.
 
-테스트 격리를 위해 `_retrieve_wiki`/`ai_api.complete`/`index_one_page`를
-모듈 속성으로 두어 monkeypatch 가능하게 한다. rag 부재/오류 시 `_retrieve_wiki`는
+테스트 격리를 위해 `_retrieve_wiki`/`ai_api.complete`를 모듈 속성으로 두어
+monkeypatch 가능하게 한다. provider 부재/오류 시 `_retrieve_wiki`는
 graceful `[]`를 반환한다.
 
 저자: Synapse Memory Maintainers
