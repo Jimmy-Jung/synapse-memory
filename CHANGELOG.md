@@ -2,6 +2,25 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.17.4] — 2026-06-17
+
+local embedding/BM25/vector index hot path를 제거하고, Claude/Codex provider retrieval과 markdown-backed index로 wiki·recipe·persona 질의를 단순화했다.
+
+### Added
+
+- `CardIndex`와 `page_index`를 추가해 Project/Company Card 및 wiki page metadata를 markdown 파일에서 직접 조회.
+- 020 provider-only retrieval 설계 문서와 migration stage 기록을 추가.
+
+### Changed
+
+- `ask`, `persona`, recipe pipeline, wiki query가 로컬 vector store 대신 provider가 vault/page context를 직접 읽는 흐름을 사용.
+- daily/watch/launchd 경로에서 삭제된 local ML index 유지보수 작업을 제거.
+- 테스트 suite를 provider-only retrieval 계약에 맞게 재정렬.
+
+### Removed
+
+- `sentence-transformers`, `numpy`, `rank-bm25` 기반 BM25/embedding/hybrid/vector index 모듈과 관련 CLI/tests 제거.
+
 ## [1.17.3] — 2026-06-16
 
 wiki ingest의 librarian 호출이 Claude/Codex provider 모두에서 구조화 JSON을 안정적으로 받도록 정리했다.

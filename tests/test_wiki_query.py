@@ -23,7 +23,6 @@ def test_ask_wiki_writeback_creates_insight(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(q, "_retrieve_wiki",
         lambda query, *, vault_path, top_k: [load_page("concept", "rag", vault_path=vault_path)])
     monkeypatch.setattr(q.ai_api, "complete", lambda *a, **k: "답변 본문 [[rag]]")
-    monkeypatch.setattr(q, "index_one_page", lambda page, **kw: None)
     res = q.ask_wiki("RAG 설명", vault_path=tmp_path, save=True, today="2026-06-14")
     assert res.saved_slug is not None
     insight = load_page("insight", res.saved_slug, vault_path=tmp_path, when=datetime.date(2026, 6, 14))

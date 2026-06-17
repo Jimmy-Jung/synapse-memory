@@ -8,13 +8,12 @@
 """
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass, field, replace
+from itertools import islice
 from pathlib import Path
 
 from synapse_memory.llm import ai_api
 from synapse_memory.wiki.apply import apply_ops
-from synapse_memory.wiki.index import index_one_page
 from synapse_memory.wiki.integration import (
     INTEGRATION_SCHEMA,
     INTEGRATION_SYSTEM,
@@ -24,7 +23,7 @@ from synapse_memory.wiki.integration import (
 )
 from synapse_memory.wiki.log import append_log
 from synapse_memory.wiki.rawdoc import iter_new_raw
-from synapse_memory.wiki.retrieval import find_related_pages
+from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
 from synapse_memory.wiki.schema import ensure_schema
 from synapse_memory.wiki.watermark import load_watermark, save_watermark
 
@@ -71,22 +70,26 @@ def ingest_source(
     watermark를 전진시키지 않으므로 재실행 시 재시도된다.
     """
     since = load_watermark(source, path=watermark_path)
-    docs = iter_new_raw(
+    docs_all = iter_new_raw(
         source, since=since, root=raw_root, min_age_seconds=min_age_seconds
     )
-    if limit is not None:
-        docs = docs[:limit]
+    # 020: limit는 islice로 — 사이클당 doc 상한(메모리 천장). limit 없으면 전체.
+    docs = islice(docs_all, limit) if limit is not None else docs_all
 
     result = IngestResult(source=source)
     # SCHEMA.md(wiki의 CLAUDE.md) 보장 — 어떤 에이전트든 wiki 유지 규약을 읽을 수
     # 있도록. ensure_schema는 idempotent(존재 시 보존). dry_run이면 디스크 미변경.
     if not dry_run:
         ensure_schema(vault_path=vault_path)
+    # 020: 관련 페이지 선별용 전체 페이지를 사이클 1회 로드 — doc마다 재읽기 제거.
+    all_pages = _all_pages(vault_path)
     max_mtime = since
     for doc in docs:
         result.docs_processed += 1
         try:
-            related = find_related_pages(doc.text, vault_path=vault_path)
+            related = find_related_pages(
+                doc.text, vault_path=vault_path, pages=all_pages
+            )
             prompt = build_integration_prompt(doc.text, related)
             payload = ai_api.complete_structured(
                 prompt, system=INTEGRATION_SYSTEM, model=model,
@@ -99,10 +102,8 @@ def ingest_source(
                 continue
             written = apply_ops(ops, vault_path=vault_path, today=today)
             result.pages_written.extend(written)
-            # 변경 페이지 재인덱싱 — best-effort. rag 부재해도 ingest 성공 유지.
-            for op in ops:
-                with contextlib.suppress(Exception):
-                    index_one_page(op.page)
+            # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever). 로컬
+            # 임베딩(bge-m3) 로드를 핫패스에서 영구 차단. 페이지는 디스크에만 기록.
             if written:
                 append_log(
                     f"ingest {source}: {len(written)} pages "

@@ -1,4 +1,9 @@
-"""persona what-did-i-think / decide 테스트.
+"""persona what-did-i-think / decide 테스트 (020 provider-only).
+
+벡터/임베딩/hybrid 의존 제거. 실제 ProjectCard 를 vault 에 심고, persona 의
+``select_related`` (provider 선별) + pipeline 의 ``select_related``/``ai_api_complete`` 를
+monkeypatch 한다. decide out-of-domain 가드는 distance 임계 → "provider 0건 선별 = 거부"
+로 변경됨.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -7,11 +12,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 import synapse_memory.endpoints.persona as me_mod
+from synapse_memory.cards.project import ProjectCard, save_project_card
 from synapse_memory.endpoints.persona import (
     WhatDidIThinkResult,
     _load_profile_text,
@@ -19,8 +25,6 @@ from synapse_memory.endpoints.persona import (
     what_did_i_think,
 )
 from synapse_memory.llm.claude import ClaudeEnvironment
-from synapse_memory.rag.hybrid import RetrievalHit
-from synapse_memory.rag.vector_store import VectorRecord
 from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
 
@@ -29,166 +33,103 @@ def _ai_env() -> ClaudeEnvironment:
     return ClaudeEnvironment(claude_path="/x/claude", claude_version="2.1", model="sonnet")
 
 
-def _rec(cid: str, doc: str, kind: str = "card_project") -> VectorRecord:
-    return VectorRecord(
-        id=f"{kind}:{cid}",
-        document=doc,
-        embedding=[0.0],
-        metadata={"source_kind": kind, "card_id": cid, "display_name": cid},
-    )
+def _seed(vault: Path, *project_ids: str) -> None:
+    for pid in project_ids:
+        save_project_card(
+            ProjectCard(
+                project_id=pid,
+                display_name=pid,
+                status="active",
+                body=f"# {pid} 본문",
+            ),
+            vault_path=vault,
+        )
 
 
 class TestWhatDidIThink:
-    def test_returns_answer_with_sources(self) -> None:
-        store = MagicMock()
-        store.query.return_value = [
-            (_rec("dansim", "# 단심\n## 회고\nTCA 도입"), 0.3),
-            (_rec("이력서-2026", "# 클린 아키텍처 도입"), 0.4),
-        ]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+    def test_returns_answer_with_sources(self, tmp_path: Path) -> None:
+        _seed(tmp_path, "dansim", "이력서-2026")
+        with patch.object(
+            me_mod, "select_related", return_value=["dansim", "이력서-2026"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["dansim", "이력서-2026"],
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="TCA를 도입했습니다 [dansim].",
         ):
             result = what_did_i_think(
-                "TCA 아키텍처", store=store, ai_env=_ai_env()
+                "TCA 아키텍처", ai_env=_ai_env(), vault_path=tmp_path
             )
 
         assert isinstance(result, WhatDidIThinkResult)
         assert "TCA" in result.answer
-        assert result.source_ids == ["dansim", "이력서-2026"]
+        assert set(result.source_ids) == {"dansim", "이력서-2026"}
 
     def test_records_last_answer_reference(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
-        store = MagicMock()
-        store.query.return_value = [(_rec("dansim", "# 단심"), 0.3)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        _seed(tmp_path, "dansim")
+        with patch.object(
+            me_mod, "select_related", return_value=["dansim"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["dansim"]
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="답변 [dansim].",
         ):
-            what_did_i_think("TCA", store=store, ai_env=_ai_env())
+            what_did_i_think("TCA", ai_env=_ai_env(), vault_path=tmp_path)
 
         ref = load_last_answer()
         assert ref is not None
-        assert ref.command == "persona.generate.recall"  # R-6: unified persona.generate.<recipe>
+        assert ref.command == "persona.generate.recall"
         assert ref.citations[0].target_ref == "dansim"
 
-    def test_strips_claude_meta_prefix(self) -> None:
-        store = MagicMock()
-        store.query.return_value = [(_rec("x", "# X"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+    def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
+        _seed(tmp_path, "x")
+        with patch.object(
+            me_mod, "select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="Insight: 이 답변은 개인 자료를 바탕으로 합니다.\n\n실제 답변 [x]",
         ):
-            result = what_did_i_think("x", store=store, ai_env=_ai_env())
+            result = what_did_i_think("x", ai_env=_ai_env(), vault_path=tmp_path)
         assert result.answer == "실제 답변 [x]"
 
     def test_empty_topic_raises(self) -> None:
         with pytest.raises(ValueError):
-            what_did_i_think("", store=MagicMock(), ai_env=_ai_env())
+            what_did_i_think("", ai_env=_ai_env())
 
-    def test_no_results_returns_help(self) -> None:
-        store = MagicMock()
-        store.query.return_value = []
-        with patch.object(me_mod, "embed_query", return_value=[0.0]):
-            result = what_did_i_think("x", store=store, ai_env=_ai_env())
-        assert "rag index" in result.answer.lower()
-
-    def test_hybrid_uses_hybrid_search_order(self) -> None:
-        store = MagicMock()
-        hybrid_record = _rec("danggeun", "# 당근마켓")
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod,
-            "hybrid_search",
-            return_value=[
-                RetrievalHit(
-                    record=hybrid_record,
-                    dense_rank=2,
-                    dense_distance=0.4,
-                    bm25_rank=1,
-                    bm25_score=3.0,
-                    rrf_score=0.03,
-                )
-            ],
-        ), patch(
-            "synapse_memory.recipes.pipeline.ai_api_complete",
-            return_value="당근마켓을 검토했습니다 [danggeun].",
-        ):
-            result = what_did_i_think(
-                "당근마켓",
-                store=store,
-                ai_env=_ai_env(),
-                hybrid=True,
-            )
-
-        assert result.source_ids == ["danggeun"]
+    def test_no_selection_returns_help(self, tmp_path: Path) -> None:
+        _seed(tmp_path, "x")
+        with patch.object(me_mod, "select_related", return_value=[]):
+            result = what_did_i_think("x", ai_env=_ai_env(), vault_path=tmp_path)
+        assert "자료 없음" in result.answer
 
     def test_hybrid_timeline_combination_rejected(self) -> None:
         with pytest.raises(ValueError):
             what_did_i_think(
                 "당근마켓",
-                store=MagicMock(),
                 ai_env=_ai_env(),
                 hybrid=True,
                 by="time",
             )
 
-    def test_hybrid_prompt_uses_redacted_raw_context(self) -> None:
-        store = MagicMock()
-        raw_record = VectorRecord(
-            id="raw_obsidian:abc:0",
-            document="연락처 [EMAIL_1] 당근마켓",
-            embedding=[0.0],
-            metadata={
-                "source_kind": "raw_obsidian",
-                "path": "10_Active/secret.md",
-                "chunk_index": 0,
-                "display_name": "secret.md",
-            },
-        )
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch.object(
-            me_mod,
-            "hybrid_search",
-            return_value=[
-                RetrievalHit(
-                    record=raw_record,
-                    dense_rank=None,
-                    dense_distance=None,
-                    bm25_rank=1,
-                    bm25_score=3.0,
-                    rrf_score=0.02,
-                )
-            ],
-        ), patch(
-            "synapse_memory.recipes.pipeline.ai_api_complete",
-            return_value="당근마켓을 검토했습니다 [raw_obsidian:abc:0].",
-        ) as mock_complete:
-            what_did_i_think(
-                "당근마켓",
-                store=store,
-                ai_env=_ai_env(),
-                hybrid=True,
-            )
-
-        prompt = mock_complete.call_args.args[0]
-        assert "user@example.com" not in prompt
-        assert "[EMAIL_1]" in prompt
-
 
 class TestDecide:
     def test_without_profile(self, tmp_path: Path) -> None:
-        store = MagicMock()
-        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        _seed(tmp_path, "x")
+        with patch.object(
+            me_mod, "select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
         ):
-            result = decide(
-                "어떤 회사 지원?",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
+            result = decide("어떤 회사 지원?", ai_env=_ai_env(), vault_path=tmp_path)
         assert result.profile_used is False
         assert "추천" in result.answer
         assert result.source_ids == ["x"]
@@ -197,48 +138,41 @@ class TestDecide:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
-        store = MagicMock()
-        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
-            "synapse_memory.recipes.pipeline.ai_api_complete",
-            return_value="추천: A",
+        _seed(tmp_path, "x")
+        with patch.object(
+            me_mod, "select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
         ):
-            decide(
-                "어떤 회사 지원?",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
+            decide("어떤 회사 지원?", ai_env=_ai_env(), vault_path=tmp_path)
 
         ref = load_last_answer()
         assert ref is not None
-        assert ref.command == "persona.generate.decide"  # R-6: unified persona.generate.<recipe>
+        assert ref.command == "persona.generate.decide"
         assert ref.citations[0].target_ref == "x"
 
     def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
-        store = MagicMock()
-        store.query.return_value = [(_rec("x", "# X 정보"), 0.4)]
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        _seed(tmp_path, "x")
+        with patch.object(
+            me_mod, "select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="Analysis: 사용자의 Profile을 검토했습니다.\n\n**추천**: A",
         ):
-            result = decide(
-                "어떤 회사 지원?",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
+            result = decide("어떤 회사 지원?", ai_env=_ai_env(), vault_path=tmp_path)
         assert result.answer == "**추천**: A"
 
     def test_with_profile(self, tmp_path: Path) -> None:
-        # Profile.md 생성
         ai_dir = tmp_path / "90_System" / "AI"
         ai_dir.mkdir(parents=True)
         (ai_dir / "Profile.md").write_text(
             "# Profile\n- 한국어 응답 선호\n- 단계별 작업", encoding="utf-8"
         )
-        store = MagicMock()
-        store.query.return_value = [(_rec("x", "# X"), 0.4)]
+        _seed(tmp_path, "x")
 
         captured_prompt: list[str] = []
 
@@ -246,107 +180,59 @@ class TestDecide:
             captured_prompt.append(prompt)
             return "추천"
 
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+        with patch.object(
+            me_mod, "select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete", side_effect=fake_complete
         ):
-            result = decide(
-                "결정",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
+            result = decide("결정", ai_env=_ai_env(), vault_path=tmp_path)
         assert result.profile_used is True
         assert "한국어 응답 선호" in captured_prompt[0]
 
     def test_empty_situation_raises(self) -> None:
         with pytest.raises(ValueError):
-            decide("", store=MagicMock(), ai_env=_ai_env())
+            decide("")
 
-    # B2 신뢰 가드 (eng-review 2026-05-13) ----------------------------------
+    # out-of-domain 가드 (020: provider 0건 선별 = 거부) -----------------------
 
-    def test_guard_rejects_when_no_rag_matches(self, tmp_path: Path) -> None:
-        """case 0개 → LLM 호출 안 함, 명시적 거부 응답."""
-        store = MagicMock()
-        store.query.return_value = []
-
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+    def test_guard_rejects_when_provider_selects_nothing(self, tmp_path: Path) -> None:
+        """provider 0건 선별 → LLM 호출 안 함, 명시적 거부 응답."""
+        _seed(tmp_path, "x")
+        with patch.object(me_mod, "select_related", return_value=[]), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete"
         ) as mock_complete:
-            result = decide(
-                "이직할까?",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
+            result = decide("이직할까?", ai_env=_ai_env(), vault_path=tmp_path)
 
         mock_complete.assert_not_called()  # critical: LLM 호출 차단
         assert result.profile_used is False
         assert result.source_ids == []
-        assert "신뢰 가능한 답변 불가" in result.answer or "자료 없음" in result.answer
+        assert "신뢰 가능한 답변 불가" in result.answer or "자료 불충분" in result.answer
 
-    def test_guard_rejects_when_top_match_too_far(self, tmp_path: Path) -> None:
-        """top distance > DECIDE_DISTANCE_THRESHOLD → out-of-domain, LLM 차단."""
-        store = MagicMock()
-        # distance 0.9 > 0.6 임계 → 너무 멀다
-        store.query.return_value = [(_rec("x", "# 무관한 자료"), 0.9)]
-
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
+    def test_guard_rejects_when_index_empty(self, tmp_path: Path) -> None:
+        """카드가 0개인 vault → 0건 선별과 동일하게 거부."""
+        with patch(
             "synapse_memory.recipes.pipeline.ai_api_complete"
         ) as mock_complete:
-            result = decide(
-                "이직할까?",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
-
-        mock_complete.assert_not_called()  # critical: 위장 인용 방지
-        assert result.profile_used is False
+            result = decide("이직할까?", ai_env=_ai_env(), vault_path=tmp_path)
+        mock_complete.assert_not_called()
         assert result.source_ids == []
-        # 거부 응답이 distance 와 threshold 둘 다 명시 (사용자가 calibration 가능)
-        assert "0.9" in result.answer
-        assert "0.6" in result.answer
 
-    def test_guard_passes_when_top_match_close_enough(self, tmp_path: Path) -> None:
-        """top distance ≤ threshold → 기존 흐름 통과, LLM 호출됨."""
-        store = MagicMock()
-        store.query.return_value = [(_rec("x", "# 가까운 자료"), 0.4)]
-
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
-            "synapse_memory.recipes.pipeline.ai_api_complete",
-            return_value="추천: A",
+    def test_guard_passes_when_provider_selects(self, tmp_path: Path) -> None:
+        """provider 가 1건 이상 선별 → 통과, LLM 호출됨."""
+        _seed(tmp_path, "x")
+        with patch.object(
+            me_mod, "select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
         ) as mock_complete:
-            result = decide(
-                "결정",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
+            result = decide("결정", ai_env=_ai_env(), vault_path=tmp_path)
 
         mock_complete.assert_called_once()
         assert "추천" in result.answer
-
-    def test_guard_uses_min_distance_across_matches(self, tmp_path: Path) -> None:
-        """여러 매치 중 *가장 가까운* 것을 기준으로 판정."""
-        store = MagicMock()
-        # 첫 매치 멀지만, 두 번째가 가까움 → 통과해야 함
-        store.query.return_value = [
-            (_rec("far", "# 멀다"), 0.8),
-            (_rec("near", "# 가깝다"), 0.5),
-        ]
-
-        with patch.object(me_mod, "embed_query", return_value=[0.0]), patch(
-            "synapse_memory.recipes.pipeline.ai_api_complete",
-            return_value="ok",
-        ) as mock_complete:
-            decide(
-                "결정",
-                store=store,
-                ai_env=_ai_env(),
-                vault_path=tmp_path,
-            )
-
-        mock_complete.assert_called_once()
 
 
 class TestLoadProfileText:
@@ -357,15 +243,12 @@ class TestLoadProfileText:
         """B2: 5000자 silent truncation 제거 회귀 검증."""
         ai_dir = tmp_path / "90_System" / "AI"
         ai_dir.mkdir(parents=True)
-        # 6000자 (cap 이 5000자였던 시점에 잘리던 크기)
-        # MARKER 를 끝에 두어 truncation 시 사라지는지 확인
         long_profile = "# Profile\n" + ("x" * 5900) + "\nMARKER_END"
         assert len(long_profile) > 5000
         (ai_dir / "Profile.md").write_text(long_profile, encoding="utf-8")
 
         loaded = _load_profile_text(tmp_path)
 
-        # 5000자 이상 보존 + 끝 MARKER 까지 보존 확인
         assert len(loaded) > 5000
         assert "MARKER_END" in loaded
 

@@ -1,4 +1,4 @@
-"""cli wiki ask / wiki reindex 서브커맨드 (ask_wiki/index_wiki_pages monkeypatch)."""
+"""cli wiki ask 서브커맨드 (ask_wiki monkeypatch). reindex 는 020 에서 제거됨."""
 from __future__ import annotations
 
 import synapse_memory.cli as cli
@@ -11,10 +11,3 @@ def test_cli_wiki_ask(monkeypatch, capsys):
     rc = cli.main(["wiki", "ask", "RAG가 뭐야?"])
     assert rc == 0
     assert "답" in capsys.readouterr().out
-
-
-def test_cli_wiki_reindex(monkeypatch, capsys):
-    monkeypatch.setattr(cli, "index_wiki_pages", lambda **kw: 7)
-    rc = cli.main(["wiki", "reindex"])
-    assert rc == 0
-    assert "7" in capsys.readouterr().out

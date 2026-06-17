@@ -9,7 +9,6 @@ import pytest
 
 from synapse_memory.daily import DailyResult, write_daily_report
 from synapse_memory.profile.extract import (
-    DecisionPattern,
     ProfileFact,
     save_profile_update,
 )

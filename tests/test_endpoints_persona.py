@@ -1,4 +1,8 @@
-"""me endpoints — draft_resume 테스트.
+"""me endpoints — draft_resume 테스트 (020 provider-only).
+
+벡터/임베딩 의존 제거. recipes pipeline 이 ``build_card_index`` + ``select_related`` 로
+ProjectCard 를 선별하므로, 실제 ProjectCard 를 vault 에 심고 ``select_related`` +
+``ai_api_complete`` 만 monkeypatch 한다.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -6,8 +10,9 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -16,6 +21,7 @@ from synapse_memory.cards.company import (
     JobPosition,
     save_company_card,
 )
+from synapse_memory.cards.project import ProjectCard, save_project_card
 from synapse_memory.endpoints.persona import (
     DRAFTS_SUBPATH,
     ResumeDraft,
@@ -24,7 +30,7 @@ from synapse_memory.endpoints.persona import (
     draft_resume,
 )
 from synapse_memory.llm.claude import ClaudeEnvironment
-from synapse_memory.rag.vector_store import VectorRecord
+from synapse_memory.recipes.pipeline import _CardMatch
 
 
 def _ai_env() -> ClaudeEnvironment:
@@ -42,16 +48,27 @@ def vault(tmp_path: Path) -> Path:
     return v
 
 
-def _mock_record(card_id: str, doc: str = "") -> VectorRecord:
-    return VectorRecord(
-        id=f"card_project:{card_id}",
+def _card_match(card_id: str, doc: str = "") -> _CardMatch:
+    return _CardMatch(
+        id=card_id,
         document=doc or f"# {card_id}",
-        embedding=[0.0],
         metadata={
             "source_kind": "card_project",
             "card_id": card_id,
             "display_name": card_id,
         },
+    )
+
+
+def _seed_project(vault: Path, project_id: str) -> None:
+    save_project_card(
+        ProjectCard(
+            project_id=project_id,
+            display_name=project_id,
+            status="active",
+            body=f"# {project_id} 본문",
+        ),
+        vault_path=vault,
     )
 
 
@@ -90,11 +107,11 @@ class TestBuildPrompt:
     def test_includes_all_cards(self) -> None:
         c = CompanyCard(company_id="x", display_name="X")
         matched = [
-            (_mock_record("p1", "# P1\n내용"), 0.4),
-            (_mock_record("p2", "# P2\n내용"), 0.5),
+            (_card_match("p1", "# P1\n내용"), 0.0),
+            (_card_match("p2", "# P2\n내용"), 0.0),
         ]
         prompt = _build_resume_prompt(c, matched)
-        assert "# X" in prompt or "X" in prompt
+        assert "X" in prompt
         assert "[p1]" in prompt
         assert "[p2]" in prompt
         assert "P1" in prompt and "P2" in prompt
@@ -125,30 +142,22 @@ class TestDraftResume:
 
     def test_creates_markdown_in_drafts(self, vault: Path) -> None:
         self._setup_company(vault)
-        store = MagicMock()
-        store.query.return_value = [
-            (_mock_record("dansim", "# 단심\n## 영향\nretention 18%→31%"), 0.4),
-            (_mock_record("이력서-2026", "# iOS 클린 아키텍처"), 0.45),
-        ]
-
-        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
+        _seed_project(vault, "dansim")
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["dansim"],
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value=(
                 "---\n"
                 "title: 당근마켓 지원 이력서\n"
                 "company_id: danggeun\n"
-                "generated: 2026-05-10\n"
-                "based_on:\n"
-                "  - card_project:dansim\n"
-                "---\n\n"
-                "# 한 줄 소개\n"
-                "iOS 개발자."
+                "---\n\n# 한 줄 소개\niOS 개발자."
             ),
         ):
             result = draft_resume(
                 "danggeun",
                 vault_path=vault,
-                store=store,
                 ai_env=_ai_env(),
             )
 
@@ -156,52 +165,49 @@ class TestDraftResume:
         assert result.company_id == "danggeun"
         assert result.company_name == "당근마켓"
         assert result.saved_path.exists()
-        # 저장 위치: <vault>/30_Creative/Drafts/Resume - 당근마켓 (YYYY-MM).md
         assert result.saved_path.parent.relative_to(vault) == DRAFTS_SUBPATH
         assert "당근마켓" in result.saved_path.name
         assert result.saved_path.suffix == ".md"
         assert "dansim" in result.project_card_ids
 
-    def test_passes_project_filter(self, vault: Path) -> None:
+    def test_restricts_to_project_kind(self, vault: Path) -> None:
         self._setup_company(vault)
-        store = MagicMock()
-        store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
+        _seed_project(vault, "x")
+        from synapse_memory.recipes import pipeline as pipeline_mod
+
+        with patch.object(
+            pipeline_mod, "build_card_index", wraps=pipeline_mod.build_card_index
+        ) as mock_build, patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["x"],
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="---\ntitle: x\n---\n",
         ):
-            draft_resume("danggeun", vault_path=vault, store=store, ai_env=_ai_env())
-        kw = store.query.call_args.kwargs
-        assert kw["where"] == {"source_kind": "card_project"}
+            draft_resume("danggeun", vault_path=vault, ai_env=_ai_env())
+        # resume recipe rag_filter=card_project → kinds=("project",)
+        assert mock_build.call_args.kwargs["kinds"] == ("project",)
 
     def test_missing_company_raises(self, vault: Path) -> None:
         with pytest.raises(FileNotFoundError):
-            draft_resume(
-                "nonexistent",
-                vault_path=vault,
-                store=MagicMock(),
-                ai_env=_ai_env(),
-            )
+            draft_resume("nonexistent", vault_path=vault, ai_env=_ai_env())
 
     def test_no_matches_raises(self, vault: Path) -> None:
         self._setup_company(vault)
-        store = MagicMock()
-        store.query.return_value = []
-        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), pytest.raises(
-            ValueError, match="ProjectCard"
-        ):
-            draft_resume(
-                "danggeun",
-                vault_path=vault,
-                store=store,
-                ai_env=_ai_env(),
-            )
+        _seed_project(vault, "x")
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=[],
+        ), pytest.raises(ValueError, match="ProjectCard"):
+            draft_resume("danggeun", vault_path=vault, ai_env=_ai_env())
 
-    def test_top_k_passed(self, vault: Path) -> None:
+    def test_top_k_passed_to_select(self, vault: Path) -> None:
         self._setup_company(vault)
-        store = MagicMock()
-        store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
+        _seed_project(vault, "x")
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["x"],
+        ) as mock_select, patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="---\ntitle: x\n---\n",
         ):
@@ -209,24 +215,21 @@ class TestDraftResume:
                 "danggeun",
                 top_k_projects=10,
                 vault_path=vault,
-                store=store,
                 ai_env=_ai_env(),
             )
-        assert store.query.call_args.kwargs["top_k"] == 10
+        assert mock_select.call_args.kwargs["max_pages"] == 10
 
     def test_filename_includes_company_and_yearmonth(self, vault: Path) -> None:
         self._setup_company(vault)
-        store = MagicMock()
-        store.query.return_value = [(_mock_record("x"), 0.4)]
-        with patch("synapse_memory.recipes.pipeline.embed_query", return_value=[0.0]), patch(
+        _seed_project(vault, "x")
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["x"],
+        ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
             return_value="---\ntitle: x\n---\n",
         ):
-            result = draft_resume(
-                "danggeun", vault_path=vault, store=store, ai_env=_ai_env()
-            )
-        # 형식: Resume - 당근마켓 (YYYY-MM).md
-        import re
+            result = draft_resume("danggeun", vault_path=vault, ai_env=_ai_env())
         assert re.match(
             r"Resume - 당근마켓 \(\d{4}-\d{2}\)\.md", result.saved_path.name
         )

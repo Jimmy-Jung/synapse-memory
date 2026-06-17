@@ -84,18 +84,6 @@ def test_me_generate_weekly_report_invocation(
 
     monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
 
-    class _StoreStub:
-        def query(self, *_args: Any, **_kwargs: Any) -> list[tuple[Any, float]]:
-            rec = mock.Mock()
-            rec.metadata = {
-                "card_id": "prj-2026-w19-alpha",
-                "display_name": "Synapse Memory v0.5 alpha",
-                "source_kind": "card_project",
-            }
-            rec.document = "이번 주의 핵심 작업"
-            rec.id = "prj-2026-w19-alpha"
-            return [(rec, 0.1)]
-
     def fake_complete(prompt: str, *, system: str | None = None, **_kw: Any) -> str:
         return "## 이번 주 한 일\n- [prj-2026-w19-alpha] 진행"
 
@@ -109,8 +97,8 @@ def test_me_generate_weekly_report_invocation(
         "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT",
         _BUILTIN_DIR,
     ), mock.patch(
-        "synapse_memory.cli.open_vector_store",
-        return_value=_StoreStub(),
+        "synapse_memory.recipes.pipeline.select_related",
+        return_value=["prj-2026-w19-alpha"],
     ):
         rc = cli_mod.main(
             [
@@ -153,7 +141,7 @@ def test_me_generate_passes_rag_mode_override(
         rag_mode="hybrid",
     )
 
-    with mock.patch("synapse_memory.cli.open_vector_store", return_value=None), mock.patch(
+    with mock.patch(
         "synapse_memory.recipes.generate",
         return_value=fake_result,
     ) as mocked_generate:
@@ -177,71 +165,6 @@ def test_me_generate_passes_rag_mode_override(
     assert "rag_mode=hybrid" in captured.err
 
 
-def test_me_generate_hybrid_unavailable_exits_with_reindex_hint(
-    fixture_vault: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    from synapse_memory.recipes import RecipeHybridUnavailableError
-
-    monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
-
-    with mock.patch("synapse_memory.cli.open_vector_store", return_value=None), mock.patch(
-        "synapse_memory.recipes.generate",
-        side_effect=RecipeHybridUnavailableError(
-            "rag_mode=hybrid requires BM25 sidecar. "
-            "Run `synapse-memory rag index --include-raw` and retry."
-        ),
-    ):
-        rc = cli_mod.main(
-            [
-                "persona",
-                "generate",
-                "weekly_report",
-                "--input",
-                "period=2026-W19",
-                "--rag-mode",
-                "hybrid",
-                "--vault",
-                str(fixture_vault),
-            ]
-        )
-
-    err = capsys.readouterr().err
-    assert rc == 10
-    assert "rag_mode=hybrid" in err
-    assert "rag index --include-raw" in err
-
-
-def test_me_generate_hybrid_override_without_store_exits_with_reindex_hint(
-    fixture_vault: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
-
-    with mock.patch("synapse_memory.cli.open_vector_store", return_value=None):
-        rc = cli_mod.main(
-            [
-                "persona",
-                "generate",
-                "weekly_report",
-                "--input",
-                "period=2026-W19",
-                "--rag-mode",
-                "hybrid",
-                "--vault",
-                str(fixture_vault),
-                "--dry-run",
-            ]
-        )
-
-    err = capsys.readouterr().err
-    assert rc == 10
-    assert "rag_mode=hybrid" in err
-    assert "rag index --include-raw" in err
-
-
 def test_me_generate_missing_required_input_exits_with_code(
     fixture_vault: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -250,14 +173,8 @@ def test_me_generate_missing_required_input_exits_with_code(
     """FR-014 — required input 누락 → non-zero exit code + stderr 메시지."""
     monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
 
-    class _EmptyStore:
-        def query(self, *_args: Any, **_kwargs: Any) -> list[tuple[Any, float]]:
-            return []
-
     with mock.patch(
         "synapse_memory.recipes.pipeline._BUILTIN_DIR_DEFAULT", _BUILTIN_DIR
-    ), mock.patch(
-        "synapse_memory.cli.open_vector_store", return_value=_EmptyStore()
     ):
         rc = cli_mod.main(
             [

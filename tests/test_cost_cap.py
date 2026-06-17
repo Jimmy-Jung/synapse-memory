@@ -39,7 +39,7 @@ def _event(ts: str, usd: float) -> CostEvent:
 
 
 def test_compute_mtd_sums_current_month_only():
-    now = datetime.datetime(2026, 5, 15, 12, 0, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 5, 15, 12, 0, tzinfo=datetime.UTC)
     events = [
         _event("2026-05-01T08:00:00+00:00", 1.0),
         _event("2026-05-13T12:00:00+00:00", 0.5),
@@ -105,9 +105,8 @@ def test_enforce_blocks_when_over_cap(capsys, monkeypatch):
     with mock.patch(
         "synapse_memory.cost.cap.get_cap_status",
         return_value=CapStatus(cap_usd=10.0, month_to_date_usd=11.0),
-    ):
-        with pytest.raises(SystemExit) as exc:
-            enforce_cost_cap("ask")
+    ), pytest.raises(SystemExit) as exc:
+        enforce_cost_cap("ask")
     assert exc.value.code == CAP_EXCEEDED_EXIT_CODE
     err = capsys.readouterr().err
     assert "월 cap 초과" in err
@@ -149,7 +148,7 @@ def test_enforce_silent_under_80_percent(capsys, monkeypatch):
 
 
 def test_month_window_handles_december_year_rollover():
-    now = datetime.datetime(2026, 12, 31, 23, 59, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 12, 31, 23, 59, tzinfo=datetime.UTC)
     events = [
         _event("2026-12-15T00:00:00+00:00", 2.0),
         _event("2027-01-01T00:00:01+00:00", 99.0),

@@ -312,7 +312,7 @@ class TestSinceDaysCutoff:
         self, vault: Path, dst: Path
     ) -> None:
         """since_days=None → 기존 동작 그대로 (회귀 가드)."""
-        recent = _write_md(vault, "00_Inbox/recent.md", "a")
+        _write_md(vault, "00_Inbox/recent.md", "a")
         old = _write_md(vault, "00_Inbox/old.md", "b")
         self._set_mtime_days_ago(old, 30.0)
 
@@ -325,7 +325,7 @@ class TestSinceDaysCutoff:
     ) -> None:
         """skip 된 오래된 파일의 prev_state 는 보존 — 다음 full mode 호출 시 unchanged 분류."""
         old = _write_md(vault, "00_Inbox/old.md", "기존")
-        recent = _write_md(vault, "00_Inbox/recent.md", "신규")
+        _write_md(vault, "00_Inbox/recent.md", "신규")
 
         # First full mode: 둘 다 mirror
         collect_obsidian(vault_path=vault, dst_root=dst)

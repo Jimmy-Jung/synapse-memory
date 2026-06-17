@@ -3,13 +3,6 @@ from __future__ import annotations
 
 from synapse_memory.wiki.backfill import BackfillResult, run_backfill
 from synapse_memory.wiki.daemon import CycleOutcome, run_watch_cycle
-from synapse_memory.wiki.index import (
-    WIKI_SOURCE_KIND,
-    index_one_page,
-    index_wiki_pages,
-    wiki_page_to_record,
-    wiki_page_to_text,
-)
 from synapse_memory.wiki.index_md import (
     MARKER_END,
     MARKER_START,
@@ -64,7 +57,6 @@ __all__ = [
     "MARKER_START",
     "SCHEMA_FILENAME",
     "VALID_TYPES",
-    "WIKI_SOURCE_KIND",
     "BackfillResult",
     "CycleOutcome",
     "FileLock",
@@ -83,8 +75,6 @@ __all__ = [
     "find_dead_links",
     "find_orphans",
     "index_md_path",
-    "index_one_page",
-    "index_wiki_pages",
     "ingest_source",
     "install_watch",
     "list_pages",
@@ -104,8 +94,6 @@ __all__ = [
     "slugify",
     "stale_candidates",
     "uninstall_watch",
-    "wiki_page_to_record",
-    "wiki_page_to_text",
     "with_related",
     "write_index",
     "write_schema",

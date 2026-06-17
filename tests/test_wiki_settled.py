@@ -23,7 +23,7 @@ def test_recent_file_skipped_when_min_age_set(tmp_path: Path) -> None:
     now = time.time()
     os.utime(recent, (now, now))
     os.utime(settled, (now - 600, now - 600))
-    docs = iter_new_raw("claude-code", since=None, root=root, min_age_seconds=180, now=now)
+    docs = list(iter_new_raw("claude-code", since=None, root=root, min_age_seconds=180, now=now))
     texts = [d.text for d in docs]
     assert "끝난 대화" in texts and "진행 중" not in texts
 
@@ -31,4 +31,4 @@ def test_recent_file_skipped_when_min_age_set(tmp_path: Path) -> None:
 def test_no_min_age_returns_all(tmp_path: Path) -> None:
     root = tmp_path / "raw" / "claude-code"
     _sess(root, "a", "x")
-    assert len(iter_new_raw("claude-code", since=None, root=root)) == 1
+    assert len(list(iter_new_raw("claude-code", since=None, root=root))) == 1

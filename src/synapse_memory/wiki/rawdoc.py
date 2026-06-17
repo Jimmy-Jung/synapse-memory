@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -76,27 +77,30 @@ def iter_new_raw(
     root: Path | None = None,
     min_age_seconds: float | None = None,
     now: float | None = None,
-) -> list[RawDoc]:
-    """source의 새 RawDoc 목록 (mtime > since). ref 정렬.
+) -> Iterator[RawDoc]:
+    """source의 새 RawDoc을 ref 정렬 순서로 **lazy yield** (mtime > since).
+
+    020: 리스트 materialize 대신 제너레이터 — 호출측이 ``itertools.islice``로 N개만
+    소비하면 그 N개 파일만 읽어들인다(backlog 전체를 메모리에 올리지 않음). 파일
+    본문(``_file_text``)은 yield 시점에 1개씩만 읽는다.
 
     ``min_age_seconds``가 주어지면 ``(now or time.time()) - min_age_seconds``보다
     최근에 수정된 파일(=진행 중)은 건너뛴다. ``None``이면 기존 동작 그대로.
 
     Raises:
-        ValueError: 미지원 source.
+        ValueError: 미지원 source (첫 반복 시점에 발생 — 제너레이터 lazy 평가).
     """
     if source not in SUPPORTED_SOURCES:
         raise ValueError(f"미지원 source: {source!r}")
     base = (root or default_source_root(source)).expanduser()
     if not base.is_dir():
-        return []
+        return
     since_ts = datetime.fromisoformat(since).timestamp() if since else None
     settled_before = (
         (now if now is not None else time.time()) - min_age_seconds
         if min_age_seconds is not None
         else None
     )
-    docs: list[RawDoc] = []
     for path in sorted(base.rglob("*.jsonl")):
         # 워터마크는 초 단위(timespec="seconds")로 저장되므로 비교도 초로 절삭해야
         # 동일 파일이 재처리되지 않는다.
@@ -110,12 +114,9 @@ def iter_new_raw(
         if not text:
             continue
         rel = path.relative_to(base).as_posix()
-        docs.append(
-            RawDoc(
-                source=source,
-                ref=f"{source}:{rel}",
-                text=text,
-                mtime_iso=datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
-            )
+        yield RawDoc(
+            source=source,
+            ref=f"{source}:{rel}",
+            text=text,
+            mtime_iso=datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
         )
-    return docs

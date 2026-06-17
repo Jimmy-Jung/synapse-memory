@@ -17,23 +17,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from synapse_memory.cards.card_index import build_card_index
+from synapse_memory.cards.card_text import company_card_to_text
 from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.config import get_config
 from synapse_memory.llm.ai_api import AIEnvironment
-from synapse_memory.rag import (
-    VectorRecord,
-    VectorStore,
-    embed_query,
-    hybrid_search,
-    open_vector_store,
-)
-from synapse_memory.rag.indexer import company_card_to_text
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     new_answer_reference,
     save_last_answer,
 )
+from synapse_memory.wiki.llm_retrieval import select_related
 
 DEFAULT_PROJECTS_FOR_RESUME = 6
 DEFAULT_RESUME_MODEL = "sonnet"
@@ -69,20 +64,24 @@ def _company_search_query(company: CompanyCard) -> str:
 
 def _build_resume_prompt(
     company: CompanyCard,
-    matched: list[tuple[VectorRecord, float]],
+    matched: list[tuple[object, float]],
 ) -> str:
-    """CompanyCard + 매칭 ProjectCard들로 AI provider prompt 빌드."""
+    """CompanyCard + 매칭 ProjectCard들로 AI provider prompt 빌드.
+
+    ``matched`` 요소는 ``.metadata``(card_id)·``.document``·``.id``를 노출하는 record
+    (provider 선별 _CardMatch 또는 호환 객체). 거리는 provider 선별이라 의미 없음.
+    """
     company_block = company_card_to_text(company)
     project_blocks: list[str] = []
-    for rec, dist in matched:
-        cid = rec.metadata.get("card_id") or rec.id
-        project_blocks.append(
-            f"---\n[{cid}] (유사도 거리={dist:.3f})\n{rec.document}"
-        )
+    for rec, _score in matched:
+        meta = getattr(rec, "metadata", {}) or {}
+        cid = meta.get("card_id") or getattr(rec, "id", "")
+        document = getattr(rec, "document", "")
+        project_blocks.append(f"---\n[{cid}]\n{document}")
 
     return (
         f"# 지원 회사\n{company_block}\n\n"
-        f"# 사용자 ProjectCard ({len(matched)}개, 가까운 순)\n"
+        f"# 사용자 ProjectCard ({len(matched)}개)\n"
         + "\n\n".join(project_blocks)
         + "\n\n# 지시\n위 자료로 회사 맞춤 한국어 이력서를 작성하세요. "
         f"오늘 날짜: {datetime.date.today().isoformat()}."
@@ -96,7 +95,7 @@ def draft_resume(
     model: str = DEFAULT_RESUME_MODEL,
     vault_path: Path | None = None,
     ai_env: AIEnvironment | None = None,
-    store: VectorStore | None = None,
+    store: object | None = None,  # 시그니처 호환 — provider 선별로 미사용
     timeout: int = DEFAULT_RESUME_TIMEOUT,
 ) -> ResumeDraft:
     """회사 맞춤 이력서 자동 생성 → vault에 저장 (007-persona-recipes wrapper).
@@ -115,14 +114,12 @@ def draft_resume(
     from synapse_memory.recipes import generate as recipes_generate
 
     company = load_company_card(company_id, vault_path=vault_path)
-    store = store or open_vector_store()
 
     try:
         result = recipes_generate(
             _RESUME_RECIPE_NAME,
             inputs={"company_id": company_id},
             vault_path=vault_path,
-            store=store,
             ai_env=ai_env,
             model_override=model,
             timeout_override=timeout,
@@ -135,13 +132,13 @@ def draft_resume(
         # 기존 message 호환 (SC-005)
         if "got 0" in str(exc):
             raise ValueError(
-                "매칭 ProjectCard 0건 — `synapse-memory rag index` 먼저 실행"
+                "매칭 ProjectCard 0건 — vault에 ProjectCard를 먼저 생성하세요"
             ) from exc
         raise
 
     if not result.source_ids:
         raise ValueError(
-            "매칭 ProjectCard 0건 — `synapse-memory rag index` 먼저 실행"
+            "매칭 ProjectCard 0건 — vault에 ProjectCard를 먼저 생성하세요"
         )
 
     # 기존 filename rule 유지 (SC-005): `Resume - {display_name} ({YYYY-MM}).md`
@@ -184,66 +181,52 @@ def what_did_i_think(
     top_k: int = 8,
     model: str | None = "sonnet",
     ai_env: AIEnvironment | None = None,
-    store: VectorStore | None = None,
+    store: object | None = None,  # 시그니처 호환 — provider 선별로 미사용
     by: Literal["time", "distance"] = "distance",
     limit: int = 20,
     today: datetime.date | None = None,
     hybrid: bool = False,
+    vault_path: Path | None = None,
 ) -> WhatDidIThinkResult:
-    """주제에 대한 과거 사고 회상.
+    """주제에 대한 과거 사고 회상 (provider 선별, 로컬 임베딩 제거 — 020).
 
     Parameters
     ----------
     by:
-        ``"distance"`` (기본) — 기존 cosine 정렬 + Claude 정리 답변.
+        ``"distance"`` (기본) — provider 선별 카드 + Claude 정리 답변.
         ``"time"`` — period_end desc 시간순 정렬 + 분기 그룹 (외부 LLM 미호출,
-        FR-A1 / specs/002-timeline-recall).
+        FR-A1 / specs/002-timeline-recall). CardIndex.meta 에서 타임라인 메타를 읽는다.
     limit:
         ``by="time"`` 모드에서 출력 카드 최대 수 (기본 20).
     today:
         ``by="time"`` 의 today_fallback 계산용. ``None`` 이면 ``datetime.date.today()``.
+    hybrid:
+        폐기됨 — provider 선별로 일원화. ``by="time"`` 과의 충돌만 유지.
     """
     if not topic.strip():
         raise ValueError("topic은 빈 문자열일 수 없음")
     if hybrid and by == "time":
         raise ValueError("--timeline and --hybrid conflict — pick one.")
 
-    store = store or open_vector_store()
-    q_vec = embed_query(topic)
-    if hybrid:
-        hits = hybrid_search(
-            topic,
-            query_embedding=q_vec,
-            store=store,
-            top_k=top_k,
-        )
-        results = [(hit.record, hit.rrf_score) for hit in hits]
-    else:
-        results = store.query(q_vec, top_k=top_k)
+    index = build_card_index(vault_path=vault_path)
 
-    if not results:
-        if by == "time":
+    if by == "time":
+        today_resolved = today or datetime.date.today()
+        if not index.entries:
             return WhatDidIThinkResult(
                 topic=topic,
                 answer=_EMPTY_MESSAGE,
                 source_ids=[],
             )
-        return WhatDidIThinkResult(
-            topic=topic,
-            answer="자료 없음 — `synapse-memory rag index` 먼저",
-            source_ids=[],
-        )
-
-    if by == "time":
-        today_resolved = today or datetime.date.today()
+        # 타임라인은 전체 카드를 시간 메타로 정렬 (provider 선별 불필요).
         cards = [
             _resolve_sort_ts(
-                dict(rec.metadata),
+                dict(entry.meta, card_id=entry.card_id),
                 today_resolved,
-                distance=dist,
-                document=rec.document,
+                distance=None,
+                document=entry.summary,
             )
-            for rec, dist in results
+            for entry in index.entries
         ]
         sorted_cards = _sort_by_time(cards)
         groups = _group_by_quarter(sorted_cards)
@@ -257,16 +240,21 @@ def what_did_i_think(
         )
         return WhatDidIThinkResult(topic=topic, answer=markdown, source_ids=source_ids)
 
-    # distance-mode → recipes.generate("recall", ...) wrapper (007 R-7)
+    # distance-mode → provider 선별 (0건이면 "자료 없음") → recipes.generate("recall")
+    selected = select_related(topic, index, max_pages=top_k) if index.entries else []
+    if not selected:
+        return WhatDidIThinkResult(
+            topic=topic,
+            answer="자료 없음 — vault에 관련 Card를 먼저 생성하세요 (`synapse-memory daily`)",
+            source_ids=[],
+        )
+
     from synapse_memory.recipes import generate as recipes_generate
 
-    # 006 hybrid 결과 또는 기존 dense 결과를 007 recipe pipeline 의 matched-record
-    # 인터페이스로 그대로 전달한다. store 를 재사용하면 hybrid order 가 dense query 로
-    # 덮일 수 있다.
     result = recipes_generate(
         _RECALL_RECIPE_NAME,
         inputs={"topic": topic},
-        store=_PrecomputedResultStore(results),
+        vault_path=vault_path,
         ai_env=ai_env,
         model_override=model,
         top_k_override=top_k,
@@ -279,27 +267,12 @@ def what_did_i_think(
     )
 
 
-class _PrecomputedResultStore:
-    def __init__(self, results: list[tuple[VectorRecord, float]]) -> None:
-        self._results = results
-
-    def query(self, *_args: object, **_kwargs: object) -> list[tuple[VectorRecord, float]]:
-        return list(self._results)
-
-
 # ---------------------------------------------------------------------------
 # decide — 의사결정 코파일럿
 # ---------------------------------------------------------------------------
 
 
 _DECIDE_RECIPE_NAME = "decide"  # 007-persona-recipes — decide() wrapper
-
-# B2 guard thresholds (eng-review 2026-05-13)
-#
-# 가장 가까운 매치의 cosine distance 가 이 값보다 크면 out-of-domain 으로 간주.
-# Profile 위장 인용으로 generic 답을 만드는 위험을 차단하기 위한 신뢰 가드.
-# cosine distance 는 0(동일) ~ 2(반대). 0.6 은 보수적 임계값 (실측 후 calibration 가능).
-DECIDE_DISTANCE_THRESHOLD = 0.6
 
 
 @dataclass
@@ -336,66 +309,45 @@ def decide(
     top_k: int = 6,
     model: str = "sonnet",
     ai_env: AIEnvironment | None = None,
-    store: VectorStore | None = None,
+    store: object | None = None,  # 시그니처 호환 — provider 선별로 미사용
     vault_path: Path | None = None,
 ) -> DecideResult:
-    """의사결정 코파일럿 (007-persona-recipes wrapper).
+    """의사결정 코파일럿 (007-persona-recipes wrapper, provider 선별 — 020).
 
     내부적으로 ``recipes.pipeline.generate("decide", ...)`` 를 호출한다.
     외부 시그니처와 ``DecideResult`` 반환은 SC-005 회귀 가드로 보존.
 
-    B2 신뢰 가드 (eng-review 2026-05-13):
-    1. RAG 매치 0개 → LLM 호출 안 함, "자료 없음" 거부 응답
-    2. 가장 가까운 매치 distance > ``DECIDE_DISTANCE_THRESHOLD`` →
-       out-of-domain, "신뢰 가능 답변 불가" 거부 응답
-
-    Profile 이 없는 영역에서 generic LLM 답을 ``[Profile: ...]`` 인용으로 위장하는
-    현재 위험을 차단한다. retrieve 결과는 ``_PrecomputedResultStore`` 로 recipes
-    pipeline 에 재사용 — 중복 embedding 호출 없음.
+    out-of-domain 가드 (020, distance 임계 0.6 폐기):
+    - provider 가 0건 선별 → "자료 불충분" 거부 응답. Profile/Card 인용을 위장한
+      generic 추천을 막는 신뢰 가드 (CardIndex + ``select_related``).
     """
     if not situation.strip():
         raise ValueError("situation은 빈 문자열일 수 없음")
 
-    store = store or open_vector_store()
-    q_vec = embed_query(situation)
-    results = store.query(q_vec, top_k=top_k)
+    index = build_card_index(vault_path=vault_path)
+    selected = select_related(situation, index, max_pages=top_k) if index.entries else []
 
-    # Guard 1: 데이터 없음
-    if not results:
+    # Guard: provider 가 관련 카드를 0건 선별 → 신뢰 불가, 거부.
+    if not selected:
         return DecideResult(
             situation=situation,
             answer=(
-                "유사 과거 자료 없음 — `synapse-memory rag index` 먼저 실행하거나, "
+                "관련 과거 자료 불충분 — vault에 비슷한 결정 노트/Card를 먼저 기록하거나, "
                 "`synapse-memory persona update-profile` 로 결정 패턴을 추출하세요. "
-                "현재 vault 자료로는 신뢰 가능한 답변 불가."
+                "현재 vault 자료로는 신뢰 가능한 답변 불가 — "
+                "Profile/Card 인용을 위장한 generic 추천을 막기 위해 거부합니다."
             ),
             profile_used=False,
             source_ids=[],
         )
 
-    # Guard 2: 가장 가까운 매치도 너무 멀다 (out-of-domain)
-    top_distance = min(dist for _rec, dist in results)
-    if top_distance > DECIDE_DISTANCE_THRESHOLD:
-        return DecideResult(
-            situation=situation,
-            answer=(
-                f"질문과 유사한 과거 자료가 충분히 가깝지 않습니다 "
-                f"(가장 가까운 거리 {top_distance:.2f} > 임계 {DECIDE_DISTANCE_THRESHOLD}). "
-                "현재 vault 자료로는 신뢰 가능한 답변 불가 — Profile/Card 인용을 위장한 generic 추천을 막기 위해 거부합니다. "
-                "비슷한 결정 노트를 vault 에 먼저 기록한 뒤 다시 호출하세요."
-            ),
-            profile_used=False,
-            source_ids=[],
-        )
-
-    # Guard 통과 → recipes pipeline 호출 (retrieve 결과 재사용)
+    # Guard 통과 → recipes pipeline 호출 (pipeline 이 다시 provider 선별 + 합성)
     from synapse_memory.recipes import generate as recipes_generate
 
     result = recipes_generate(
         _DECIDE_RECIPE_NAME,
         inputs={"situation": situation},
         vault_path=vault_path,
-        store=_PrecomputedResultStore(results),
         ai_env=ai_env,
         model_override=model,
         top_k_override=top_k,

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "synapse-memory"
-version = "1.17.3"
+version = "1.17.4"
 description = "Personal LLM-maintained wiki — auto-builds a second brain from your AI conversations"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -25,16 +25,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-rag = [
-    "chromadb>=0.5",
-    "sentence-transformers>=3.0",
-    "rank-bm25>=0.2",
-    # torch는 sentence-transformers 의존. Apple Silicon은 MPS 자동 사용.
-]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "rank-bm25>=0.2",
     "ruff>=0.5",
     "mypy>=1.10",
 ]

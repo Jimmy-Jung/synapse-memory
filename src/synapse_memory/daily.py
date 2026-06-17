@@ -73,7 +73,6 @@ DAILY_STAGES = (
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
-    DailyStage("index", "Card RAG index", ("generate",)),
     DailyStage(
         "update_profile",
         "ProfileFact/DecisionPattern 후보 추출",
@@ -301,7 +300,6 @@ def _build_stage_actions(
             max_new_clusters=quick_max_new_clusters,
         ),
         "generate": _build_generate_action(generate_model, on_log, status_sink),
-        "index": _index_action,
         "update_profile": _build_update_profile_action(
             profile_model=profile_model,
             profile_sample_lines=profile_sample_lines,
@@ -612,13 +610,6 @@ def _build_generate_action(
         return summary
 
     return step
-
-
-def _index_action() -> str:
-    from synapse_memory.rag import index_cards
-
-    stats = index_cards()
-    return f"project={stats.project_cards} company={stats.company_cards}"
 
 
 def _build_update_profile_action(
@@ -1157,13 +1148,6 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             if extras:
                 parts.append("· " + ", ".join(extras))
             return " ".join(parts)
-    elif stage == "index":
-        kv = _parse_kv(raw)
-        if "project" in kv or "company" in kv:
-            return (
-                f"Project Card {kv.get('project', 0)}개, "
-                f"Company Card {kv.get('company', 0)}개 인덱싱"
-            )
     elif stage == "update_profile":
         kv = _parse_kv(raw)
         if "fact" in kv or "pattern" in kv:

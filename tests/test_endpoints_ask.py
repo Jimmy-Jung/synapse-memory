@@ -1,4 +1,8 @@
-"""ask endpoint 테스트 — RAG/Claude mock.
+"""ask endpoint 테스트 — provider 선별 + Claude 합성 mock (020 provider-only).
+
+벡터/임베딩 의존 제거. ``build_card_index``/``select_related``/``_load_card_text``/
+``ai_api.complete`` 를 monkeypatch 해 hermetic 하게 검증한다. 정확한 cosine 순위
+단언은 폐기 — "provider 선별 호출됨 + 합성 반환" 수준으로 본다.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -7,19 +11,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 import synapse_memory.endpoints.ask as ask_mod
-from synapse_memory.endpoints.ask import (
-    _build_context,
-    ask,
-)
+from synapse_memory.cards.card_index import CardEntry, CardIndex
+from synapse_memory.endpoints.ask import ask
 from synapse_memory.llm.claude import ClaudeEnvironment
-from synapse_memory.rag.bm25 import BM25IndexError
-from synapse_memory.rag.hybrid import RetrievalHit
-from synapse_memory.rag.vector_store import VectorRecord
 from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
 
@@ -32,64 +31,58 @@ def _ai_env() -> ClaudeEnvironment:
     )
 
 
-def _mock_record(card_id: str, kind: str, name: str, doc: str) -> VectorRecord:
-    return VectorRecord(
-        id=f"{kind}:{card_id}",
-        document=doc,
-        embedding=[0.0],
-        metadata={
-            "source_kind": kind,
-            "card_id": card_id,
-            "display_name": name,
+def _entry(card_id: str, kind: str, title: str) -> CardEntry:
+    return CardEntry(
+        card_id=card_id,
+        kind=kind,  # type: ignore[arg-type]
+        title=title,
+        summary=f"{title} 요약",
+        meta={
+            "source_kind": f"card_{kind}",
+            "display_name": title,
         },
     )
 
 
-class TestBuildContext:
-    def test_includes_all_sources(self) -> None:
-        results = [
-            (_mock_record("dansim", "card_project", "단심", "# 단심\n## 문제\n..."), 0.4),
-            (_mock_record("danggeun", "card_company", "당근", "# 당근\n..."), 0.5),
-        ]
-        ctx = _build_context(results)
-        assert "[dansim]" in ctx
-        assert "[danggeun]" in ctx
-        assert "card_project" in ctx
-        assert "card_company" in ctx
-        assert "단심" in ctx
+def _index(*entries: CardEntry) -> CardIndex:
+    return CardIndex(entries=tuple(entries))
 
 
 class TestAsk:
-    def _setup_store(self, records: list[tuple]) -> MagicMock:
-        store = MagicMock()
-        store.query.return_value = records
-        return store
-
     def test_empty_query_raises(self) -> None:
         with pytest.raises(ValueError):
-            ask("", store=MagicMock())
+            ask("")
 
-    def test_no_results_returns_helpful_message(self) -> None:
-        store = self._setup_store([])
-        with patch.object(ask_mod, "embed_query", return_value=[0.0]):
-            result = ask("질문", store=store, ai_env=_ai_env())
-        assert "rag index" in result.answer.lower()
+    def test_no_selection_returns_helpful_message(self) -> None:
+        with patch.object(
+            ask_mod, "build_card_index", return_value=_index(_entry("x", "project", "X"))
+        ), patch.object(ask_mod, "select_related", return_value=[]):
+            result = ask("질문", ai_env=_ai_env())
+        assert "Card" in result.answer
+        assert result.sources == []
+
+    def test_empty_index_returns_helpful_message(self) -> None:
+        with patch.object(ask_mod, "build_card_index", return_value=_index()):
+            result = ask("질문", ai_env=_ai_env())
         assert result.sources == []
 
     def test_returns_answer_and_sources(self) -> None:
-        records = [
-            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
-            (_mock_record("danggeun", "card_company", "당근", "# 당근"), 0.5),
-        ]
-        store = self._setup_store(records)
+        index = _index(
+            _entry("dansim", "project", "단심"),
+            _entry("danggeun", "company", "당근"),
+        )
         with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
+            ask_mod, "build_card_index", return_value=index
+        ), patch.object(
+            ask_mod, "select_related", return_value=["dansim", "danggeun"]
+        ), patch.object(
+            ask_mod, "_load_card_text", side_effect=lambda cid, *a, **k: f"# {cid}"
         ), patch.object(
             ask_mod.ai_api,
             "complete",
             return_value="당신은 단심앱을 만들었습니다 [dansim].",
         ):
-            result = ask("뭐 만들었어?", store=store, ai_env=_ai_env())
+            result = ask("뭐 만들었어?", ai_env=_ai_env())
 
         assert "단심앱" in result.answer
         assert len(result.sources) == 2
@@ -100,18 +93,17 @@ class TestAsk:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
-        records = [
-            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
-        ]
-        store = self._setup_store(records)
+        index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
+            ask_mod, "build_card_index", return_value=index
         ), patch.object(
-            ask_mod.ai_api,
-            "complete",
-            return_value="단심앱입니다 [dansim].",
+            ask_mod, "select_related", return_value=["dansim"]
+        ), patch.object(
+            ask_mod, "_load_card_text", return_value="# 단심"
+        ), patch.object(
+            ask_mod.ai_api, "complete", return_value="단심앱입니다 [dansim]."
         ):
-            ask("뭐 만들었어?", store=store, ai_env=_ai_env())
+            ask("뭐 만들었어?", ai_env=_ai_env())
 
         ref = load_last_answer()
         assert ref is not None
@@ -122,20 +114,19 @@ class TestAsk:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(tmp_path / "vault"))
-        records = [
-            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
-        ]
-        store = self._setup_store(records)
+        index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
+            ask_mod, "build_card_index", return_value=index
+        ), patch.object(
+            ask_mod, "select_related", return_value=["dansim"]
+        ), patch.object(
+            ask_mod, "_load_card_text", return_value="# 단심"
         ), patch.object(
             ask_mod.ai_api,
             "complete",
             return_value="개인 연락처 010-1234-5678 대신 단심 근거 [dansim].",
-        ), patch.object(
-            ask_mod, "index_insight_card"
-        ) as mock_index:
-            result = ask("TCA를 왜 도입했지?", store=store, ai_env=_ai_env(), save=True)
+        ):
+            result = ask("TCA를 왜 도입했지?", ai_env=_ai_env(), save=True)
 
         assert result.saved_path is not None
         text = result.saved_path.read_text(encoding="utf-8")
@@ -143,160 +134,80 @@ class TestAsk:
         assert "010-1234-5678" in text
         assert "related:" in text
         assert "dansim" in text
-        mock_index.assert_called_once()
 
-    def test_save_uses_raw_question_for_frontmatter_filename_and_index(
+    def test_save_uses_raw_question_for_frontmatter_filename(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(tmp_path / "vault"))
-        records = [
-            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
-        ]
-        store = self._setup_store(records)
+        index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
+            ask_mod, "build_card_index", return_value=index
         ), patch.object(
-            ask_mod.ai_api,
-            "complete",
-            return_value="답변 본문 [dansim].",
+            ask_mod, "select_related", return_value=["dansim"]
         ), patch.object(
-            ask_mod, "index_insight_card"
-        ) as mock_index:
-            result = ask("홍길동 이직 전략", store=store, ai_env=_ai_env(), save=True)
+            ask_mod, "_load_card_text", return_value="# 단심"
+        ), patch.object(
+            ask_mod.ai_api, "complete", return_value="답변 본문 [dansim]."
+        ):
+            result = ask("홍길동 이직 전략", ai_env=_ai_env(), save=True)
 
         assert result.saved_path is not None
         assert "홍길동" in result.saved_path.name
         text = result.saved_path.read_text(encoding="utf-8")
         assert "홍길동 이직 전략" in text
-        indexed_card = mock_index.call_args.args[0]
-        assert indexed_card.question == "홍길동 이직 전략"
 
     def test_strips_claude_meta_prefix(self) -> None:
-        records = [
-            (_mock_record("dansim", "card_project", "단심", "# 단심"), 0.4),
-        ]
-        store = self._setup_store(records)
+        index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
+            ask_mod, "build_card_index", return_value=index
+        ), patch.object(
+            ask_mod, "select_related", return_value=["dansim"]
+        ), patch.object(
+            ask_mod, "_load_card_text", return_value="# 단심"
         ), patch.object(
             ask_mod.ai_api,
             "complete",
             return_value="Note: I will answer from the cards.\n\n단심앱입니다 [dansim].",
         ):
-            result = ask("뭐 만들었어?", store=store, ai_env=_ai_env())
+            result = ask("뭐 만들었어?", ai_env=_ai_env())
 
         assert result.answer == "단심앱입니다 [dansim]."
 
-    def test_passes_where_filter(self) -> None:
-        store = self._setup_store([])
-        with patch.object(ask_mod, "embed_query", return_value=[0.0]):
-            ask(
-                "q",
-                store=store,
-                ai_env=_ai_env(),
-                where={"source_kind": "card_project"},
-            )
-        kwargs = store.query.call_args.kwargs
-        assert kwargs["where"] == {"source_kind": "card_project"}
+    def test_where_filter_restricts_kinds(self) -> None:
+        captured: dict[str, object] = {}
 
-    def test_top_k_passed(self) -> None:
-        store = self._setup_store([])
-        with patch.object(ask_mod, "embed_query", return_value=[0.0]):
-            ask("q", top_k=10, store=store, ai_env=_ai_env())
-        assert store.query.call_args.kwargs["top_k"] == 10
+        def _fake_build(**kwargs: object) -> CardIndex:
+            captured.update(kwargs)
+            return _index()
+
+        with patch.object(ask_mod, "build_card_index", side_effect=_fake_build):
+            ask("q", ai_env=_ai_env(), where={"source_kind": "card_project"})
+        assert captured["kinds"] == ("project",)
+
+    def test_top_k_passed_to_select(self) -> None:
+        index = _index(_entry("x", "project", "X"))
+        with patch.object(
+            ask_mod, "build_card_index", return_value=index
+        ), patch.object(
+            ask_mod, "select_related", return_value=[]
+        ) as mock_select:
+            ask("q", top_k=10, ai_env=_ai_env())
+        assert mock_select.call_args.kwargs["max_pages"] == 10
 
     def test_claude_receives_context(self) -> None:
-        records = [
-            (_mock_record("x", "card_project", "X", "# X 내용 풍부"), 0.3),
-        ]
-        store = self._setup_store(records)
+        index = _index(_entry("x", "project", "X"))
         with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
+            ask_mod, "build_card_index", return_value=index
+        ), patch.object(
+            ask_mod, "select_related", return_value=["x"]
+        ), patch.object(
+            ask_mod, "_load_card_text", return_value="# X 내용 풍부"
         ), patch.object(
             ask_mod.ai_api, "complete", return_value="답변"
         ) as mock_complete:
-            ask("문의", store=store, ai_env=_ai_env())
+            ask("문의", ai_env=_ai_env())
 
         prompt = mock_complete.call_args.args[0]
         assert "문의" in prompt
         assert "[x]" in prompt
         assert "X 내용 풍부" in prompt
-
-    def test_hybrid_uses_hybrid_search_order(self) -> None:
-        store = self._setup_store([])
-        hybrid_record = _mock_record(
-            "danggeun", "card_company", "당근마켓", "# 당근마켓"
-        )
-        with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
-        ), patch.object(
-            ask_mod,
-            "hybrid_search",
-            return_value=[
-                RetrievalHit(
-                    record=hybrid_record,
-                    dense_rank=2,
-                    dense_distance=0.4,
-                    bm25_rank=1,
-                    bm25_score=3.0,
-                    rrf_score=0.03,
-                )
-            ],
-        ) as mock_hybrid, patch.object(
-            ask_mod.ai_api,
-            "complete",
-            return_value="당근마켓 경험입니다 [danggeun].",
-        ):
-            result = ask("당근마켓 경험", store=store, ai_env=_ai_env(), hybrid=True)
-
-        assert result.sources[0].card_id == "danggeun"
-        assert result.sources[0].distance == 0.03
-        mock_hybrid.assert_called_once()
-
-    def test_hybrid_missing_bm25_sidecar_raises(self) -> None:
-        store = self._setup_store([])
-        with patch.object(ask_mod, "embed_query", return_value=[0.0]), patch.object(
-            ask_mod,
-            "hybrid_search",
-            side_effect=BM25IndexError("BM25 sidecar 없음"),
-        ), pytest.raises(BM25IndexError):
-            ask("당근마켓", store=store, ai_env=_ai_env(), hybrid=True)
-
-    def test_hybrid_prompt_uses_redacted_raw_context(self) -> None:
-        store = self._setup_store([])
-        raw_record = VectorRecord(
-            id="raw_obsidian:abc:0",
-            document="연락처 [EMAIL_1] 당근마켓",
-            embedding=[0.0],
-            metadata={
-                "source_kind": "raw_obsidian",
-                "path": "10_Active/secret.md",
-                "chunk_index": 0,
-                "display_name": "secret.md",
-            },
-        )
-        with patch.object(
-            ask_mod, "embed_query", return_value=[0.0]
-        ), patch.object(
-            ask_mod,
-            "hybrid_search",
-            return_value=[
-                RetrievalHit(
-                    record=raw_record,
-                    dense_rank=None,
-                    dense_distance=None,
-                    bm25_rank=1,
-                    bm25_score=3.0,
-                    rrf_score=0.02,
-                )
-            ],
-        ), patch.object(
-            ask_mod.ai_api,
-            "complete",
-            return_value="redacted raw 근거입니다 [raw_obsidian:abc:0].",
-        ) as mock_complete:
-            ask("당근마켓", store=store, ai_env=_ai_env(), hybrid=True)
-
-        prompt = mock_complete.call_args.args[0]
-        assert "user@example.com" not in prompt
-        assert "[EMAIL_1]" in prompt
