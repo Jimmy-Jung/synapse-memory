@@ -20,17 +20,14 @@ graceful `[]`를 반환한다.
 """
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
 from synapse_memory.llm import ai_api
-from synapse_memory.wiki.index import index_one_page
 from synapse_memory.wiki.page import (
     WikiPage,
     extract_wikilinks,
-    load_page,
     save_page,
     slugify,
 )
@@ -64,32 +61,22 @@ def _retrieve_wiki(
     vault_path: Path | None = None,
     top_k: int = DEFAULT_TOP_K,
 ) -> list[WikiPage]:
-    """rag 의미검색(where=wiki)으로 관련 wiki 페이지를 로드. rag 부재/오류 시 ``[]``."""
-    try:
-        from synapse_memory.rag import embed_query, open_vector_store
+    """provider LLM(claude|codex)로 관련 wiki 페이지를 선별·로드 (020).
 
-        store = open_vector_store()
-        results = store.query(
-            embed_query(query),
-            top_k=top_k,
-            where={"source_kind": "wiki"},
-        )
-        pages: list[WikiPage] = []
-        for rec, _dist in results:
-            meta = rec.metadata or {}
-            page_type = meta.get("type")
-            slug = meta.get("slug")
-            if not page_type or not slug:
-                continue
-            try:
-                pages.append(
-                    load_page(str(page_type), str(slug), vault_path=vault_path)
-                )
-            except (FileNotFoundError, ValueError):
-                continue
-        return pages
-    except Exception:
+    로컬 임베딩(bge-m3)/벡터스토어 제거 — PageIndex를 provider에 넘겨 관련 slug를
+    고른 뒤 해당 페이지를 반환한다. 빈 vault/오류 시 ``[]`` (graceful).
+    """
+    from synapse_memory.wiki.llm_retrieval import select_related
+    from synapse_memory.wiki.page_index import build_page_index
+    from synapse_memory.wiki.retrieval import _all_pages
+
+    all_pages = _all_pages(vault_path)
+    if not all_pages:
         return []
+    index = build_page_index(all_pages)
+    by_slug = {p.slug: p for p in all_pages}
+    slugs = select_related(query, index, max_pages=top_k)
+    return [by_slug[s] for s in slugs if s in by_slug]
 
 
 def _build_context(pages: list[WikiPage]) -> str:
@@ -167,6 +154,5 @@ def _write_back(
         updated=today or date.today().isoformat(),
     )
     save_page(page, vault_path=vault_path)
-    with contextlib.suppress(Exception):
-        index_one_page(page)
+    # 020: 벡터 재인덱싱 제거 — provider-only(로컬 임베딩 미사용). 페이지는 디스크에만.
     return slug

@@ -41,16 +41,21 @@ def run_watch_cycle(
 
     idle_minutes 미지정 시 ``config.maintenance.idle_minutes``를 사용한다.
     """
+    cfg = get_config().maintenance
     if idle_minutes is None:
-        idle_minutes = get_config().maintenance.idle_minutes
+        idle_minutes = cfg.idle_minutes
     if lock_path is None:
         lock_path = default_lock_path()
     try:
         with FileLock(lock_path):
+            # 020: bounded 단명 사이클 — limit로 메모리 천장, checkpoint_each로 doc별
+            # watermark 저장(중단/kill돼도 다음 사이클이 이어서 = 재처리 악순환 차단).
             result = ingest_source(
                 source,
                 min_age_seconds=idle_minutes * SECONDS_PER_MINUTE,
                 vault_path=vault_path,
+                limit=cfg.max_docs_per_cycle,
+                checkpoint_each=True,
             )
             return CycleOutcome(ran=True, skipped_reason=None, result=result)
     except LockHeldError:

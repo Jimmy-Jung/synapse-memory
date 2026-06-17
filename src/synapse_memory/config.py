@@ -42,6 +42,8 @@ class ClaudeModelsConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
+    # 020: 로컬 임베딩 대체 — wiki 관련 페이지 선별(LLM-as-retriever). 싼 티어.
+    relevance: str = "haiku"
 
 
 @dataclass
@@ -55,6 +57,8 @@ class CodexModelsConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
+    # 020: 로컬 임베딩 대체 — wiki 관련 페이지 선별(LLM-as-retriever). 싼 티어.
+    relevance: str = "gpt-5.5"
 
 
 @dataclass
@@ -223,6 +227,9 @@ class MaintenanceConfig:
 
     engine: str = "claude"
     idle_minutes: int = 3
+    # 020: bounded 단명 잡 — 사이클당 doc 상한(메모리 천장) + 스케줄 주기(분).
+    max_docs_per_cycle: int = 25
+    interval_minutes: int = 20
 
 
 @dataclass
@@ -436,6 +443,18 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
     if cfg.maintenance.idle_minutes < 1:
         errors.append(
             f"maintenance.idle_minutes는 1 이상 — 현재: {cfg.maintenance.idle_minutes}"
+        )
+
+    if cfg.maintenance.max_docs_per_cycle < 1:
+        errors.append(
+            "maintenance.max_docs_per_cycle는 1 이상 — 현재: "
+            f"{cfg.maintenance.max_docs_per_cycle}"
+        )
+
+    if cfg.maintenance.interval_minutes < 1:
+        errors.append(
+            "maintenance.interval_minutes는 1 이상 — 현재: "
+            f"{cfg.maintenance.interval_minutes}"
         )
 
     for field_name in (

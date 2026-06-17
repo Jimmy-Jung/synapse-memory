@@ -78,17 +78,3 @@ def test_ingest_error_isolation(tmp_path, monkeypatch) -> None:
     assert result.docs_processed == 2
     assert len(result.errors) == 1
     assert "ok" in result.pages_written
-
-
-def test_ingest_reindexes_written_pages(tmp_path, monkeypatch) -> None:
-    raw_root = tmp_path / "raw" / "claude-code"
-    _write_session(raw_root, "s", "RAG 정리")
-    state = tmp_path / "state.json"
-    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured",
-        _fake_complete_structured({"operations": [
-            {"op": "create", "type": "concept", "slug": "rag", "title": "RAG", "body": "b"}]}))
-    seen = []
-    monkeypatch.setattr(ingest_mod, "index_one_page", lambda page, **kw: seen.append(page.slug))
-    ingest_source("claude-code", vault_path=tmp_path, raw_root=raw_root,
-                  watermark_path=state, ai_env=None, today="2026-06-14")
-    assert "rag" in seen

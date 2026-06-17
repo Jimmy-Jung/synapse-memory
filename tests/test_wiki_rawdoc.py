@@ -28,7 +28,7 @@ def test_extracts_text_from_message_events(tmp_path: Path) -> None:
              "content": [{"type": "text", "text": "MVVM 입니다"}]}},
         ],
     )
-    docs = iter_new_raw("claude-code", since=None, root=root)
+    docs = list(iter_new_raw("claude-code", since=None, root=root))
     assert len(docs) == 1
     assert isinstance(docs[0], RawDoc)
     assert "프로젝트 구조 알려줘" in docs[0].text
@@ -44,13 +44,13 @@ def test_since_filters_older_files(tmp_path: Path) -> None:
     _write_jsonl(new, [{"message": {"role": "user", "content": "new"}}])
     os.utime(old, (1_000_000_000, 1_000_000_000))
     os.utime(new, (2_000_000_000, 2_000_000_000))
-    docs = iter_new_raw("claude-code", since="2020-01-01T00:00:00", root=root)
+    docs = list(iter_new_raw("claude-code", since="2020-01-01T00:00:00", root=root))
     texts = [d.text for d in docs]
     assert "new" in texts and "old" not in texts
 
 
 def test_missing_root_returns_empty(tmp_path: Path) -> None:
-    assert iter_new_raw("claude-code", since=None, root=tmp_path / "nope") == []
+    assert list(iter_new_raw("claude-code", since=None, root=tmp_path / "nope")) == []
 
 
 def test_skips_unparseable_lines(tmp_path: Path) -> None:
@@ -58,6 +58,6 @@ def test_skips_unparseable_lines(tmp_path: Path) -> None:
     f = root / "s.jsonl"
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text('{"message":{"role":"user","content":"ok"}}\nGARBAGE\n', encoding="utf-8")
-    docs = iter_new_raw("claude-code", since=None, root=root)
+    docs = list(iter_new_raw("claude-code", since=None, root=root))
     assert len(docs) == 1
     assert "ok" in docs[0].text

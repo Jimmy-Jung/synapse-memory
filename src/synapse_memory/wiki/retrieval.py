@@ -27,29 +27,25 @@ _DEFAULT = object()
 SemanticFn = Callable[..., list[str]]
 
 
-def _default_semantic(text: str, *, vault_path: Path | None, top_k: int) -> list[str]:
-    """rag 의미검색으로 wiki 페이지 slug top-k를 반환. rag 부재/오류 시 ``[]``.
+def _default_semantic(
+    text: str,
+    *,
+    vault_path: Path | None,
+    top_k: int,
+    pages: list[WikiPage] | None = None,
+) -> list[str]:
+    """provider LLM(claude|codex)로 관련 wiki 페이지 slug를 선별 (020).
 
-    빈/부재 store에서도 안전하게 ``[]``를 보장해 기존 회귀 테스트가
-    실제 벡터 스토어를 건드리지 않게 한다.
+    로컬 임베딩(bge-m3) 제거 — PageIndex를 provider에 넘겨 LLM-as-retriever로 선별.
+    실패/빈 인덱스 → ``[]`` (graceful, ingest 진행 보존). ``pages`` 주입 시 디스크
+    재로드를 피한다.
     """
-    try:
-        from synapse_memory.rag import embed_query, open_vector_store
+    from synapse_memory.wiki.llm_retrieval import select_related
+    from synapse_memory.wiki.page_index import build_page_index
 
-        store = open_vector_store()
-        results = store.query(
-            embed_query(text),
-            top_k=top_k,
-            where={"source_kind": "wiki"},
-        )
-        slugs: list[str] = []
-        for rec, _dist in results:
-            slug = (rec.metadata or {}).get("slug")
-            if slug:
-                slugs.append(str(slug))
-        return slugs
-    except Exception:
-        return []
+    all_pages = pages if pages is not None else _all_pages(vault_path)
+    index = build_page_index(all_pages)
+    return select_related(text, index, max_pages=top_k)
 
 
 def _all_pages(vault_path: Path | None) -> list[WikiPage]:
@@ -91,6 +87,7 @@ def find_related_pages(
     vault_path: Path | None = None,
     max_pages: int = DEFAULT_MAX_PAGES,
     semantic_fn: SemanticFn | None = _DEFAULT,  # type: ignore[assignment]
+    pages: list[WikiPage] | None = None,
 ) -> list[WikiPage]:
     """본문과 관련된 기존 페이지. 이름(title/slug) 매칭 + 의미 top-k + related 1-hop.
 
@@ -107,7 +104,7 @@ def find_related_pages(
     )
 
     haystack = text.lower()
-    all_pages = _all_pages(vault_path)
+    all_pages = pages if pages is not None else _all_pages(vault_path)
 
     matched: list[WikiPage] = []
     matched_slugs: set[str] = set()
@@ -119,9 +116,16 @@ def find_related_pages(
             matched_slugs.add(p.slug)
 
     if resolved_semantic is not None:
-        semantic_slugs = resolved_semantic(
-            text, vault_path=vault_path, top_k=max_pages
-        )
+        # 기본(provider) 경로는 재로드 방지 위해 pages 주입. 커스텀 semantic_fn은
+        # 기존 (text, vault_path, top_k) 계약 유지.
+        if resolved_semantic is _default_semantic:
+            semantic_slugs = _default_semantic(
+                text, vault_path=vault_path, top_k=max_pages, pages=all_pages
+            )
+        else:
+            semantic_slugs = resolved_semantic(
+                text, vault_path=vault_path, top_k=max_pages
+            )
         for slug in semantic_slugs:
             if slug in matched_slugs:
                 continue
