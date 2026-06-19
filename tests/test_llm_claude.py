@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from unittest.mock import patch
 
@@ -90,10 +91,32 @@ class TestEnvironment:
         env = ClaudeEnvironment(claude_path="/x", claude_version="1.0")
         assert env.ready is True
 
-    def test_detect_no_cli(self) -> None:
+    def test_detect_no_cli(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(os.path, "isfile", lambda _path: False)
         with patch("synapse_memory.llm.claude.shutil.which", return_value=None):
             env = detect_claude_environment()
             assert env.ready is False
+
+    def test_detect_uses_known_path_fallback(
+        self, tmp_path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        claude_bin = tmp_path / ".local" / "bin" / "claude"
+        claude_bin.parent.mkdir(parents=True)
+        claude_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+        claude_bin.chmod(0o755)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setattr("synapse_memory.llm.claude.shutil.which", lambda _name: None)
+
+        def fake_run(*_args, **_kwargs):
+            return _mock_proc(stdout="2.0.0 (Claude Code)")
+
+        monkeypatch.setattr("synapse_memory.llm.claude.subprocess.run", fake_run)
+
+        env = detect_claude_environment()
+
+        assert env.ready is True
+        assert env.claude_path == str(claude_bin)
+        assert env.claude_version == "2.0.0 (Claude Code)"
 
 
 # ---------------------------------------------------------------------------

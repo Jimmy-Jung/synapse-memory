@@ -716,10 +716,13 @@ def cmd_watch_run(args: argparse.Namespace) -> int:
     result = outcome.result
     pages = getattr(result, "pages_written", []) or []
     docs = getattr(result, "docs_processed", 0)
-    print(f"watch run: docs={docs}, pages={len(pages)}")
+    errors = getattr(result, "errors", []) or []
+    print(f"watch run: docs={docs}, pages={len(pages)}, errors={len(errors)}")
     if pages:
         print("  written: " + ", ".join(pages))
-    return 0
+    for error in errors:
+        print(f"  error: {error}", file=sys.stderr)
+    return 1 if errors else 0
 
 
 def cmd_watch_install(args: argparse.Namespace) -> int:
@@ -3220,7 +3223,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_lint.set_defaults(func=cmd_lint)
 
     p_watch = sub.add_parser(
-        "watch", help="자동 통합 데몬 (launchd WatchPaths + 유휴 + 락)"
+        "watch", help="자동 통합 데몬 (launchd StartInterval + 유휴 + 락)"
     )
     watch_sub = p_watch.add_subparsers(dest="action", required=True, metavar="ACTION")
     p_watch_run = watch_sub.add_parser("run", help="watch 사이클 1회 실행")

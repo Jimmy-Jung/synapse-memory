@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import plistlib
+
 from synapse_memory.wiki.launchd import (
     LABEL,
     build_plist,
@@ -19,6 +21,34 @@ def test_build_plist_has_startinterval_and_program() -> None:
     assert "watch" in xml and "run" in xml
     assert "1200" in xml
     assert xml.lstrip().startswith("<?xml")
+
+
+def test_build_plist_includes_daemon_path(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "HOME",
+        "/Users/jimmy",
+    )
+    monkeypatch.setenv("PATH", "/Users/jimmy/.codex/tmp/arg0:/Users/jimmy/bin:/usr/bin")
+    monkeypatch.setattr(
+        "synapse_memory.wiki.launchd.shutil.which",
+        lambda name: "/Users/jimmy/.local/bin/claude" if name == "claude" else None,
+    )
+
+    xml = build_plist(
+        program_args=["/opt/synapse/bin/synapse-memory", "watch", "run"],
+        interval_seconds=1200,
+    )
+    payload = plistlib.loads(xml.encode("utf-8"))
+
+    path = payload["EnvironmentVariables"]["PATH"]
+    assert path.split(":")[:3] == [
+        "/opt/synapse/bin",
+        "/Users/jimmy/.local/bin",
+        "/Users/jimmy/bin",
+    ]
+    assert "/usr/bin" in path
+    assert "/bin" in path
+    assert "/Users/jimmy/.codex/tmp/arg0" not in path
 
 
 def test_plist_path_under_launchagents(tmp_path) -> None:

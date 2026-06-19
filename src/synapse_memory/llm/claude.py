@@ -18,6 +18,7 @@ NOTE: ``--bare`` 모드는 OAuth/keychain 인증을 무시하고 ANTHROPIC_API_K
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -38,6 +39,24 @@ _CODE_FENCE_RE = re.compile(
     r"^\s*```(?:json|JSON)?\s*\n?(?P<body>.*?)\n?\s*```\s*$",
     re.DOTALL,
 )
+
+
+def _known_claude_paths() -> tuple[str, ...]:
+    return (
+        os.path.expanduser("~/.local/bin/claude"),
+        "/usr/local/bin/claude",
+        "/opt/homebrew/bin/claude",
+    )
+
+
+def _resolve_claude_path() -> str | None:
+    path = shutil.which(CLAUDE_BIN)
+    if path:
+        return path
+    for candidate in _known_claude_paths():
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
 
 
 class ClaudeError(RuntimeError):
@@ -67,7 +86,7 @@ class ClaudeEnvironment:
 
 
 def detect_claude_environment(model: str = DEFAULT_MODEL) -> ClaudeEnvironment:
-    path = shutil.which(CLAUDE_BIN)
+    path = _resolve_claude_path()
     version = None
     if path:
         try:
