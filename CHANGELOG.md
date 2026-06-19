@@ -2,6 +2,30 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.17.5] — 2026-06-19
+
+watch LaunchAgent가 정상 실행 중이어도 launchd 환경에서 `claude` CLI를 찾지 못해
+wiki 갱신이 `docs>0, pages=0`으로 조용히 멈추던 문제를 수정했다.
+
+### Fixed
+
+- `synapse-memory watch install`이 생성하는 LaunchAgent plist에 데몬용
+  `EnvironmentVariables.PATH`를 추가해 launchd 기본 PATH 밖에 있는 `claude`와
+  `synapse-memory` 실행 파일을 찾을 수 있게 했다.
+- 데몬 PATH 생성 시 `.codex/tmp`, `.venv`, `/tmp` 같은 임시 경로를 영구 저장하지
+  않고, resolved 바이너리 디렉터리와 사용자/system bin 후보만 포함하도록 제한했다.
+- Claude provider가 `PATH` 조회에 실패해도 `~/.local/bin/claude`,
+  `/usr/local/bin/claude`, `/opt/homebrew/bin/claude` 실행 파일을 fallback으로
+  검사하도록 했다.
+- `watch run`이 ingest error 수를 stdout에 표시하고 각 error를 stderr에 기록하며,
+  error가 있으면 non-zero exit code를 반환하도록 해 launchd 로그에서 실패 원인을
+  바로 볼 수 있게 했다.
+
+### Documentation
+
+- `WATCH_DAEMON_DIAGNOSIS.md`에 원인 사슬, 적용된 수정, 기존 LaunchAgent 재설치
+  필요성, backlog drain 절차를 정리했다.
+
 ## [1.17.4] — 2026-06-17
 
 local embedding/BM25/vector index hot path를 제거하고, Claude/Codex provider retrieval과 markdown-backed index로 wiki·recipe·persona 질의를 단순화했다.
