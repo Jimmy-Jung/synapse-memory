@@ -155,9 +155,17 @@ def ingest_source(
         is_large_doc = len(doc.text) > LARGE_DOC_CHAR_THRESHOLD
         try:
             for chunk in _integration_chunks(doc.ref, doc.text):
-                related = find_related_pages(
-                    chunk.text, vault_path=vault_path, pages=all_pages
-                )
+                if is_large_doc:
+                    related = find_related_pages(
+                        chunk.text,
+                        vault_path=vault_path,
+                        pages=all_pages,
+                        semantic_fn=None,
+                    )
+                else:
+                    related = find_related_pages(
+                        chunk.text, vault_path=vault_path, pages=all_pages
+                    )
                 prompt = build_integration_prompt(chunk.text, related)
                 payload = ai_api.complete_structured(
                     prompt, system=INTEGRATION_SYSTEM, model=model,

@@ -88,16 +88,22 @@ def test_large_doc_is_chunked_for_integration_calls(tmp_path, monkeypatch) -> No
         "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda",
     )
     prompts: list[str] = []
+    semantic_args: list[object] = []
     timeouts: list[int] = []
     monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
     monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_TOKENS", 4, raising=False)
     monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_OVERLAP", 0, raising=False)
+
+    def fake_related(text, *, vault_path=None, pages=None, semantic_fn="default"):
+        semantic_args.append(semantic_fn)
+        return []
 
     def fake_complete(prompt, *, system=None, model=None, json_schema=None, env=None, timeout=120, **kw):
         prompts.append(prompt)
         timeouts.append(timeout)
         return {"operations": []}
 
+    monkeypatch.setattr(ingest_mod, "find_related_pages", fake_related)
     monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", fake_complete)
     result = ingest_source(
         "claude-code",
@@ -111,6 +117,7 @@ def test_large_doc_is_chunked_for_integration_calls(tmp_path, monkeypatch) -> No
     assert result.docs_processed == 1
     assert result.docs_skipped == 0
     assert len(prompts) == 3
+    assert semantic_args == [None, None, None]
     assert timeouts == [300, 300, 300]
     assert "alpha beta gamma delta" in prompts[0]
     assert "epsilon zeta eta theta" in prompts[1]
