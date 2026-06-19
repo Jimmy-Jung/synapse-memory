@@ -31,3 +31,13 @@ def test_ingest_dry_run_flag(monkeypatch) -> None:
     monkeypatch.setattr(cli, "ingest_source", fake_ingest)
     cli.main(["ingest", "--now", "--dry-run"])
     assert captured["dry_run"] is True
+
+
+def test_ingest_prints_skipped_count(monkeypatch, capsys) -> None:
+    def fake_ingest(source, **kwargs):
+        return IngestResult(source=source, docs_processed=1, docs_skipped=1)
+
+    monkeypatch.setattr(cli, "ingest_source", fake_ingest)
+    rc = cli.main(["ingest", "--now", "--source", "codex"])
+    assert rc == 0
+    assert "skipped=1" in capsys.readouterr().out

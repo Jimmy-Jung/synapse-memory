@@ -78,3 +78,76 @@ def test_ingest_error_isolation(tmp_path, monkeypatch) -> None:
     assert result.docs_processed == 2
     assert len(result.errors) == 1
     assert "ok" in result.pages_written
+
+
+def test_large_doc_is_chunked_for_integration_calls(tmp_path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(
+        raw_root,
+        "large",
+        "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda",
+    )
+    prompts: list[str] = []
+    timeouts: list[int] = []
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_TOKENS", 4, raising=False)
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_OVERLAP", 0, raising=False)
+
+    def fake_complete(prompt, *, system=None, model=None, json_schema=None, env=None, timeout=120, **kw):
+        prompts.append(prompt)
+        timeouts.append(timeout)
+        return {"operations": []}
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", fake_complete)
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        ai_env=None,
+        today="2026-06-14",
+    )
+
+    assert result.docs_processed == 1
+    assert result.docs_skipped == 0
+    assert len(prompts) == 3
+    assert timeouts == [300, 300, 300]
+    assert "alpha beta gamma delta" in prompts[0]
+    assert "epsilon zeta eta theta" in prompts[1]
+    assert "iota kappa lambda" in prompts[2]
+
+
+def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypatch) -> None:
+    import os
+    from datetime import datetime
+
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "large", "alpha beta gamma delta epsilon zeta")
+    session_path = raw_root / "large.jsonl"
+    mtime = 1_700_000_000
+    os.utime(session_path, (mtime, mtime))
+    state = tmp_path / "state.json"
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_TOKENS", 4, raising=False)
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_OVERLAP", 0, raising=False)
+
+    def timeout(*args, **kwargs):
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", timeout)
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=state,
+        ai_env=None,
+        today="2026-06-14",
+        checkpoint_each=True,
+    )
+
+    expected = datetime.fromtimestamp(mtime).isoformat(timespec="microseconds")
+    assert result.docs_processed == 1
+    assert result.docs_skipped == 1
+    assert result.errors == []
+    assert load_watermark("claude-code", path=state) == expected
+    assert "skipped large doc" in (tmp_path / "log.md").read_text(encoding="utf-8")

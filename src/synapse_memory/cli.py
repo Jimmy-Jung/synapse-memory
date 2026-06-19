@@ -664,7 +664,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     result = ingest_source(args.source, dry_run=dry, limit=args.limit)
     label = "(dry-run) " if dry else ""
     print(f"{label}ingest {result.source}: docs={result.docs_processed}, "
-          f"pages={len(result.pages_written)}")
+          f"pages={len(result.pages_written)}, skipped={result.docs_skipped}")
     if result.pages_written:
         print("  written: " + ", ".join(result.pages_written))
     if result.errors:
@@ -683,7 +683,8 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     )
     print(
         f"backfill {r.source}: {r.batches} batches, "
-        f"{r.docs_processed} docs, {len(r.pages_written)} pages"
+        f"{r.docs_processed} docs, {len(r.pages_written)} pages, "
+        f"skipped={r.docs_skipped}"
     )
     if r.errors:
         print(f"  errors: {len(r.errors)}")
@@ -721,6 +722,7 @@ def cmd_watch_run(args: argparse.Namespace) -> int:
     settled ingest만 1회씩 돌리고 결과를 합산한다.
     """
     total_docs = 0
+    total_docs_skipped = 0
     total_pages: list[str] = []
     total_errors: list[object] = []
     skipped: list[str] = []
@@ -733,11 +735,12 @@ def cmd_watch_run(args: argparse.Namespace) -> int:
         result = outcome.result
         total_pages.extend(getattr(result, "pages_written", []) or [])
         total_docs += getattr(result, "docs_processed", 0)
+        total_docs_skipped += getattr(result, "docs_skipped", 0)
         total_errors.extend(getattr(result, "errors", []) or [])
 
     print(
         f"watch run: docs={total_docs}, pages={len(total_pages)}, "
-        f"errors={len(total_errors)}"
+        f"errors={len(total_errors)}, skipped={total_docs_skipped}"
     )
     if total_pages:
         print("  written: " + ", ".join(total_pages))
