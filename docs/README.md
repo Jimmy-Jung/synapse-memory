@@ -30,6 +30,7 @@
    - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
    - apply 중복 질문 5중 차단 + codex 통합 + 관찰성 (v0.14.0)
    - 외부 데이터 수집기 13종 확장 — shell history, Cursor / Continue / Aider 세션, Apple Notes, Day One, VS Code Local History, iMessage, Gmail, Calendar, 브라우저 history, Screen Time, Apple Health (v0.15.0)
+   - Codex 세션을 wiki 통합 소스로 추가 (`collect codex`, `ingest --source codex`, `backfill --source codex`)
 
 ## 한 문장으로 이해하기
 

@@ -36,7 +36,7 @@ def test_checkpoint_advances_watermark_midway(tmp_path, monkeypatch) -> None:
     ingest_source("claude-code", vault_path=tmp_path, raw_root=root,
                   watermark_path=state, ai_env=None, today="2026-06-15", checkpoint_each=True)
     from datetime import datetime
-    expected = datetime.fromtimestamp(1_700_000_000).isoformat(timespec="seconds")
+    expected = datetime.fromtimestamp(1_700_000_000).isoformat(timespec="microseconds")
     assert load_watermark("claude-code", path=state) == expected
 
 

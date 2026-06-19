@@ -61,3 +61,112 @@ def test_skips_unparseable_lines(tmp_path: Path) -> None:
     docs = list(iter_new_raw("claude-code", since=None, root=root))
     assert len(docs) == 1
     assert "ok" in docs[0].text
+
+
+# ---------------------------------------------------------------------------
+# codex 소스
+# ---------------------------------------------------------------------------
+
+
+def test_codex_extracts_user_and_assistant_messages(tmp_path: Path) -> None:
+    root = tmp_path / "raw" / "codex"
+    f = root / "sessions" / "2026" / "06" / "19" / "rollout-x.jsonl"
+    _write_jsonl(
+        f,
+        [
+            {"type": "session_meta", "payload": {"id": "abc", "cwd": "/x"}},
+            {"type": "event_msg", "payload": {"type": "user_message",
+             "message": "프로젝트 구조 알려줘"}},
+            {"type": "response_item", "payload": {"type": "reasoning",
+             "content": [{"type": "text", "text": "think..."}]}},
+            {"type": "response_item", "payload": {"type": "message", "role": "assistant",
+             "content": [{"type": "output_text", "text": "MVVM 구조입니다"}]}},
+        ],
+    )
+    docs = list(iter_new_raw("codex", since=None, root=root))
+    assert len(docs) == 1
+    assert isinstance(docs[0], RawDoc)
+    assert docs[0].source == "codex"
+    assert "User: 프로젝트 구조 알려줘" in docs[0].text
+    assert "Assistant: MVVM 구조입니다" in docs[0].text
+    assert "think..." not in docs[0].text  # reasoning 제외
+    assert docs[0].ref == "codex:sessions/2026/06/19/rollout-x.jsonl"
+
+
+def test_codex_assistant_uses_response_item_not_truncated_agent_message(
+    tmp_path: Path,
+) -> None:
+    """agent_message(잘린 도입부) 대신 response_item/message 전체 본문을 써야 한다."""
+    root = tmp_path / "raw" / "codex"
+    f = root / "sessions" / "s.jsonl"
+    full = "도입부입니다.\n<proposed_plan>\n상세 계획 본문 전체\n</proposed_plan>\n마무리."
+    _write_jsonl(
+        f,
+        [
+            {"type": "event_msg", "payload": {"type": "agent_message",
+             "message": "도입부입니다."}},  # 잘린 lead-in — 무시돼야
+            {"type": "response_item", "payload": {"type": "message", "role": "assistant",
+             "content": [{"type": "output_text", "text": full}]}},
+        ],
+    )
+    docs = list(iter_new_raw("codex", since=None, root=root))
+    assert len(docs) == 1
+    # 전체 본문(구조블록 포함)이 보존돼야 한다.
+    assert "상세 계획 본문 전체" in docs[0].text
+    # agent_message 중복 라인이 추가로 들어가면 안 됨.
+    assert docs[0].text.count("도입부입니다.") == 1
+
+
+def test_no_skip_with_shared_second_mtimes_and_limit(tmp_path: Path) -> None:
+    """같은 초에 미러된 파일이 limit를 초과해도 watch 루프가 전량 처리(누락 0).
+
+    회귀: 과거 초 단위 mtime 절삭 + 경로순 + max-mtime watermark + limit 조합은
+    같은 초의 나머지 파일을 영구 skip시켜 대량 백필의 94%를 잃었다.
+    """
+    import itertools
+
+    root = tmp_path / "raw" / "codex"
+    base_ts = 1_700_000_000  # 동일 정수 초
+    for i in range(5):
+        f = root / "sessions" / f"s{i}.jsonl"
+        _write_jsonl(
+            f,
+            [{"type": "event_msg", "payload": {"type": "user_message",
+              "message": f"msg{i}"}}],
+        )
+        # 같은 초, 서로 다른 마이크로초 (미러 순차 기록 재현).
+        os.utime(f, (base_ts + i * 0.001, base_ts + i * 0.001))
+
+    # watch 루프 시뮬: 사이클당 limit=2, watermark를 처리한 doc의 max mtime_iso로 전진.
+    seen: list[str] = []
+    since: str | None = None
+    for _ in range(10):
+        docs = list(itertools.islice(iter_new_raw("codex", since=since, root=root), 2))
+        if not docs:
+            break
+        seen.extend(d.ref for d in docs)
+        since = max(d.mtime_iso for d in docs)
+
+    assert len(seen) == 5, f"전량 처리돼야 함, got {seen}"
+    assert len(set(seen)) == 5, f"중복 없어야 함, got {seen}"
+
+
+def test_codex_filters_noise_events(tmp_path: Path) -> None:
+    """developer 보일러플레이트 / token_count / function_call / user role-주입 은 제외."""
+    root = tmp_path / "raw" / "codex"
+    f = root / "sessions" / "s.jsonl"
+    _write_jsonl(
+        f,
+        [
+            {"type": "response_item", "payload": {"type": "message", "role": "developer",
+             "content": [{"type": "input_text", "text": "<permissions instructions>"}]}},
+            {"type": "response_item", "payload": {"type": "message", "role": "user",
+             "content": [{"type": "input_text", "text": "# AGENTS.md 주입"}]}},
+            {"type": "event_msg", "payload": {"type": "token_count"}},
+            {"type": "response_item", "payload": {"type": "function_call",
+             "name": "shell", "arguments": "{}"}},
+        ],
+    )
+    docs = list(iter_new_raw("codex", since=None, root=root))
+    # 노이즈만 있으면 텍스트 0 → doc 생성 안 됨.
+    assert docs == []

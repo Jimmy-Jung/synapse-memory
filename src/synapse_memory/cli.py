@@ -69,6 +69,10 @@ from synapse_memory.collectors.claude_code import (  # noqa: E402
     DEFAULT_CLAUDE_HOME,
     collect_claude_code,
 )
+from synapse_memory.collectors.codex import (  # noqa: E402
+    DEFAULT_CODEX_HOME,
+    collect_codex,
+)
 from synapse_memory.collectors.obsidian import (  # noqa: E402
     collect_obsidian,
     get_vault_path,
@@ -707,22 +711,41 @@ def cmd_lint(args: argparse.Namespace) -> int:
     return 0
 
 
+_WATCH_SOURCES = ("claude-code", "codex")
+
+
 def cmd_watch_run(args: argparse.Namespace) -> int:
-    """watch 사이클 1회 실행 (락 + 유휴 필터 ingest)."""
-    outcome = run_watch_cycle()
-    if not outcome.ran:
-        print(f"skipped: {outcome.skipped_reason}")
-        return 0
-    result = outcome.result
-    pages = getattr(result, "pages_written", []) or []
-    docs = getattr(result, "docs_processed", 0)
-    errors = getattr(result, "errors", []) or []
-    print(f"watch run: docs={docs}, pages={len(pages)}, errors={len(errors)}")
-    if pages:
-        print("  written: " + ", ".join(pages))
-    for error in errors:
+    """watch 사이클 1회 실행 — 등록 소스별 유휴 필터 ingest.
+
+    raw mirror(collect)는 SessionEnd 훅이 담당한다. 여기서는 소스별 watermark로
+    settled ingest만 1회씩 돌리고 결과를 합산한다.
+    """
+    total_docs = 0
+    total_pages: list[str] = []
+    total_errors: list[object] = []
+    skipped: list[str] = []
+
+    for source in _WATCH_SOURCES:
+        outcome = run_watch_cycle(source=source)
+        if not outcome.ran:
+            skipped.append(f"{source}:{outcome.skipped_reason}")
+            continue
+        result = outcome.result
+        total_pages.extend(getattr(result, "pages_written", []) or [])
+        total_docs += getattr(result, "docs_processed", 0)
+        total_errors.extend(getattr(result, "errors", []) or [])
+
+    print(
+        f"watch run: docs={total_docs}, pages={len(total_pages)}, "
+        f"errors={len(total_errors)}"
+    )
+    if total_pages:
+        print("  written: " + ", ".join(total_pages))
+    if skipped:
+        print("  skipped: " + ", ".join(skipped))
+    for error in total_errors:
         print(f"  error: {error}", file=sys.stderr)
-    return 1 if errors else 0
+    return 1 if total_errors else 0
 
 
 def cmd_watch_install(args: argparse.Namespace) -> int:
@@ -2853,6 +2876,27 @@ def cmd_collect_claude_code(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_collect_codex(args: argparse.Namespace) -> int:
+    """Codex 세션 로그를 L0로 mirror (incremental)."""
+    codex_home: Path = args.src.expanduser().resolve()
+    dst_root: Path = args.dst.expanduser().resolve()
+
+    if not codex_home.is_dir():
+        print(f"{FAIL} Codex home 없음: {codex_home}", file=sys.stderr)
+        return 2
+
+    print(f"수집 시작: {codex_home} → {dst_root}")
+    stats = collect_codex(codex_home=codex_home, dst_root=dst_root)
+    print(stats.summary())
+
+    if stats.errors:
+        print("에러:", file=sys.stderr)
+        for path, msg in stats.errors:
+            print(f"  {path}: {msg}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="synapse-memory",
@@ -2895,6 +2939,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="L0 mirror 루트 (기본: ~/.synapse/private/raw/claude-code)",
     )
     p_cc.set_defaults(func=cmd_collect_claude_code)
+
+    p_codex = collect_sub.add_parser(
+        "codex", help="Codex 세션 로그를 L0로 mirror"
+    )
+    p_codex.add_argument(
+        "--src",
+        type=Path,
+        default=DEFAULT_CODEX_HOME,
+        help=f"Codex home (기본: {DEFAULT_CODEX_HOME})",
+    )
+    p_codex.add_argument(
+        "--dst",
+        type=Path,
+        default=l0_root() / "raw" / "codex",
+        help="L0 mirror 루트 (기본: ~/.synapse/private/raw/codex)",
+    )
+    p_codex.set_defaults(func=cmd_collect_codex)
 
     p_obs = collect_sub.add_parser(
         "obsidian", help="Obsidian vault를 L0로 mirror"
@@ -3538,8 +3599,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_ingest = sub.add_parser("ingest", help="wiki ingest 엔진 (raw 대화 → wiki 통합)")
     p_ingest.add_argument("--now", action="store_true", help="즉시 1회 ingest")
-    p_ingest.add_argument("--source", default="claude-code", choices=["claude-code"],
-                          help="ingest 소스 (P1a: claude-code)")
+    p_ingest.add_argument("--source", default="claude-code", choices=["claude-code", "codex"],
+                          help="ingest 소스 (claude-code, codex)")
     p_ingest.add_argument("--dry-run", action="store_true", help="적용 없이 결과만 표시")
     p_ingest.add_argument("--limit", type=int, default=None, help="처리할 최대 doc 수")
     p_ingest.set_defaults(func=cmd_ingest)
@@ -3549,8 +3610,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="빈 vault 재구축 — 전체 raw 이력을 배치로 ingest (재개 가능)",
     )
     p_backfill.add_argument(
-        "--source", default="claude-code", choices=["claude-code"],
-        help="백필 소스 (claude-code)",
+        "--source", default="claude-code", choices=["claude-code", "codex"],
+        help="백필 소스 (claude-code, codex)",
     )
     p_backfill.add_argument(
         "--batch-size", type=int, default=20, help="배치당 처리할 doc 수",
