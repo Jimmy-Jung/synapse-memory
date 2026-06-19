@@ -11,6 +11,7 @@ launchctl을 절대 호출하지 않는다. ``home=``으로 테스트 격리도 
 """
 from __future__ import annotations
 
+import os
 import plistlib
 import shutil
 import subprocess
@@ -21,6 +22,56 @@ from synapse_memory.storage.l0 import l0_root
 
 LABEL = "com.synapse-memory.watch"
 DEFAULT_INTERVAL_SECONDS = 1200  # 20분 — config.maintenance.interval_minutes 폴백
+_STANDARD_PATHS = ("/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin")
+_USER_BIN_SUFFIXES = ("bin", ".local/bin", ".cargo/bin", ".npm/bin", ".bun/bin")
+_UNSTABLE_PATH_MARKERS = (
+    "/.codex/tmp/",
+    "/.venv/",
+    "/node_modules/",
+    "/private/tmp/",
+    "/private/var/folders/",
+    "/tmp/",
+    "/var/tmp/",
+)
+
+
+def _known_user_bin_paths() -> tuple[str, ...]:
+    home = os.path.normpath(os.path.expanduser("~"))
+    return tuple(os.path.join(home, suffix) for suffix in _USER_BIN_SUFFIXES)
+
+
+def _is_persistent_path(path: str) -> bool:
+    normalized = os.path.normpath(os.path.expanduser(path))
+    if not os.path.isabs(normalized):
+        return False
+    return not any(marker in f"{normalized}/" for marker in _UNSTABLE_PATH_MARKERS)
+
+
+def _daemon_path(program_args: list[str]) -> str:
+    """launchd 기본 환경에서도 CLI 바이너리를 찾는 안정적인 PATH를 만든다."""
+    parts: list[str] = []
+    program = program_args[0] if program_args else ""
+    if os.path.isabs(program):
+        program_dir = os.path.dirname(program)
+        if _is_persistent_path(program_dir):
+            parts.append(program_dir)
+    claude = shutil.which("claude")
+    if claude:
+        claude_dir = os.path.dirname(claude)
+        if _is_persistent_path(claude_dir):
+            parts.append(claude_dir)
+    parts.extend(_known_user_bin_paths())
+    parts.append("/opt/homebrew/bin")
+    parts.extend(_STANDARD_PATHS)
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for part in parts:
+        normalized = os.path.normpath(os.path.expanduser(part))
+        if _is_persistent_path(normalized) and normalized not in seen:
+            seen.add(normalized)
+            deduped.append(normalized)
+    return os.pathsep.join(deduped)
 
 
 def build_plist(*, program_args: list[str], interval_seconds: int) -> str:
@@ -35,6 +86,7 @@ def build_plist(*, program_args: list[str], interval_seconds: int) -> str:
         "StartInterval": int(interval_seconds),
         "ThrottleInterval": int(interval_seconds),
         "RunAtLoad": False,
+        "EnvironmentVariables": {"PATH": _daemon_path(program_args)},
         "StandardOutPath": str(l0_root() / "watch.out.log"),
         "StandardErrorPath": str(l0_root() / "watch.err.log"),
     }
