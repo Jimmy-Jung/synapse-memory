@@ -44,6 +44,32 @@ def _add_back_links(page: WikiPage, *, vault_path: Path | None) -> None:
             break
 
 
+def _merge_tuple(existing: tuple[str, ...], incoming: tuple[str, ...]) -> tuple[str, ...]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for value in (*existing, *incoming):
+        if value in seen:
+            continue
+        merged.append(value)
+        seen.add(value)
+    return tuple(merged)
+
+
+def _page_for_apply(page: WikiPage, op: str, *, vault_path: Path | None, stamp: str) -> WikiPage:
+    stamped = replace(page, updated=stamp)
+    if op != "update":
+        return stamped
+    try:
+        existing = load_page(page.type, page.slug, vault_path=vault_path)
+    except (FileNotFoundError, ValueError):
+        return stamped
+    return replace(
+        stamped,
+        related=_merge_tuple(existing.related, stamped.related),
+        sources=_merge_tuple(existing.sources, stamped.sources),
+    )
+
+
 def apply_ops(
     ops: list[PageOp],
     *,
@@ -54,7 +80,7 @@ def apply_ops(
     stamp = today or date.today().isoformat()
     written: list[str] = []
     for op in ops:
-        page = replace(op.page, updated=stamp)
+        page = _page_for_apply(op.page, op.op, vault_path=vault_path, stamp=stamp)
         save_page(page, vault_path=vault_path)
         written.append(page.slug)
         _add_back_links(page, vault_path=vault_path)

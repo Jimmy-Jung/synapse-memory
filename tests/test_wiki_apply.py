@@ -32,3 +32,40 @@ def test_apply_skips_backlink_when_target_missing(tmp_path: Path) -> None:
                 related=("[[ghost]]",), body="b"))
     written = apply_ops([op], vault_path=tmp_path, today="2026-06-14")
     assert written == ["p"]
+
+
+def test_apply_update_preserves_existing_sources_and_related(tmp_path: Path) -> None:
+    save_page(
+        WikiPage(
+            type="project",
+            slug="tablet",
+            title="Tablet",
+            related=("[[ai-profile]]",),
+            sources=("vault-md:tablet.md", "codex:old-session"),
+            body="old body",
+        ),
+        vault_path=tmp_path,
+    )
+    op = PageOp(
+        op="update",
+        page=WikiPage(
+            type="project",
+            slug="tablet",
+            title="Tablet",
+            related=("[[cursor-ide-ios-workflow]]",),
+            sources=("codex:new-session",),
+            body="new body",
+        ),
+    )
+
+    apply_ops([op], vault_path=tmp_path, today="2026-06-20")
+
+    saved = load_page("project", "tablet", vault_path=tmp_path)
+    assert saved.body == "new body"
+    assert saved.updated == "2026-06-20"
+    assert saved.related == ("[[ai-profile]]", "[[cursor-ide-ios-workflow]]")
+    assert saved.sources == (
+        "vault-md:tablet.md",
+        "codex:old-session",
+        "codex:new-session",
+    )
