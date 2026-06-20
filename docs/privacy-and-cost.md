@@ -104,6 +104,11 @@ synapse-memory cost summary --days 30 --by command
 - 매일은 quick, 주 1회만 full `daily`를 실행합니다.
 - Codex backfill 전에는 `synapse-memory ingest-audit --source codex --limit 50`으로
   pending queue의 `estimated_llm_calls`와 `oversize`를 먼저 확인합니다.
+- 백필 비용을 더 낮춰 검증할 때는
+  `synapse-memory ingest-audit --source codex --limit 50 --no-semantic-retrieval`로
+  저비용 예상 호출 수를 확인한 뒤,
+  `synapse-memory backfill --source codex --batch-size 5 --max-batches 1 --no-semantic-retrieval`
+  처럼 작은 배치로 실행합니다.
 - 수집 소스가 많을수록 대화 단위 외부 AI 호출이 늘어납니다. 불필요한 소스(예: Codex)는 비활성화해 호출 수를 줄입니다.
 - 같은 질문을 반복하기 전에 카드와 Profile 후보를 먼저 검토합니다.
 - 불필요한 draft와 오래된 MemoryInbox 후보는 Claude Code `/sm:cleanup`, Codex
@@ -114,6 +119,10 @@ ingest는 대형 문서 비용을 줄이기 위해 문서 크기별로 다르게
 넘고 120,000자 이하인 문서는 관련 페이지 선별을 끄고 20,000자 이내 샘플만 1회
 통합합니다. 120,000자를 넘는 초대형 문서는 외부 AI에 보내지 않고 skip하며, 같은
 파일을 무한 재시도하지 않도록 watermark를 전진시킵니다.
+
+`--no-semantic-retrieval`은 40,000자 이하 문서에서도 관련 페이지 선별 호출을 생략해
+호출 수를 줄입니다. 대신 기존 페이지를 갱신할지 새 페이지를 만들지 판단하는 품질은
+기본 모드보다 낮을 수 있습니다.
 
 ## 노트북을 잃어버리면 어떻게 되나요?
 

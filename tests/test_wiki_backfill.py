@@ -63,3 +63,23 @@ def test_backfill_continues_after_skipped_batch(tmp_path, monkeypatch) -> None:
     assert result.batches == 2
     assert result.docs_processed == 1
     assert result.docs_skipped == 1
+
+
+def test_backfill_can_disable_semantic_retrieval(tmp_path, monkeypatch) -> None:
+    captured = {}
+
+    def fake_ingest(source, **kw):
+        captured["semantic_retrieval"] = kw.get("semantic_retrieval")
+        return IngestResult(source=source, docs_processed=0)
+
+    monkeypatch.setattr(bf, "ingest_source", fake_ingest)
+    result = run_backfill(
+        source="codex",
+        vault_path=tmp_path,
+        batch_size=5,
+        max_batches=1,
+        semantic_retrieval=False,
+    )
+
+    assert result.batches == 1
+    assert captured["semantic_retrieval"] is False

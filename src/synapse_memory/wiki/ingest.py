@@ -77,14 +77,14 @@ class IngestRoute:
     text_chars: int
 
 
-def classify_ingest_text(text: str) -> IngestRoute:
+def classify_ingest_text(text: str, *, semantic_retrieval: bool = True) -> IngestRoute:
     """ingest 비용 정책을 단일 기준으로 분류한다."""
     text_chars = len(text)
     if text_chars <= LARGE_DOC_CHAR_THRESHOLD:
         return IngestRoute(
             kind="small",
             # small 문서는 provider 기반 관련 페이지 선별 + 통합 호출을 모두 사용한다.
-            estimated_llm_calls=2,
+            estimated_llm_calls=2 if semantic_retrieval else 1,
             text_chars=text_chars,
         )
     if text_chars <= SAMPLED_DOC_CHAR_LIMIT:
@@ -172,6 +172,7 @@ def ingest_source(
     today: str | None = None,
     min_age_seconds: float | None = None,
     checkpoint_each: bool = False,
+    semantic_retrieval: bool = True,
 ) -> IngestResult:
     """source의 새 RawDoc을 ingest. dry_run이면 적용/watermark/로그 생략.
 
@@ -215,7 +216,7 @@ def ingest_source(
             continue
         try:
             for chunk in chunks:
-                if chunk.sampled:
+                if chunk.sampled or not semantic_retrieval:
                     related = find_related_pages(
                         chunk.text,
                         vault_path=vault_path,

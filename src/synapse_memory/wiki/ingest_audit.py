@@ -29,6 +29,7 @@ def audit_ingest_queue(
     watermark_path: Path | None = None,
     limit: int | None = None,
     min_age_seconds: float | None = None,
+    semantic_retrieval: bool = True,
 ) -> IngestAuditResult:
     """watermark 이후 pending raw 문서를 읽고 비용 라우팅만 계산한다."""
     since = load_watermark(source, path=watermark_path)
@@ -48,7 +49,10 @@ def audit_ingest_queue(
     max_chars = 0
 
     for doc in docs:
-        route = classify_ingest_text(doc.text)
+        route = classify_ingest_text(
+            doc.text,
+            semantic_retrieval=semantic_retrieval,
+        )
         docs_pending += 1
         max_chars = max(max_chars, route.text_chars)
         estimated_llm_calls += route.estimated_llm_calls

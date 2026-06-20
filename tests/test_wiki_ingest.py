@@ -133,6 +133,35 @@ def test_large_doc_uses_single_budgeted_sample_call(tmp_path, monkeypatch) -> No
     assert len(prompts[0]) < 1_200
 
 
+def test_small_doc_can_disable_semantic_retrieval(tmp_path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "small", "short project update")
+    semantic_args: list[object] = []
+
+    def fake_related(text, *, vault_path=None, pages=None, semantic_fn="default"):
+        semantic_args.append(semantic_fn)
+        return []
+
+    monkeypatch.setattr(ingest_mod, "find_related_pages", fake_related)
+    monkeypatch.setattr(
+        ingest_mod.ai_api,
+        "complete_structured",
+        _fake_complete_structured({"operations": []}),
+    )
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        ai_env=None,
+        today="2026-06-14",
+        semantic_retrieval=False,
+    )
+
+    assert result.docs_processed == 1
+    assert semantic_args == [None]
+
+
 def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypatch) -> None:
     import os
     from datetime import datetime

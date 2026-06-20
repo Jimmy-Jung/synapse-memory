@@ -48,6 +48,25 @@ def test_audit_classifies_pending_docs_without_llm(tmp_path, monkeypatch) -> Non
     assert result.max_chars == 90
 
 
+def test_audit_can_estimate_without_semantic_retrieval(tmp_path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "small", "a" * 10, 1_700_000_000)
+    _write_session(raw_root, "sampled", "b" * 50, 1_700_000_010)
+    _write_session(raw_root, "oversize", "c" * 90, 1_700_000_020)
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 20, raising=False)
+    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 70, raising=False)
+
+    result = audit_ingest_queue(
+        "claude-code",
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        semantic_retrieval=False,
+    )
+
+    assert result.docs_pending == 3
+    assert result.estimated_llm_calls == 2
+
+
 def test_audit_respects_watermark_and_limit(tmp_path, monkeypatch) -> None:
     raw_root = tmp_path / "raw" / "claude-code"
     state = tmp_path / "state.json"

@@ -662,7 +662,12 @@ def cmd_me_decide(args: argparse.Namespace) -> int:
 def cmd_ingest(args: argparse.Namespace) -> int:
     """wiki ingest 엔진 1회 실행."""
     dry = bool(getattr(args, "dry_run", False))
-    result = ingest_source(args.source, dry_run=dry, limit=args.limit)
+    result = ingest_source(
+        args.source,
+        dry_run=dry,
+        limit=args.limit,
+        semantic_retrieval=not args.no_semantic_retrieval,
+    )
     label = "(dry-run) " if dry else ""
     print(f"{label}ingest {result.source}: docs={result.docs_processed}, "
           f"pages={len(result.pages_written)}, skipped={result.docs_skipped}")
@@ -681,6 +686,7 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
         args.source,
         limit=args.limit,
         min_age_seconds=args.min_age_seconds,
+        semantic_retrieval=not args.no_semantic_retrieval,
     )
     print(
         f"ingest-audit {result.source}: pending={result.docs_pending}, "
@@ -698,6 +704,7 @@ def cmd_backfill(args: argparse.Namespace) -> int:
         source=args.source,
         batch_size=args.batch_size,
         max_batches=args.max_batches,
+        semantic_retrieval=not args.no_semantic_retrieval,
     )
     print(
         f"backfill {r.source}: {r.batches} batches, "
@@ -3624,6 +3631,11 @@ def build_parser() -> argparse.ArgumentParser:
                           help="ingest 소스 (claude-code, codex)")
     p_ingest.add_argument("--dry-run", action="store_true", help="적용 없이 결과만 표시")
     p_ingest.add_argument("--limit", type=int, default=None, help="처리할 최대 doc 수")
+    p_ingest.add_argument(
+        "--no-semantic-retrieval",
+        action="store_true",
+        help="provider 기반 관련 페이지 선별을 끄고 통합 호출만 수행",
+    )
     p_ingest.set_defaults(func=cmd_ingest)
 
     p_ingest_audit = sub.add_parser(
@@ -3641,6 +3653,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="최근 변경 중인 파일을 제외할 최소 age(초)",
     )
+    p_ingest_audit.add_argument(
+        "--no-semantic-retrieval",
+        action="store_true",
+        help="관련 페이지 선별 호출을 제외한 저비용 예상 호출 수 계산",
+    )
     p_ingest_audit.set_defaults(func=cmd_ingest_audit)
 
     p_backfill = sub.add_parser(
@@ -3656,6 +3673,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_backfill.add_argument(
         "--max-batches", type=int, default=None, help="최대 배치 수 (생략 시 소진까지)",
+    )
+    p_backfill.add_argument(
+        "--no-semantic-retrieval",
+        action="store_true",
+        help="provider 기반 관련 페이지 선별을 끄고 저비용으로 백필",
     )
     p_backfill.set_defaults(func=cmd_backfill)
 

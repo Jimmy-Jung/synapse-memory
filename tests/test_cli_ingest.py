@@ -2,6 +2,8 @@
 """ingest CLI 서브커맨드 — 인자 파싱 + 오케스트레이터 위임."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import synapse_memory.cli as cli
 from synapse_memory.wiki.ingest import IngestResult
 from synapse_memory.wiki.ingest_audit import IngestAuditResult
@@ -32,6 +34,19 @@ def test_ingest_dry_run_flag(monkeypatch) -> None:
     monkeypatch.setattr(cli, "ingest_source", fake_ingest)
     cli.main(["ingest", "--now", "--dry-run"])
     assert captured["dry_run"] is True
+
+
+def test_ingest_no_semantic_retrieval_flag(monkeypatch) -> None:
+    captured = {}
+
+    def fake_ingest(source, **kwargs):
+        captured["semantic_retrieval"] = kwargs.get("semantic_retrieval")
+        return IngestResult(source=source, docs_processed=0)
+
+    monkeypatch.setattr(cli, "ingest_source", fake_ingest)
+    rc = cli.main(["ingest", "--now", "--no-semantic-retrieval"])
+    assert rc == 0
+    assert captured["semantic_retrieval"] is False
 
 
 def test_ingest_prints_skipped_count(monkeypatch, capsys) -> None:
@@ -71,3 +86,36 @@ def test_ingest_audit_prints_queue_cost_summary(monkeypatch, capsys) -> None:
     assert "sampled=2" in out
     assert "oversize=1" in out
     assert "estimated_llm_calls=3" in out
+
+
+def test_ingest_audit_no_semantic_retrieval_flag(monkeypatch) -> None:
+    captured = {}
+
+    def fake_audit(source, **kwargs):
+        captured["semantic_retrieval"] = kwargs.get("semantic_retrieval")
+        return IngestAuditResult(source=source)
+
+    monkeypatch.setattr(cli, "audit_ingest_queue", fake_audit)
+    rc = cli.main(["ingest-audit", "--no-semantic-retrieval"])
+    assert rc == 0
+    assert captured["semantic_retrieval"] is False
+
+
+def test_backfill_no_semantic_retrieval_flag(monkeypatch) -> None:
+    captured = {}
+
+    def fake_backfill(**kwargs):
+        captured["semantic_retrieval"] = kwargs.get("semantic_retrieval")
+        return SimpleNamespace(
+            source=kwargs["source"],
+            batches=0,
+            docs_processed=0,
+            pages_written=[],
+            docs_skipped=0,
+            errors=[],
+        )
+
+    monkeypatch.setattr(cli, "run_backfill", fake_backfill)
+    rc = cli.main(["backfill", "--source", "codex", "--no-semantic-retrieval"])
+    assert rc == 0
+    assert captured["semantic_retrieval"] is False
