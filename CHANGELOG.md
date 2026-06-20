@@ -2,6 +2,22 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.18.1] — 2026-06-20
+
+Codex plugin marketplace가 1.18.0 이후 추가된 install source 보정까지
+공식 release/tag/installer에 포함되도록 patch release를 발행한다.
+
+### Fixed
+
+- Codex CLI가 root source marketplace 항목을 `codex plugin list`와
+  `codex plugin add` 표면에 노출하지 못하던 문제를 수정했다.
+- Codex용 `plugins/sm` wrapper source를 추가해 marketplace catalog,
+  install cache, `skills/` 로딩 경로가 같은 구조를 사용하도록 정렬했다.
+
+### Documentation
+
+- Codex plugin 검증 명령을 현재 CLI 출력 기준에 맞춰 갱신했다.
+
 ## [1.18.0] — 2026-06-20
 
 Codex 세션을 wiki ingest의 정식 소스로 추가하고, 대형 Codex 문서가
