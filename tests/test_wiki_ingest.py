@@ -80,19 +80,27 @@ def test_ingest_error_isolation(tmp_path, monkeypatch) -> None:
     assert "ok" in result.pages_written
 
 
-def test_large_doc_is_chunked_for_integration_calls(tmp_path, monkeypatch) -> None:
+def test_large_doc_uses_single_budgeted_sample_call(tmp_path, monkeypatch) -> None:
     raw_root = tmp_path / "raw" / "claude-code"
     _write_session(
         raw_root,
         "large",
-        "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda",
+        (
+            "alpha beta gamma delta epsilon\n"
+            "boring filler one two three four five six seven\n"
+            "/Users/jimmy/Documents/GitHub/synapse-memory/src/synapse_memory/wiki/ingest.py\n"
+            "TimeoutError: integration took too long\n"
+            "iota kappa lambda mu nu xi omicron"
+        ),
     )
     prompts: list[str] = []
     semantic_args: list[object] = []
     timeouts: list[int] = []
     monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_TOKENS", 4, raising=False)
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_OVERLAP", 0, raising=False)
+    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 500, raising=False)
+    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_BUDGET", 600, raising=False)
+    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_EDGE_CHARS", 45, raising=False)
+    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_SIGNAL_CHARS", 220, raising=False)
 
     def fake_related(text, *, vault_path=None, pages=None, semantic_fn="default"):
         semantic_args.append(semantic_fn)
@@ -116,12 +124,13 @@ def test_large_doc_is_chunked_for_integration_calls(tmp_path, monkeypatch) -> No
 
     assert result.docs_processed == 1
     assert result.docs_skipped == 0
-    assert len(prompts) == 3
-    assert semantic_args == [None, None, None]
-    assert timeouts == [300, 300, 300]
+    assert len(prompts) == 1
+    assert semantic_args == [None]
+    assert timeouts == [300]
     assert "alpha beta gamma delta" in prompts[0]
-    assert "epsilon zeta eta theta" in prompts[1]
-    assert "iota kappa lambda" in prompts[2]
+    assert "TimeoutError" in prompts[0]
+    assert "iota kappa lambda" in prompts[0]
+    assert len(prompts[0]) < 1_200
 
 
 def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypatch) -> None:
@@ -158,3 +167,38 @@ def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypat
     assert result.errors == []
     assert load_watermark("claude-code", path=state) == expected
     assert "skipped large doc" in (tmp_path / "log.md").read_text(encoding="utf-8")
+
+
+def test_oversize_doc_skips_without_llm_and_advances_watermark(tmp_path, monkeypatch) -> None:
+    import os
+    from datetime import datetime
+
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "oversize", "alpha " * 100)
+    session_path = raw_root / "oversize.jsonl"
+    mtime = 1_700_000_100
+    os.utime(session_path, (mtime, mtime))
+    state = tmp_path / "state.json"
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
+    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 80, raising=False)
+
+    def unexpected_llm_call(*args, **kwargs):
+        raise AssertionError("oversize doc must not call LLM")
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", unexpected_llm_call)
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=state,
+        ai_env=None,
+        today="2026-06-14",
+        checkpoint_each=True,
+    )
+
+    expected = datetime.fromtimestamp(mtime).isoformat(timespec="microseconds")
+    assert result.docs_processed == 1
+    assert result.docs_skipped == 1
+    assert result.errors == []
+    assert load_watermark("claude-code", path=state) == expected
+    assert "skipped oversize doc" in (tmp_path / "log.md").read_text(encoding="utf-8")

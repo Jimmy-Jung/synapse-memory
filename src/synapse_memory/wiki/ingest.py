@@ -13,7 +13,6 @@ from itertools import islice
 from pathlib import Path
 
 from synapse_memory.llm import ai_api
-from synapse_memory.rag.chunker import chunk_text
 from synapse_memory.wiki.apply import apply_ops
 from synapse_memory.wiki.integration import (
     INTEGRATION_SCHEMA,
@@ -29,9 +28,28 @@ from synapse_memory.wiki.schema import ensure_schema
 from synapse_memory.wiki.watermark import load_watermark, save_watermark
 
 LARGE_DOC_CHAR_THRESHOLD = 40_000
-LARGE_DOC_CHUNK_TOKENS = 6_000
-LARGE_DOC_CHUNK_OVERLAP = 200
+SAMPLED_DOC_CHAR_LIMIT = 120_000
+SAMPLED_DOC_CHAR_BUDGET = 20_000
+SAMPLED_DOC_EDGE_CHARS = 6_000
+SAMPLED_DOC_SIGNAL_CHARS = 8_000
 INTEGRATION_TIMEOUT_SECONDS = 300
+_SIGNAL_PATTERNS = (
+    "/Users/",
+    "Documents/Git",
+    "Traceback",
+    "Error",
+    "Exception",
+    "Timeout",
+    "failed",
+    "failed:",
+    "User:",
+    "Assistant:",
+    "cwd=",
+    "workdir",
+    "pytest",
+    "ruff",
+    "git ",
+)
 
 
 @dataclass
@@ -47,6 +65,7 @@ class IngestResult:
 class _IntegrationChunk:
     ref: str
     text: str
+    sampled: bool = False
 
 
 def _stamp_sources(ops: list[PageOp], ref: str) -> list[PageOp]:
@@ -60,50 +79,45 @@ def _stamp_sources(ops: list[PageOp], ref: str) -> list[PageOp]:
     return out
 
 
-def _char_chunks(text: str, max_chars: int) -> list[str]:
-    return [
-        text[start : start + max_chars].strip()
-        for start in range(0, len(text), max_chars)
-        if text[start : start + max_chars].strip()
-    ]
-
-
-def _large_text_chunks(text: str) -> list[str]:
-    """wiki ingest용 대형 텍스트 청크를 만든다.
-
-    기본은 RAG chunker의 토큰 윈도우를 재사용한다. 토큰화 가능한 텍스트가 없거나
-    단일 토큰이 지나치게 길어 여전히 거대 청크가 남으면 문자 슬라이스로 격리한다.
-    """
-    overlap = min(LARGE_DOC_CHUNK_OVERLAP, LARGE_DOC_CHUNK_TOKENS - 1)
-    token_chunks = chunk_text(
-        text,
-        max_tokens=LARGE_DOC_CHUNK_TOKENS,
-        overlap=overlap,
-    )
-    if not token_chunks:
-        return _char_chunks(text, LARGE_DOC_CHAR_THRESHOLD)
-
-    chunks: list[str] = []
-    for chunk in token_chunks:
-        stripped = chunk.strip()
-        if not stripped:
+def _budgeted_signal_block(text: str, max_chars: int) -> str:
+    lines: list[str] = []
+    used = 0
+    for raw_line in text.splitlines():
+        line = " ".join(raw_line.split())
+        if not line or not any(pattern in line for pattern in _SIGNAL_PATTERNS):
             continue
-        if len(stripped) > LARGE_DOC_CHAR_THRESHOLD:
-            chunks.extend(_char_chunks(stripped, LARGE_DOC_CHAR_THRESHOLD))
-        else:
-            chunks.append(stripped)
-    return chunks
+        next_used = used + len(line) + 1
+        if next_used > max_chars:
+            break
+        lines.append(line)
+        used = next_used
+    return "\n".join(lines)
+
+
+def _budgeted_sample(text: str) -> str:
+    head = text[:SAMPLED_DOC_EDGE_CHARS].strip()
+    tail = text[-SAMPLED_DOC_EDGE_CHARS:].strip()
+    signal = _budgeted_signal_block(text, SAMPLED_DOC_SIGNAL_CHARS)
+    sample = (
+        "# 원문 정보\n"
+        f"- 원문 문자 수: {len(text)}\n"
+        "- 처리 방식: 비용 제한 샘플. 전체 원문은 raw ref를 통해 보존됨.\n\n"
+        "# 앞부분 샘플\n"
+        f"{head}\n\n"
+        "# 고신호 라인\n"
+        f"{signal or '(추출된 고신호 라인 없음)'}\n\n"
+        "# 뒷부분 샘플\n"
+        f"{tail}"
+    )
+    return sample[:SAMPLED_DOC_CHAR_BUDGET].strip()
 
 
 def _integration_chunks(ref: str, text: str) -> list[_IntegrationChunk]:
     if len(text) <= LARGE_DOC_CHAR_THRESHOLD:
         return [_IntegrationChunk(ref=ref, text=text)]
-
-    chunks = _large_text_chunks(text)
-    return [
-        _IntegrationChunk(ref=f"{ref}#c{index}", text=chunk)
-        for index, chunk in enumerate(chunks, start=1)
-    ]
+    if len(text) <= SAMPLED_DOC_CHAR_LIMIT:
+        return [_IntegrationChunk(ref=f"{ref}#sample", text=_budgeted_sample(text), sampled=True)]
+    return []
 
 
 def _advance_watermark(current: str | None, candidate: str) -> str:
@@ -153,9 +167,22 @@ def ingest_source(
     for doc in docs:
         result.docs_processed += 1
         is_large_doc = len(doc.text) > LARGE_DOC_CHAR_THRESHOLD
+        chunks = _integration_chunks(doc.ref, doc.text)
+        if not chunks:
+            result.docs_skipped += 1
+            if not dry_run:
+                append_log(
+                    f"ingest {source}: skipped oversize doc from {doc.ref} "
+                    f"(chars={len(doc.text)}, limit={SAMPLED_DOC_CHAR_LIMIT})",
+                    vault_path=vault_path,
+                )
+                max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
+                if checkpoint_each and max_mtime:
+                    save_watermark(source, max_mtime, path=watermark_path)
+            continue
         try:
-            for chunk in _integration_chunks(doc.ref, doc.text):
-                if is_large_doc:
+            for chunk in chunks:
+                if chunk.sampled:
                     related = find_related_pages(
                         chunk.text,
                         vault_path=vault_path,
