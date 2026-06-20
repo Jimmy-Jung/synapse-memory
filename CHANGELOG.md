@@ -2,6 +2,38 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.18.0] — 2026-06-20
+
+Codex 세션을 wiki ingest의 정식 소스로 추가하고, 대형 Codex 문서가
+backfill 비용과 시간을 무한히 소모하지 않도록 ingest 경로를 보강했다.
+
+### Added
+
+- `collect codex`, `ingest --source codex`, `backfill --source codex`,
+  `watch run`의 Codex source 통합을 추가했다.
+- `synapse-memory ingest-audit`을 추가해 backfill 전 pending 문서 수,
+  대형 문서 분류, 예상 LLM 호출 수를 로컬에서 확인할 수 있게 했다.
+- `ingest`, `backfill`, `ingest-audit`에 `--no-semantic-retrieval` 옵션을
+  추가해 대량 backfill canary에서 작은 문서의 관련 페이지 선별 호출을
+  생략할 수 있게 했다.
+
+### Changed
+
+- 40,000자 초과 문서는 전체 본문을 한 번에 보내지 않고 비용 예산에 맞춰
+  샘플링하며, 120,000자 초과 문서는 LLM 호출 없이 격리하고 watermark를
+  전진시켜 backlog jam을 방지한다.
+- wiki ingest 구조화 호출 timeout을 300초로 늘려 중간 크기 문서의 정상
+  처리를 더 안정적으로 만들었다.
+
+### Fixed
+
+- 동일 mtime 파일 정렬 충돌로 raw 문서가 누락될 수 있던 증분 collect
+  데이터 손실을 수정했다.
+- 대형 문서 처리 실패가 watermark를 전진시키지 못해 같은 문서를 계속
+  재시도하며 비용을 반복 소모하던 문제를 수정했다.
+- wiki page update 시 기존 `related`와 `sources` metadata가 덮어써져
+  provenance가 사라질 수 있던 문제를 수정했다.
+
 ## [1.17.5] — 2026-06-19
 
 watch LaunchAgent가 정상 실행 중이어도 launchd 환경에서 `claude` CLI를 찾지 못해

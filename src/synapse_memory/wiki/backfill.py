@@ -21,6 +21,7 @@ class BackfillResult:
     source: str
     batches: int = 0
     docs_processed: int = 0
+    docs_skipped: int = 0
     pages_written: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -33,6 +34,7 @@ def run_backfill(
     batch_size: int = 20,
     max_batches: int | None = None,
     today: str | None = None,
+    semantic_retrieval: bool = True,
 ) -> BackfillResult:
     """배치 단위로 ``ingest_source``를 소진될 때까지 반복 호출.
 
@@ -49,13 +51,19 @@ def run_backfill(
             checkpoint_each=True,
             min_age_seconds=None,
             today=today,
+            semantic_retrieval=semantic_retrieval,
         )
         result.batches += 1
         result.docs_processed += batch.docs_processed
+        result.docs_skipped += batch.docs_skipped
         result.pages_written.extend(batch.pages_written)
         result.errors.extend(batch.errors)
         # 진전 없음(배치 전부 실패) → 무한루프 방지
-        if batch.docs_processed > 0 and len(batch.errors) >= batch.docs_processed:
+        if (
+            batch.docs_processed > 0
+            and batch.docs_skipped == 0
+            and len(batch.errors) >= batch.docs_processed
+        ):
             break
         if batch.docs_processed == 0:
             break

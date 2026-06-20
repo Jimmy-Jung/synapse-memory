@@ -1,6 +1,6 @@
 {
   "name": "sm",
-  "version": "1.17.5",
+  "version": "1.18.0",
   "description": "개인용 AI 비서 / 세컨드 브레인 / 클론 — vault 위 RAG + 자동 메모리 시스템.",
   "author": {
     "name": "Synapse Memory Maintainers",
