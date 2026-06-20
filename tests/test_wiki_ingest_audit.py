@@ -44,7 +44,7 @@ def test_audit_classifies_pending_docs_without_llm(tmp_path, monkeypatch) -> Non
     assert result.docs_small == 1
     assert result.docs_sampled == 1
     assert result.docs_oversize == 1
-    assert result.estimated_llm_calls == 2
+    assert result.estimated_llm_calls == 3
     assert result.max_chars == 90
 
 
@@ -69,4 +69,4 @@ def test_audit_respects_watermark_and_limit(tmp_path, monkeypatch) -> None:
     assert result.docs_small == 1
     assert result.docs_sampled == 0
     assert result.docs_oversize == 0
-    assert result.estimated_llm_calls == 1
+    assert result.estimated_llm_calls == 2

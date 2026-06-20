@@ -83,7 +83,8 @@ def classify_ingest_text(text: str) -> IngestRoute:
     if text_chars <= LARGE_DOC_CHAR_THRESHOLD:
         return IngestRoute(
             kind="small",
-            estimated_llm_calls=1,
+            # small 문서는 provider 기반 관련 페이지 선별 + 통합 호출을 모두 사용한다.
+            estimated_llm_calls=2,
             text_chars=text_chars,
         )
     if text_chars <= SAMPLED_DOC_CHAR_LIMIT:
