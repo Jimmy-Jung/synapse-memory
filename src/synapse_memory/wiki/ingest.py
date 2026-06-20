@@ -68,6 +68,37 @@ class _IntegrationChunk:
     sampled: bool = False
 
 
+@dataclass(frozen=True)
+class IngestRoute:
+    """문서 크기별 ingest 라우팅 결과."""
+
+    kind: str
+    estimated_llm_calls: int
+    text_chars: int
+
+
+def classify_ingest_text(text: str) -> IngestRoute:
+    """ingest 비용 정책을 단일 기준으로 분류한다."""
+    text_chars = len(text)
+    if text_chars <= LARGE_DOC_CHAR_THRESHOLD:
+        return IngestRoute(
+            kind="small",
+            estimated_llm_calls=1,
+            text_chars=text_chars,
+        )
+    if text_chars <= SAMPLED_DOC_CHAR_LIMIT:
+        return IngestRoute(
+            kind="sampled",
+            estimated_llm_calls=1,
+            text_chars=text_chars,
+        )
+    return IngestRoute(
+        kind="oversize",
+        estimated_llm_calls=0,
+        text_chars=text_chars,
+    )
+
+
 def _stamp_sources(ops: list[PageOp], ref: str) -> list[PageOp]:
     out: list[PageOp] = []
     for op in ops:
@@ -113,9 +144,10 @@ def _budgeted_sample(text: str) -> str:
 
 
 def _integration_chunks(ref: str, text: str) -> list[_IntegrationChunk]:
-    if len(text) <= LARGE_DOC_CHAR_THRESHOLD:
+    route = classify_ingest_text(text)
+    if route.kind == "small":
         return [_IntegrationChunk(ref=ref, text=text)]
-    if len(text) <= SAMPLED_DOC_CHAR_LIMIT:
+    if route.kind == "sampled":
         return [_IntegrationChunk(ref=f"{ref}#sample", text=_budgeted_sample(text), sampled=True)]
     return []
 

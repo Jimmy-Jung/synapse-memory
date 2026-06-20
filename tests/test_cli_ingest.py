@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import synapse_memory.cli as cli
 from synapse_memory.wiki.ingest import IngestResult
+from synapse_memory.wiki.ingest_audit import IngestAuditResult
 
 
 def test_ingest_now_invokes_engine(monkeypatch, capsys) -> None:
@@ -41,3 +42,32 @@ def test_ingest_prints_skipped_count(monkeypatch, capsys) -> None:
     rc = cli.main(["ingest", "--now", "--source", "codex"])
     assert rc == 0
     assert "skipped=1" in capsys.readouterr().out
+
+
+def test_ingest_audit_prints_queue_cost_summary(monkeypatch, capsys) -> None:
+    captured = {}
+
+    def fake_audit(source, **kwargs):
+        captured["source"] = source
+        captured["limit"] = kwargs.get("limit")
+        return IngestAuditResult(
+            source=source,
+            docs_pending=4,
+            docs_small=1,
+            docs_sampled=2,
+            docs_oversize=1,
+            estimated_llm_calls=3,
+            max_chars=150_000,
+        )
+
+    monkeypatch.setattr(cli, "audit_ingest_queue", fake_audit)
+    rc = cli.main(["ingest-audit", "--source", "codex", "--limit", "5"])
+
+    assert rc == 0
+    assert captured == {"source": "codex", "limit": 5}
+    out = capsys.readouterr().out
+    assert "pending=4" in out
+    assert "small=1" in out
+    assert "sampled=2" in out
+    assert "oversize=1" in out
+    assert "estimated_llm_calls=3" in out

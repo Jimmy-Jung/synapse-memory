@@ -128,6 +128,7 @@ from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
 from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
+from synapse_memory.wiki.ingest_audit import audit_ingest_queue  # noqa: E402
 from synapse_memory.wiki.launchd import (  # noqa: E402
     install_watch,
     uninstall_watch,
@@ -672,6 +673,23 @@ def cmd_ingest(args: argparse.Namespace) -> int:
         for e in result.errors:
             print(f"    - {e}")
     return 1 if result.errors else 0
+
+
+def cmd_ingest_audit(args: argparse.Namespace) -> int:
+    """watermark 이후 ingest queue의 비용 라우팅을 LLM 없이 확인."""
+    result = audit_ingest_queue(
+        args.source,
+        limit=args.limit,
+        min_age_seconds=args.min_age_seconds,
+    )
+    print(
+        f"ingest-audit {result.source}: pending={result.docs_pending}, "
+        f"small={result.docs_small}, sampled={result.docs_sampled}, "
+        f"oversize={result.docs_oversize}, "
+        f"estimated_llm_calls={result.estimated_llm_calls}, "
+        f"max_chars={result.max_chars}"
+    )
+    return 0
 
 
 def cmd_backfill(args: argparse.Namespace) -> int:
@@ -3607,6 +3625,23 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest.add_argument("--dry-run", action="store_true", help="적용 없이 결과만 표시")
     p_ingest.add_argument("--limit", type=int, default=None, help="처리할 최대 doc 수")
     p_ingest.set_defaults(func=cmd_ingest)
+
+    p_ingest_audit = sub.add_parser(
+        "ingest-audit",
+        help="watermark 이후 raw queue 비용을 LLM 호출 없이 점검",
+    )
+    p_ingest_audit.add_argument(
+        "--source", default="claude-code", choices=["claude-code", "codex"],
+        help="감사할 소스 (claude-code, codex)",
+    )
+    p_ingest_audit.add_argument("--limit", type=int, default=None, help="확인할 최대 doc 수")
+    p_ingest_audit.add_argument(
+        "--min-age-seconds",
+        type=float,
+        default=None,
+        help="최근 변경 중인 파일을 제외할 최소 age(초)",
+    )
+    p_ingest_audit.set_defaults(func=cmd_ingest_audit)
 
     p_backfill = sub.add_parser(
         "backfill",

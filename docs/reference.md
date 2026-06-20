@@ -551,6 +551,10 @@ knowledgeC.db 는 SIP 보호 영역 일부 — Full Disk Access 권한이 필요
 
 - `synapse-memory ingest --now --source claude-code` / `--source codex`
   raw 대화를 wiki 페이지로 통합. `--source`는 `claude-code`와 `codex`를 받습니다.
+- `synapse-memory ingest-audit --source codex --limit 50`
+  watermark 이후 pending raw queue를 LLM 호출 없이 점검합니다. 출력의
+  `estimated_llm_calls`, `sampled`, `oversize`, `max_chars`로 backfill 비용과 jam
+  위험을 먼저 확인합니다.
 - `synapse-memory backfill --source codex`
   빈 vault를 전체 raw 이력으로 1회 재구축 (배치, 중단해도 재개 가능). 대량 첫 구축용.
 - `synapse-memory watch run`
@@ -558,6 +562,11 @@ knowledgeC.db 는 SIP 보호 영역 일부 — Full Disk Access 권한이 필요
 
 watermark는 소스별로 분리 저장되며 마이크로초 정밀도 ISO 타임스탬프를 씁니다(파일은 mtime
 순으로 처리, 이미 통합한 대화는 건너뜀). 동작 원리 요약은 README의 "파이프라인 동작 원리"를 보세요.
+
+ingest 비용 정책은 문서 크기 기준으로 고정됩니다. 40,000자 이하는 전체 본문을 1회
+통합하고, 40,000자를 넘고 120,000자 이하인 문서는 앞/뒤/고신호 라인 샘플만 1회
+통합합니다. 120,000자를 넘는 초대형 문서는 LLM 없이 skip하고 watermark를 전진시켜
+backfill queue가 같은 파일에서 멈추지 않게 합니다.
 
 ## 완전히 지우고 싶을 때
 
