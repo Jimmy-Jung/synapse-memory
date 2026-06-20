@@ -27,6 +27,12 @@ def test_release_version_surfaces_stay_in_sync() -> None:
     init_text = Path("src/synapse_memory/__init__.py").read_text(encoding="utf-8")
     claude_manifest = json.loads(Path(".claude-plugin/plugin.json").read_text(encoding="utf-8"))
     codex_manifest = json.loads(Path(".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    codex_wrapper_manifest = json.loads(
+        Path("plugins/sm/.codex-plugin/plugin.json").read_text(encoding="utf-8")
+    )
+    codex_marketplace = json.loads(
+        Path(".agents/plugins/marketplace.json").read_text(encoding="utf-8")
+    )
     lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
     lock_versions = [
         package["version"]
@@ -37,6 +43,8 @@ def test_release_version_surfaces_stay_in_sync() -> None:
     assert f'__version__ = "{expected}"' in init_text
     assert claude_manifest["version"] == expected
     assert codex_manifest["version"] == expected
+    assert codex_wrapper_manifest["version"] == expected
+    assert codex_marketplace["plugins"][0]["version"] == expected
     assert lock_versions == [expected]
 
 
@@ -108,7 +116,10 @@ def test_macos_installer_activates_claude_and_codex_plugins() -> None:
 
 def test_codex_marketplace_catalog_points_to_plugin_manifest() -> None:
     marketplace = json.loads(Path(".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
-    manifest = json.loads(Path(".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    root_manifest = json.loads(Path(".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    wrapper_manifest = json.loads(
+        Path("plugins/sm/.codex-plugin/plugin.json").read_text(encoding="utf-8")
+    )
 
     assert marketplace["name"] == "synapse-memory-marketplace"
     assert marketplace["interface"]["displayName"] == "Synapse Memory"
@@ -116,13 +127,30 @@ def test_codex_marketplace_catalog_points_to_plugin_manifest() -> None:
     plugins = marketplace["plugins"]
     assert len(plugins) == 1
     plugin = plugins[0]
-    assert plugin["name"] == manifest["name"] == "sm"
-    assert plugin["source"] == {"source": "local", "path": "./"}
+    assert plugin["name"] == root_manifest["name"] == wrapper_manifest["name"] == "sm"
+    assert plugin["version"] == root_manifest["version"] == wrapper_manifest["version"]
+    assert plugin["source"] == {"source": "local", "path": "./plugins/sm"}
     assert plugin["policy"] == {
         "installation": "AVAILABLE",
         "authentication": "ON_INSTALL",
     }
-    assert plugin["category"] == manifest["interface"]["category"]
+    assert plugin["category"] == root_manifest["interface"]["category"]
+    assert wrapper_manifest["skills"] == "./skills/"
+
+
+def test_codex_wrapper_skills_mirror_root_skills() -> None:
+    root_skill_dir = Path("skills")
+    wrapper_skill_dir = Path("plugins/sm/skills")
+    root_skills = {path.relative_to(root_skill_dir) for path in root_skill_dir.glob("*/SKILL.md")}
+    wrapper_skills = {
+        path.relative_to(wrapper_skill_dir) for path in wrapper_skill_dir.glob("*/SKILL.md")
+    }
+
+    assert wrapper_skills == root_skills
+    for skill in root_skills:
+        assert (wrapper_skill_dir / skill).read_text(encoding="utf-8") == (
+            root_skill_dir / skill
+        ).read_text(encoding="utf-8")
 
 
 def test_macos_installer_records_structured_state_manifest() -> None:

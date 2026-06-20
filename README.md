@@ -121,10 +121,8 @@ codex plugin marketplace add Jimmy-Jung/synapse-memory
 codex plugin marketplace upgrade synapse-memory-marketplace
 ```
 
-Codex CLI 0.130.0 기준으로 플러그인은 marketplace 단위로 추가·업그레이드합니다.
-`codex plugin list` 같은 별도 목록 명령은 없으므로, 그 다음 `~/.codex/config.toml`에
-플러그인이 활성화되어 있는지 확인합니다. 플러그인 이름은 `synapse-memory`가 아니라
-manifest 이름인 `sm`입니다.
+Codex CLI에서는 marketplace snapshot을 갱신한 뒤 plugin catalog와 config를 확인합니다.
+플러그인 이름은 `synapse-memory`가 아니라 manifest 이름인 `sm`입니다.
 
 ```toml
 [plugins."sm@synapse-memory-marketplace"]
@@ -134,18 +132,20 @@ enabled = true
 확인은 다음처럼 합니다.
 
 ```bash
+codex plugin list | grep 'sm@synapse-memory-marketplace'
 codex debug prompt-input \
   --disable apps --disable memories --disable chronicle --disable multi_agent \
   "Synapse Memory plugin visibility check" \
-  | grep "sm:doctor"
+  | grep "synapse-memory-marketplace/sm"
 ```
 
-출력이 있으면 Codex가 Synapse Memory skill을 볼 수 있는 상태입니다. Codex TUI의
+출력이 있으면 Codex가 Synapse Memory plugin skill root를 볼 수 있는 상태입니다. Codex TUI의
 Plugins 브라우저에는 custom git marketplace가 표시되지 않을 수 있습니다. 이 경우에도
 `$ask`처럼 `$`로 skill을 검색했을 때 `ask (sm)`가 보이면 사용할 수 있습니다.
-`codex debug prompt-input`에 `sm:*` skill이 보이면 모델 입력에도 정상 로드된 상태입니다.
+plugin update 직후 기존 Codex 세션에는 이전 skill 목록이 남을 수 있으므로 새 세션에서
+확인합니다.
 Codex marketplace catalog는 `.agents/plugins/marketplace.json`에 있고,
-실제 plugin manifest는 `.codex-plugin/plugin.json`입니다.
+Codex install source는 `plugins/sm/.codex-plugin/plugin.json`입니다.
 
 ## 매일 쓰는 명령
 

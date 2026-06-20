@@ -6,9 +6,10 @@
   "plugins": [
     {
       "name": "sm",
+      "version": "1.18.0",
       "source": {
         "source": "local",
-        "path": "./"
+        "path": "./plugins/sm"
       },
       "policy": {
         "installation": "AVAILABLE",
