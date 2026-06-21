@@ -10,6 +10,7 @@ import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 
@@ -73,16 +74,68 @@ def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
     )
 
 
-def diagnose_wiki_maintenance(*, home: Path | None = None) -> DiagnosticResult:
+def _parse_watermark(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.astimezone()
+    return parsed
+
+
+def _recent_watch_errors(path: Path, *, limit: int = 3) -> list[str]:
+    if not path.is_file():
+        return []
+    try:
+        lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+    except OSError:
+        return []
+    return [line for line in lines if line][-limit:]
+
+
+def diagnose_wiki_maintenance(
+    *,
+    home: Path | None = None,
+    state_path: Path | None = None,
+    err_log_path: Path | None = None,
+    sources: tuple[str, ...] = ("claude-code", "codex"),
+    stale_after: timedelta = timedelta(days=7),
+) -> DiagnosticResult:
     """v2 wiki 자동 유지 watch 데몬(launchd LaunchAgent) 설치 점검."""
+    from synapse_memory.storage.l0 import l0_root
     from synapse_memory.wiki.launchd import plist_path
+    from synapse_memory.wiki.watermark import load_watermark
 
     path = plist_path(home=home)
     if path.is_file():
+        issues: list[str] = []
+        now = datetime.now().astimezone()
+        for source in sources:
+            watermark = load_watermark(source, path=state_path)
+            if watermark is None:
+                issues.append(f"{source} watermark 없음")
+                continue
+            parsed = _parse_watermark(watermark)
+            if parsed is None:
+                issues.append(f"{source} watermark 파싱 실패")
+                continue
+            if now - parsed.astimezone() > stale_after:
+                issues.append(f"{source} watermark stale: {watermark}")
+        errors = _recent_watch_errors(err_log_path or (l0_root() / "watch.err.log"))
+        if errors:
+            issues.append(f"watch.err.log 최근 오류 {len(errors)}건")
+        if issues:
+            return DiagnosticResult(
+                check_id="wiki_maintenance",
+                status=DiagnosticStatus.WARN,
+                message=f"wiki watch 데몬 설치됨: {path}; " + "; ".join(issues),
+                target=path,
+            )
         return DiagnosticResult(
             check_id="wiki_maintenance",
             status=DiagnosticStatus.OK,
-            message=f"wiki watch 데몬 설치됨: {path}",
+            message=f"wiki watch 데몬 설치됨: {path}; sources fresh: {', '.join(sources)}",
             target=path,
         )
     return DiagnosticResult(

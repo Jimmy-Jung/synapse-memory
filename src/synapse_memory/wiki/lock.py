@@ -10,13 +10,38 @@ PID 생존 확인(``os.kill(pid, 0)``)으로 죽은 프로세스가 남긴 stale
 from __future__ import annotations
 
 import os
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, TypeVar
 
 from synapse_memory.storage.l0 import l0_root
+
+T = TypeVar("T")
 
 
 class LockHeldError(RuntimeError):
     """락이 살아있는 다른 프로세스에 의해 보유 중일 때."""
+
+
+class IngestAlreadyRunningError(RuntimeError):
+    """manual/backfill ingest가 공유 ingest lock 때문에 시작하지 못했을 때."""
+
+    def __init__(self, source: str, mode: str) -> None:
+        super().__init__(
+            f"ingest already running for source={source} mode={mode}; retry later "
+            "or use --wait-lock where supported"
+        )
+        self.source = source
+        self.mode = mode
+
+
+@dataclass(frozen=True)
+class LockedOutcome:
+    source: str
+    mode: str
+    reason: str = "locked"
 
 
 def default_lock_path() -> Path:
@@ -90,3 +115,26 @@ class FileLock:
 
     def __exit__(self, *_exc: object) -> None:
         self.release()
+
+
+def run_with_ingest_lock(
+    *,
+    source: str,
+    mode: str,
+    on_locked: Literal["skip", "fail", "wait"],
+    operation: Callable[[], T],
+    lock_path: Path | None = None,
+    retry_interval_seconds: float = 0.2,
+) -> T | LockedOutcome:
+    """모든 ingest writer가 공유하는 lock wrapper."""
+    target = lock_path or default_lock_path()
+    while True:
+        try:
+            with FileLock(target):
+                return operation()
+        except LockHeldError:
+            if on_locked == "skip":
+                return LockedOutcome(source=source, mode=mode)
+            if on_locked == "fail":
+                raise IngestAlreadyRunningError(source, mode) from None
+            time.sleep(retry_interval_seconds)

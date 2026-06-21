@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import synapse_memory.cli as cli
 from synapse_memory.wiki.ingest import IngestResult
 from synapse_memory.wiki.ingest_audit import IngestAuditResult
+from synapse_memory.wiki.lock import IngestAlreadyRunningError
 
 
 def test_ingest_now_invokes_engine(monkeypatch, capsys) -> None:
@@ -47,6 +48,17 @@ def test_ingest_no_semantic_retrieval_flag(monkeypatch) -> None:
     rc = cli.main(["ingest", "--now", "--no-semantic-retrieval"])
     assert rc == 0
     assert captured["semantic_retrieval"] is False
+
+
+def test_ingest_fails_when_shared_lock_held(monkeypatch, capsys) -> None:
+    def fake_locked(**kwargs):
+        raise IngestAlreadyRunningError(kwargs["source"], kwargs["mode"])
+
+    monkeypatch.setattr(cli, "run_with_ingest_lock", fake_locked)
+    rc = cli.main(["ingest", "--now", "--source", "codex"])
+
+    assert rc == 1
+    assert "ingest already running" in capsys.readouterr().err
 
 
 def test_ingest_prints_skipped_count(monkeypatch, capsys) -> None:

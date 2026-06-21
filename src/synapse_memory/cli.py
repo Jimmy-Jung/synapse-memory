@@ -130,10 +130,12 @@ from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
 from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
 from synapse_memory.wiki.ingest_audit import audit_ingest_queue  # noqa: E402
 from synapse_memory.wiki.launchd import (  # noqa: E402
+    LaunchctlError,
     install_watch,
     uninstall_watch,
 )
 from synapse_memory.wiki.lint import run_lint  # noqa: E402
+from synapse_memory.wiki.lock import IngestAlreadyRunningError, run_with_ingest_lock  # noqa: E402
 from synapse_memory.wiki.query import ask_wiki  # noqa: E402
 from synapse_memory.wiki.watermark import load_watermark  # noqa: E402
 
@@ -666,12 +668,21 @@ def cmd_me_decide(args: argparse.Namespace) -> int:
 def cmd_ingest(args: argparse.Namespace) -> int:
     """wiki ingest 엔진 1회 실행."""
     dry = bool(getattr(args, "dry_run", False))
-    result = ingest_source(
-        args.source,
-        dry_run=dry,
-        limit=args.limit,
-        semantic_retrieval=not args.no_semantic_retrieval,
-    )
+    try:
+        result = run_with_ingest_lock(
+            source=args.source,
+            mode="manual",
+            on_locked="fail",
+            operation=lambda: ingest_source(
+                args.source,
+                dry_run=dry,
+                limit=args.limit,
+                semantic_retrieval=not args.no_semantic_retrieval,
+            ),
+        )
+    except IngestAlreadyRunningError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     label = "(dry-run) " if dry else ""
     print(f"{label}ingest {result.source}: docs={result.docs_processed}, "
           f"pages={len(result.pages_written)}, skipped={result.docs_skipped}")
@@ -709,12 +720,17 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
 
 def cmd_backfill(args: argparse.Namespace) -> int:
     """빈 vault 재구축 — 전체 raw 이력을 배치 단위로 ingest (재개 가능)."""
-    r = run_backfill(
-        source=args.source,
-        batch_size=args.batch_size,
-        max_batches=args.max_batches,
-        semantic_retrieval=not args.no_semantic_retrieval,
-    )
+    try:
+        r = run_backfill(
+            source=args.source,
+            batch_size=args.batch_size,
+            max_batches=args.max_batches,
+            semantic_retrieval=not args.no_semantic_retrieval,
+            wait_lock=args.wait_lock,
+        )
+    except IngestAlreadyRunningError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     print(
         f"backfill {r.source}: {r.batches} batches, "
         f"{r.docs_processed} docs, {len(r.pages_written)} pages, "
@@ -787,7 +803,11 @@ def cmd_watch_run(args: argparse.Namespace) -> int:
 
 def cmd_watch_install(args: argparse.Namespace) -> int:
     """launchd LaunchAgent 설치 (raw 변화 시 watch 실행)."""
-    path = install_watch()
+    try:
+        path = install_watch()
+    except LaunchctlError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     print(f"installed: {path}")
     return 0
 
@@ -800,14 +820,26 @@ def cmd_watch_uninstall(args: argparse.Namespace) -> int:
 
 
 def cmd_watch_status(args: argparse.Namespace) -> int:
-    """LaunchAgent 설치 여부 + 마지막 watermark 출력."""
+    """LaunchAgent 설치 여부 + source별 watermark 출력."""
     from synapse_memory.wiki.launchd import plist_path
 
     path = plist_path()
     installed = path.exists()
+    sources = [
+        {"source": source, "watermark": load_watermark(source)}
+        for source in _WATCH_SOURCES
+    ]
+    if args.json:
+        print(
+            json.dumps(
+                {"installed": installed, "plist": str(path), "sources": sources},
+                ensure_ascii=False,
+            )
+        )
+        return 0
     print(f"installed: {installed} ({path})")
-    watermark = load_watermark("claude-code")
-    print(f"watermark: {watermark or '(none)'}")
+    for entry in sources:
+        print(f"{entry['source']} watermark: {entry['watermark'] or '(none)'}")
     return 0
 
 
@@ -3333,6 +3365,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_watch_uninstall.set_defaults(func=cmd_watch_uninstall)
     p_watch_status = watch_sub.add_parser("status", help="설치 여부 + watermark")
+    p_watch_status.add_argument(
+        "--json",
+        action="store_true",
+        help="설치 여부와 source별 watermark를 JSON으로 출력",
+    )
     p_watch_status.set_defaults(func=cmd_watch_status)
 
     p_cluster = sub.add_parser(
@@ -3687,6 +3724,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_backfill.add_argument(
         "--max-batches", type=int, default=None, help="최대 배치 수 (생략 시 소진까지)",
+    )
+    p_backfill.add_argument(
+        "--wait-lock",
+        action="store_true",
+        help="다른 ingest가 실행 중이면 lock이 풀릴 때까지 대기",
     )
     p_backfill.add_argument(
         "--no-semantic-retrieval",

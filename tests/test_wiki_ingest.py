@@ -198,6 +198,63 @@ def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypat
     assert "skipped large doc" in (tmp_path / "log.md").read_text(encoding="utf-8")
 
 
+def test_large_doc_provider_error_is_sanitized_in_log(tmp_path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "large", "alpha beta gamma delta epsilon zeta")
+    state = tmp_path / "state.json"
+    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
+
+    def provider_error(*args, **kwargs):
+        raise RuntimeError(
+            '{"error":{"message":"rate limited","type":"rate_limit_error"},'
+            '"session_id":"sess_secret","usage":{"input_tokens":999}}'
+        )
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", provider_error)
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=state,
+        ai_env=None,
+        today="2026-06-14",
+        checkpoint_each=True,
+    )
+
+    text = (tmp_path / "log.md").read_text(encoding="utf-8")
+    assert result.docs_skipped == 1
+    assert "rate limited" in text
+    assert "rate_limit_error" in text
+    assert "sess_secret" not in text
+    assert "input_tokens" not in text
+
+
+def test_small_doc_provider_error_is_sanitized_in_result_errors(tmp_path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "small", "short project update")
+
+    def provider_error(*args, **kwargs):
+        raise RuntimeError(
+            '{"error":{"message":"rate limited","type":"rate_limit_error"},'
+            '"session_id":"sess_secret","usage":{"input_tokens":999}}'
+        )
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", provider_error)
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        ai_env=None,
+        today="2026-06-14",
+    )
+
+    assert len(result.errors) == 1
+    assert "rate limited" in result.errors[0]
+    assert "sess_secret" not in result.errors[0]
+    assert "input_tokens" not in result.errors[0]
+
+
 def test_oversize_doc_skips_without_llm_and_advances_watermark(tmp_path, monkeypatch) -> None:
     import os
     from datetime import datetime

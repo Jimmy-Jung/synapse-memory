@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import plistlib
+import subprocess
+
+import pytest
 
 from synapse_memory.wiki.launchd import (
     LABEL,
+    LaunchctlError,
+    _launchctl,
     build_plist,
     install_watch,
     plist_path,
@@ -62,6 +67,20 @@ def test_install_writes_plist_and_loads(tmp_path, monkeypatch) -> None:
                          interval_seconds=1200)
     assert path.is_file()
     assert cmds  # launchctl 호출됨
+
+
+def test_launchctl_raises_on_failure(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "synapse_memory.wiki.launchd.subprocess.run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args=args,
+            returncode=5,
+            stderr=b"not allowed",
+        ),
+    )
+
+    with pytest.raises(LaunchctlError, match="not allowed"):
+        _launchctl("load", "-w", "/tmp/x.plist")
 
 
 def test_uninstall_removes_plist(tmp_path, monkeypatch) -> None:

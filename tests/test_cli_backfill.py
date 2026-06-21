@@ -14,3 +14,17 @@ def test_cli_backfill(monkeypatch, capsys):
     assert captured["batch_size"] == 5
     out = capsys.readouterr().out
     assert "10" in out and "3" in out
+
+
+def test_cli_backfill_wait_lock_flag(monkeypatch):
+    captured = {}
+
+    def fake(**kw):
+        captured.update(kw)
+        return BackfillResult(source="codex", batches=0, docs_processed=0)
+
+    monkeypatch.setattr(cli, "run_backfill", fake)
+    rc = cli.main(["backfill", "--source", "codex", "--wait-lock"])
+
+    assert rc == 0
+    assert captured["wait_lock"] is True

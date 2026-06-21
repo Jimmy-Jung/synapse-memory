@@ -21,7 +21,7 @@ from synapse_memory.wiki.integration import (
     build_integration_prompt,
     parse_ops,
 )
-from synapse_memory.wiki.log import append_log
+from synapse_memory.wiki.log import append_log, summarize_provider_error
 from synapse_memory.wiki.rawdoc import iter_new_raw
 from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
 from synapse_memory.wiki.schema import ensure_schema
@@ -249,12 +249,13 @@ def ingest_source(
                         vault_path=vault_path,
                     )
         except Exception as exc:
+            error_summary = summarize_provider_error(exc)
             if is_large_doc:
                 result.docs_skipped += 1
                 if not dry_run:
                     append_log(
                         f"ingest {source}: skipped large doc from {doc.ref} "
-                        f"after {type(exc).__name__}: {exc}",
+                        f"after {error_summary}",
                         vault_path=vault_path,
                     )
                 max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
@@ -262,7 +263,7 @@ def ingest_source(
                     save_watermark(source, max_mtime, path=watermark_path)
                 continue
             # 실패한 작은 doc은 watermark를 전진시키지 않는다 → 재실행 시 재시도.
-            result.errors.append(f"{doc.ref}: {exc}")
+            result.errors.append(f"{doc.ref}: {error_summary}")
             continue
         # 성공 경로에서만 watermark 후보를 전진시킨다.
         max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
