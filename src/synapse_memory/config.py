@@ -42,7 +42,7 @@ class ClaudeModelsConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
-    # 020: 로컬 임베딩 대체 — wiki 관련 페이지 선별(LLM-as-retriever). 싼 티어.
+    # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
     relevance: str = "haiku"
 
 
@@ -57,7 +57,7 @@ class CodexModelsConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
-    # 020: 로컬 임베딩 대체 — wiki 관련 페이지 선별(LLM-as-retriever). 싼 티어.
+    # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
     relevance: str = "gpt-5.5"
 
 
@@ -79,6 +79,7 @@ class TopKConfig:
     decide: int = 6
     recall: int = 8
     resume: int = 6
+    # Legacy compatibility no-op after provider-only migration.
     rag_search: int = 5
 
 
@@ -234,8 +235,10 @@ class MaintenanceConfig:
 
 @dataclass
 class AdvancedRagConfig:
+    """Deprecated compatibility surface for pre-020 local retrieval settings."""
+
     rrf_k: int = 60
-    embedding_model: str = "bge-m3"  # 변경 시 색인 재생성 필요
+    embedding_model: str = "provider-only-disabled"
 
 
 @dataclass

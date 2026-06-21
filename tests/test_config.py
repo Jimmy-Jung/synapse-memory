@@ -231,6 +231,7 @@ def test_render_shows_advanced_when_requested():
     text = render_config(cfg, show_advanced=True)
     assert "rrf_k" in text
     assert "embedding_model" in text
+    assert "provider-only-disabled" in text
 
 
 def test_describe_privacy_mode_documents_ingest_and_query_boundaries():

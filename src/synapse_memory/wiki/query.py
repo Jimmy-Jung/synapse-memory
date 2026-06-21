@@ -63,7 +63,7 @@ def _retrieve_wiki(
 ) -> list[WikiPage]:
     """provider LLM(claude|codex)로 관련 wiki 페이지를 선별·로드 (020).
 
-    로컬 임베딩(bge-m3)/벡터스토어 제거 — PageIndex를 provider에 넘겨 관련 slug를
+    로컬 임베딩/벡터스토어 제거 — PageIndex를 provider에 넘겨 관련 slug를
     고른 뒤 해당 페이지를 반환한다. 빈 vault/오류 시 ``[]`` (graceful).
     """
     from synapse_memory.wiki.llm_retrieval import select_related

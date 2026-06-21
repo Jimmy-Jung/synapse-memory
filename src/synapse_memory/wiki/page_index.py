@@ -1,7 +1,7 @@
 # src/synapse_memory/wiki/page_index.py
 """PageIndex — LLM-as-retriever용 경량 wiki 페이지 인덱스 (020).
 
-로컬 임베딩(bge-m3) 제거 후, 관련 페이지 선별/검색을 provider LLM에 맡기기 위한
+로컬 임베딩 제거 후, 관련 페이지 선별/검색을 provider LLM에 맡기기 위한
 프롬프트 친화적 인덱스. slug/title/요약만 담아 토큰을 아낀다.
 
 저자: Synapse Memory Maintainers

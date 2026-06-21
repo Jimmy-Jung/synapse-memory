@@ -240,8 +240,8 @@ def ingest_source(
                     continue
                 written = apply_ops(ops, vault_path=vault_path, today=today)
                 result.pages_written.extend(written)
-                # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever). 로컬
-                # 임베딩(bge-m3) 로드를 핫패스에서 영구 차단. 페이지는 디스크에만 기록.
+                # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever).
+                # 로컬 임베딩 로드를 핫패스에서 영구 차단. 페이지는 디스크에만 기록.
                 if written:
                     append_log(
                         f"ingest {source}: {len(written)} pages "

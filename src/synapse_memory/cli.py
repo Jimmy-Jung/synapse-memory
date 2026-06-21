@@ -2969,7 +2969,7 @@ def cmd_collect_codex(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="synapse-memory",
-        description="Personal knowledge memory & RAG layer.",
+        description="Personal knowledge memory & provider-only wiki layer.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
@@ -3404,7 +3404,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_cl_class.set_defaults(func=cmd_cluster_classify)
 
     p_ask = sub.add_parser(
-        "ask", help="자연어 질의 → RAG retrieve → AI 답변"
+        "ask",
+        help="자연어 질의 → provider 선별 → AI 답변",
+        description="자연어 질의를 CardIndex와 provider 선별 결과로 답변합니다.",
     )
     p_ask.add_argument("query", help="자연어 질문")
     p_ask.add_argument("--top-k", type=int, default=None)
@@ -3417,7 +3419,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument(
         "--hybrid",
         action="store_true",
-        help="dense + BM25 RRF 결합 검색",
+        help="호환 플래그: provider-only에서는 ranking 차이 없음",
     )
     p_ask.add_argument(
         "--save",
@@ -3539,12 +3541,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_wdt.add_argument(
         "--hybrid",
         action="store_true",
-        help="distance 모드에서 dense + BM25 RRF 결합 검색",
+        help="호환 플래그: provider-only에서는 ranking 차이 없음",
     )
     p_wdt.set_defaults(func=cmd_me_what_did_i_think)
 
     p_dec = me_sub.add_parser(
-        "decide", help="의사결정 코파일럿 (Profile + Patterns + RAG)"
+        "decide", help="의사결정 코파일럿 (Profile + Patterns + provider 선별 Card)"
     )
     p_dec.add_argument("situation", help="결정할 상황")
     p_dec.add_argument("--top-k", type=int, default=None)
@@ -3642,7 +3644,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Quick mode — 최근 N일 modified 노트만 처리 + classify cluster 수 제한 "
             "+ update_profile auto-skip. 첫 답변 ~3분 목표. full pipeline 은 "
-            "별도 cron 또는 수동 `daily` (no flag) 호출 (ChromaDB 동시성 회피)."
+            "별도 cron 또는 수동 `daily` (no flag) 호출 (wiki write 동시성 회피)."
         ),
     )
     p_daily.add_argument(

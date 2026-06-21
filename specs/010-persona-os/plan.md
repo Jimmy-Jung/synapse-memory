@@ -1,5 +1,11 @@
 # 구현 계획: Persona OS
 
+> **SUPERSEDED_BY_PROVIDER_ONLY / HISTORICAL ONLY**
+>
+> 이 문서는 현재 구현 source of truth가 아닙니다. 현재 provider-only 아키텍처와 운영
+> 기준은 `specs/020-provider-only-retrieval/design.md`,
+> `docs/current-issues-and-improvement-plan.md`, `docs/reference.md`를 읽습니다.
+
 > **Status**: SUPERSEDED
 > **Replaced by**: `~/.claude/plans/1-linked-fox.md`
 > **Date**: 2026-05-13
