@@ -271,11 +271,17 @@ synapse-memory persona draft-resume examplecorp
 ```bash
 synapse-memory hook install        # 전역 1회
 synapse-memory setup --no-marker   # 프로젝트마다 — repo 파일 수정 없이 등록
+synapse-memory doctor              # 현재 cwd 등록/cache/command 상태까지 확인
 ```
 
 - Profile 승인(`/sm:apply-profile`) 후 컨텍스트 캐시가 자동 갱신되어 다음
   세션부터 바로 반영됩니다. 수동 갱신은 `synapse-memory context render`.
 - 개인 Profile 내용이 git에 커밋되는 `CLAUDE.md`에 남지 않습니다.
+- hook이 설치되어 있어도 현재 디렉터리가 registry에 없으면 의도적으로 아무 것도
+  주입하지 않습니다. 해당 repo에서 `synapse-memory setup --no-marker`를 한 번 실행하세요.
+- `synapse-memory hook install`은 PATH가 좁은 앱 실행 환경에서도 동작하도록 가능한 경우
+  `synapse-memory` 실행 파일의 절대경로를 hook command에 기록합니다. 기존 설치가 PATH
+  의존 command라면 다시 실행하면 정규화됩니다.
 - Codex는 첫 hook 실행 전 `/hooks`에서 설치된 command hook을 신뢰 승인해야 할 수 있습니다.
 - hook을 쓰지 않는 프로젝트는 기존처럼 `synapse-memory setup --target codex`로
   `AGENTS.md` marker를 사용할 수 있습니다. `/sm:sync`는 marker 갱신 + 캐시 재렌더를

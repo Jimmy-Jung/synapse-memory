@@ -424,11 +424,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         from synapse_memory.hooks.install import diagnose_session_hook
 
         hook_result = diagnose_session_hook()
-        if hook_result.installed:
+        hook_ready = getattr(hook_result, "ready", hook_result.installed)
+        if hook_ready:
             print(f"{OK} {hook_result.message}")
         else:
             print(f"⚠ {hook_result.message}")
-            print("  설치: synapse-memory hook install")
+            if not hook_result.installed:
+                print("  설치: synapse-memory hook install")
+            else:
+                print("  정비: synapse-memory hook install")
+                print("  현재 프로젝트 등록: synapse-memory setup --no-marker")
+                print("  캐시 갱신: synapse-memory context render")
     except Exception as exc:
         print(f"⚠ SessionStart hook 진단 실패: {exc}")
 
