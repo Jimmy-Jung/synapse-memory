@@ -9,6 +9,7 @@ vault 루트 index.md의 MARKER_START/END 사이 블록만 lint가 갱신한다.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypedDict
 
 from synapse_memory.collectors.obsidian.mirror import get_vault_path
 from synapse_memory.wiki.page import VALID_TYPES, WikiPage
@@ -17,6 +18,12 @@ MARKER_START = "<!-- SYNAPSE:INDEX:START -->"
 MARKER_END = "<!-- SYNAPSE:INDEX:END -->"
 
 INDEX_FILENAME = "index.md"
+
+
+class ReviewItem(TypedDict, total=False):
+    kind: str
+    slug: str
+    other: str
 
 
 def index_md_path(*, vault_path: Path | None = None) -> Path:
@@ -29,7 +36,7 @@ def render_index(
     pages: list[WikiPage],
     *,
     orphans: list[str],
-    review_items: list[dict],
+    review_items: list[ReviewItem],
 ) -> str:
     """마커 포함 인덱스 블록 생성 — 타입별 페이지 목록 + 고아 + 검토 큐."""
     lines: list[str] = [MARKER_START, "# Wiki Index", ""]
@@ -77,7 +84,7 @@ def write_index(
     pages: list[WikiPage],
     *,
     orphans: list[str],
-    review_items: list[dict],
+    review_items: list[ReviewItem],
     vault_path: Path | None = None,
 ) -> Path:
     """index.md 갱신 — 기존 파일이면 마커 사이만 교체, 없으면 새 생성."""

@@ -21,7 +21,7 @@ from synapse_memory.wiki.integration import (
     build_integration_prompt,
     parse_ops,
 )
-from synapse_memory.wiki.log import append_log
+from synapse_memory.wiki.log import append_log, summarize_provider_error
 from synapse_memory.wiki.rawdoc import iter_new_raw
 from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
 from synapse_memory.wiki.schema import ensure_schema
@@ -50,6 +50,8 @@ _SIGNAL_PATTERNS = (
     "ruff",
     "git ",
 )
+
+AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
 
 
 @dataclass
@@ -165,7 +167,7 @@ def ingest_source(
     vault_path: Path | None = None,
     raw_root: Path | None = None,
     watermark_path: Path | None = None,
-    ai_env: object | None = None,
+    ai_env: AIEnv = None,
     model: str | None = None,
     dry_run: bool = False,
     limit: int | None = None,
@@ -240,8 +242,8 @@ def ingest_source(
                     continue
                 written = apply_ops(ops, vault_path=vault_path, today=today)
                 result.pages_written.extend(written)
-                # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever). 로컬
-                # 임베딩(bge-m3) 로드를 핫패스에서 영구 차단. 페이지는 디스크에만 기록.
+                # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever).
+                # 로컬 임베딩 로드를 핫패스에서 영구 차단. 페이지는 디스크에만 기록.
                 if written:
                     append_log(
                         f"ingest {source}: {len(written)} pages "
@@ -249,12 +251,13 @@ def ingest_source(
                         vault_path=vault_path,
                     )
         except Exception as exc:
+            error_summary = summarize_provider_error(exc)
             if is_large_doc:
                 result.docs_skipped += 1
                 if not dry_run:
                     append_log(
                         f"ingest {source}: skipped large doc from {doc.ref} "
-                        f"after {type(exc).__name__}: {exc}",
+                        f"after {error_summary}",
                         vault_path=vault_path,
                     )
                 max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
@@ -262,7 +265,7 @@ def ingest_source(
                     save_watermark(source, max_mtime, path=watermark_path)
                 continue
             # 실패한 작은 doc은 watermark를 전진시키지 않는다 → 재실행 시 재시도.
-            result.errors.append(f"{doc.ref}: {exc}")
+            result.errors.append(f"{doc.ref}: {error_summary}")
             continue
         # 성공 경로에서만 watermark 후보를 전진시킨다.
         max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)

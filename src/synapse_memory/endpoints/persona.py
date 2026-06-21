@@ -483,7 +483,7 @@ def _resolve_sort_ts(
     distance: float | None = None,
     document: str = "",
 ) -> CardWithMeta:
-    """ChromaDB metadata + today → ``CardWithMeta`` (RT-1 폴백, RT-2 YYYY-MM 정규화)."""
+    """Card metadata + today → ``CardWithMeta`` (RT-1 폴백, RT-2 YYYY-MM 정규화)."""
     card_id = str(metadata.get("card_id") or metadata.get("id") or "")
     raw_kind = str(metadata.get("source_kind") or "card_project")
     source_kind: Literal["card_project", "card_company"] = (

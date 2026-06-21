@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from synapse_memory.doctor import (
@@ -46,8 +48,85 @@ def test_wiki_maintenance_ok_when_plist_present(tmp_path: Path) -> None:
     path = plist_path(home=tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("<plist></plist>", encoding="utf-8")
+    state = tmp_path / "state.json"
+    now = datetime.now().astimezone().isoformat()
+    state.write_text(
+        f'{{"claude-code": "{now}", "codex": "{now}"}}',
+        encoding="utf-8",
+    )
 
-    result = diagnose_wiki_maintenance(home=tmp_path)
+    result = diagnose_wiki_maintenance(home=tmp_path, state_path=state)
 
     assert result.status == DiagnosticStatus.OK
     assert str(path) in result.message
+
+
+def test_wiki_maintenance_warns_on_stale_watermark(tmp_path: Path) -> None:
+    from synapse_memory.wiki.launchd import plist_path
+
+    path = plist_path(home=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<plist></plist>", encoding="utf-8")
+    stale = (datetime.now().astimezone() - timedelta(days=30)).isoformat()
+    state = tmp_path / "state.json"
+    state.write_text(
+        f'{{"claude-code": "{stale}", "codex": "{stale}"}}',
+        encoding="utf-8",
+    )
+
+    result = diagnose_wiki_maintenance(home=tmp_path, state_path=state)
+
+    assert result.status == DiagnosticStatus.WARN
+    assert "stale" in result.message
+
+
+def test_wiki_maintenance_reports_recent_watch_errors(tmp_path: Path) -> None:
+    from synapse_memory.wiki.launchd import plist_path
+
+    path = plist_path(home=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<plist></plist>", encoding="utf-8")
+    state = tmp_path / "state.json"
+    now = datetime.now().astimezone().isoformat()
+    state.write_text(
+        f'{{"claude-code": "{now}", "codex": "{now}"}}',
+        encoding="utf-8",
+    )
+    err = tmp_path / "watch.err.log"
+    err.write_text("provider failed\n", encoding="utf-8")
+
+    result = diagnose_wiki_maintenance(
+        home=tmp_path,
+        state_path=state,
+        err_log_path=err,
+    )
+
+    assert result.status == DiagnosticStatus.WARN
+    assert "watch.err.log" in result.message
+
+
+def test_wiki_maintenance_ignores_old_watch_errors(tmp_path: Path) -> None:
+    from synapse_memory.wiki.launchd import plist_path
+
+    path = plist_path(home=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("<plist></plist>", encoding="utf-8")
+    state = tmp_path / "state.json"
+    now = datetime.now().astimezone()
+    state.write_text(
+        f'{{"claude-code": "{now.isoformat()}", "codex": "{now.isoformat()}"}}',
+        encoding="utf-8",
+    )
+    err = tmp_path / "watch.err.log"
+    err.write_text("provider failed long ago\n", encoding="utf-8")
+    old_timestamp = (now - timedelta(days=2)).timestamp()
+    os.utime(err, (old_timestamp, old_timestamp))
+
+    result = diagnose_wiki_maintenance(
+        home=tmp_path,
+        state_path=state,
+        err_log_path=err,
+    )
+
+    assert result.status == DiagnosticStatus.OK
+    assert "watch.err.log" not in result.message

@@ -46,6 +46,9 @@ def test_audit_classifies_pending_docs_without_llm(tmp_path, monkeypatch) -> Non
     assert result.docs_oversize == 1
     assert result.estimated_llm_calls == 3
     assert result.max_chars == 90
+    assert result.privacy_mode == "raw_or_sampled_raw_to_provider"
+    assert result.provider_payload == "small_raw_or_sampled_raw"
+    assert "sampled docs send" in result.privacy_note
 
 
 def test_audit_can_estimate_without_semantic_retrieval(tmp_path, monkeypatch) -> None:

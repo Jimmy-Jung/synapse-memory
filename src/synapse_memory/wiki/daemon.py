@@ -15,7 +15,7 @@ from pathlib import Path
 
 from synapse_memory.config import get_config
 from synapse_memory.wiki.ingest import ingest_source
-from synapse_memory.wiki.lock import FileLock, LockHeldError, default_lock_path
+from synapse_memory.wiki.lock import LockedOutcome, default_lock_path, run_with_ingest_lock
 
 # 분 → 초.
 SECONDS_PER_MINUTE = 60
@@ -46,17 +46,21 @@ def run_watch_cycle(
         idle_minutes = cfg.idle_minutes
     if lock_path is None:
         lock_path = default_lock_path()
-    try:
-        with FileLock(lock_path):
-            # 020: bounded 단명 사이클 — limit로 메모리 천장, checkpoint_each로 doc별
-            # watermark 저장(중단/kill돼도 다음 사이클이 이어서 = 재처리 악순환 차단).
-            result = ingest_source(
-                source,
-                min_age_seconds=idle_minutes * SECONDS_PER_MINUTE,
-                vault_path=vault_path,
-                limit=cfg.max_docs_per_cycle,
-                checkpoint_each=True,
-            )
-            return CycleOutcome(ran=True, skipped_reason=None, result=result)
-    except LockHeldError:
-        return CycleOutcome(ran=False, skipped_reason="locked")
+    # 020: bounded 단명 사이클 — limit로 메모리 천장, checkpoint_each로 doc별
+    # watermark 저장(중단/kill돼도 다음 사이클이 이어서 = 재처리 악순환 차단).
+    outcome = run_with_ingest_lock(
+        source=source,
+        mode="watch",
+        on_locked="skip",
+        lock_path=lock_path,
+        operation=lambda: ingest_source(
+            source,
+            min_age_seconds=idle_minutes * SECONDS_PER_MINUTE,
+            vault_path=vault_path,
+            limit=cfg.max_docs_per_cycle,
+            checkpoint_each=True,
+        ),
+    )
+    if isinstance(outcome, LockedOutcome):
+        return CycleOutcome(ran=False, skipped_reason=outcome.reason)
+    return CycleOutcome(ran=True, skipped_reason=None, result=outcome)

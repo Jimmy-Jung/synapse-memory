@@ -10,9 +10,14 @@ description: Use when the user wants to tidy their vault — "vault 정리해줘
 ## 실행
 
 ```bash
-synapse-memory cleanup
+synapse-memory cleanup scan
+synapse-memory cleanup scan --json
+synapse-memory cleanup apply --dry-run
+synapse-memory cleanup apply --apply
 ```
 
-(인자 없이 호출 후, CLI가 대화형으로 카테고리 — `inbox stale` / `dormant projects` / `empty cards` 등 — 를 묻습니다.)
+먼저 `cleanup scan`으로 후보를 보여줍니다. 사용자가 승인하기 전에는
+`cleanup apply --apply`를 실행하지 마세요. `cleanup apply`와 `cleanup apply --dry-run`은
+둘 다 dry-run입니다.
 
 임계값 (예: "60일 이상 미접근") 은 `config` skill 로 조정합니다.

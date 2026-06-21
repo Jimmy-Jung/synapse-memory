@@ -127,13 +127,15 @@ from synapse_memory.storage.l0 import l0_root  # noqa: E402
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
-from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
+from synapse_memory.wiki.ingest import IngestResult, ingest_source  # noqa: E402
 from synapse_memory.wiki.ingest_audit import audit_ingest_queue  # noqa: E402
 from synapse_memory.wiki.launchd import (  # noqa: E402
+    LaunchctlError,
     install_watch,
     uninstall_watch,
 )
 from synapse_memory.wiki.lint import run_lint  # noqa: E402
+from synapse_memory.wiki.lock import IngestAlreadyRunningError, run_with_ingest_lock  # noqa: E402
 from synapse_memory.wiki.query import ask_wiki  # noqa: E402
 from synapse_memory.wiki.watermark import load_watermark  # noqa: E402
 
@@ -383,15 +385,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     # v2 wiki 자동 유지 데몬 점검 — launchd watch LaunchAgent + maintenance engine
     try:
-        from synapse_memory.config import load_config
+        from synapse_memory.config import describe_privacy_mode, load_config
 
         wm_result = diagnose_wiki_maintenance()
         if wm_result.status == DiagnosticStatus.OK:
             print(f"{OK} {wm_result.message}")
         else:
             print(f"⚠ {wm_result.message}")
-        engine = load_config().maintenance.engine
+        cfg = load_config()
+        engine = cfg.maintenance.engine
         print(f"{OK} wiki maintenance engine: {engine}")
+        privacy_mode = describe_privacy_mode(cfg)
+        print(f"{OK} privacy mode ingest: {privacy_mode.ingest}")
+        print(f"{OK} privacy mode query: {privacy_mode.query}")
     except Exception as exc:
         print(f"⚠ wiki 유지 데몬 진단 실패: {exc}")
 
@@ -418,11 +424,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         from synapse_memory.hooks.install import diagnose_session_hook
 
         hook_result = diagnose_session_hook()
-        if hook_result.installed:
+        hook_ready = getattr(hook_result, "ready", hook_result.installed)
+        if hook_ready:
             print(f"{OK} {hook_result.message}")
         else:
             print(f"⚠ {hook_result.message}")
-            print("  설치: synapse-memory hook install")
+            if not hook_result.installed:
+                print("  설치: synapse-memory hook install")
+            else:
+                print("  정비: synapse-memory hook install")
+                print("  현재 프로젝트 등록: synapse-memory setup --no-marker")
+                print("  캐시 갱신: synapse-memory context render")
     except Exception as exc:
         print(f"⚠ SessionStart hook 진단 실패: {exc}")
 
@@ -453,10 +465,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def cmd_card_list(args: argparse.Namespace) -> int:
     """Project / Company Card 목록."""
     kind = args.type
+    project_cards = list_project_cards() if kind in ("project", "all") else []
+    company_cards = list_company_cards() if kind in ("company", "all") else []
+
+    if args.json:
+        from dataclasses import asdict
+
+        print(
+            json.dumps(
+                {
+                    "type": kind,
+                    "total": len(project_cards) + len(company_cards),
+                    "projects": [asdict(card) for card in project_cards],
+                    "companies": [asdict(card) for card in company_cards],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
     shown = 0
 
     if kind in ("project", "all"):
-        cards = list_project_cards()
+        cards = project_cards
         if cards:
             print(f"\n[Project Cards]   {projects_dir()}")
             print(
@@ -474,7 +506,7 @@ def cmd_card_list(args: argparse.Namespace) -> int:
             shown += len(cards)
 
     if kind in ("company", "all"):
-        cards_c = list_company_cards()
+        cards_c = company_cards
         if cards_c:
             print(f"\n[Company Cards]   {companies_dir()}")
             print(
@@ -662,12 +694,25 @@ def cmd_me_decide(args: argparse.Namespace) -> int:
 def cmd_ingest(args: argparse.Namespace) -> int:
     """wiki ingest 엔진 1회 실행."""
     dry = bool(getattr(args, "dry_run", False))
-    result = ingest_source(
-        args.source,
-        dry_run=dry,
-        limit=args.limit,
-        semantic_retrieval=not args.no_semantic_retrieval,
-    )
+    try:
+        locked_result = run_with_ingest_lock(
+            source=args.source,
+            mode="manual",
+            on_locked="fail",
+            operation=lambda: ingest_source(
+                args.source,
+                dry_run=dry,
+                limit=args.limit,
+                semantic_retrieval=not args.no_semantic_retrieval,
+            ),
+        )
+    except IngestAlreadyRunningError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
+    if not isinstance(locked_result, IngestResult):
+        print(f"{FAIL} ingest already running: {locked_result.reason}", file=sys.stderr)
+        return 1
+    result = locked_result
     label = "(dry-run) " if dry else ""
     print(f"{label}ingest {result.source}: docs={result.docs_processed}, "
           f"pages={len(result.pages_written)}, skipped={result.docs_skipped}")
@@ -688,6 +733,12 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
         min_age_seconds=args.min_age_seconds,
         semantic_retrieval=not args.no_semantic_retrieval,
     )
+    if args.json:
+        from dataclasses import asdict
+
+        print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
+        return 0
+
     print(
         f"ingest-audit {result.source}: pending={result.docs_pending}, "
         f"small={result.docs_small}, sampled={result.docs_sampled}, "
@@ -695,17 +746,27 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
         f"estimated_llm_calls={result.estimated_llm_calls}, "
         f"max_chars={result.max_chars}"
     )
+    print(
+        f"privacy_mode={result.privacy_mode}, "
+        f"provider_payload={result.provider_payload}"
+    )
+    print(f"privacy_note: {result.privacy_note}")
     return 0
 
 
 def cmd_backfill(args: argparse.Namespace) -> int:
     """빈 vault 재구축 — 전체 raw 이력을 배치 단위로 ingest (재개 가능)."""
-    r = run_backfill(
-        source=args.source,
-        batch_size=args.batch_size,
-        max_batches=args.max_batches,
-        semantic_retrieval=not args.no_semantic_retrieval,
-    )
+    try:
+        r = run_backfill(
+            source=args.source,
+            batch_size=args.batch_size,
+            max_batches=args.max_batches,
+            semantic_retrieval=not args.no_semantic_retrieval,
+            wait_lock=args.wait_lock,
+        )
+    except IngestAlreadyRunningError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     print(
         f"backfill {r.source}: {r.batches} batches, "
         f"{r.docs_processed} docs, {len(r.pages_written)} pages, "
@@ -778,27 +839,47 @@ def cmd_watch_run(args: argparse.Namespace) -> int:
 
 def cmd_watch_install(args: argparse.Namespace) -> int:
     """launchd LaunchAgent 설치 (raw 변화 시 watch 실행)."""
-    path = install_watch()
+    try:
+        path = install_watch()
+    except LaunchctlError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     print(f"installed: {path}")
     return 0
 
 
 def cmd_watch_uninstall(args: argparse.Namespace) -> int:
     """launchd LaunchAgent 제거."""
-    uninstall_watch()
+    try:
+        uninstall_watch()
+    except LaunchctlError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     print("uninstalled")
     return 0
 
 
 def cmd_watch_status(args: argparse.Namespace) -> int:
-    """LaunchAgent 설치 여부 + 마지막 watermark 출력."""
+    """LaunchAgent 설치 여부 + source별 watermark 출력."""
     from synapse_memory.wiki.launchd import plist_path
 
     path = plist_path()
     installed = path.exists()
+    sources = [
+        {"source": source, "watermark": load_watermark(source)}
+        for source in _WATCH_SOURCES
+    ]
+    if args.json:
+        print(
+            json.dumps(
+                {"installed": installed, "plist": str(path), "sources": sources},
+                ensure_ascii=False,
+            )
+        )
+        return 0
     print(f"installed: {installed} ({path})")
-    watermark = load_watermark("claude-code")
-    print(f"watermark: {watermark or '(none)'}")
+    for entry in sources:
+        print(f"{entry['source']} watermark: {entry['watermark'] or '(none)'}")
     return 0
 
 
@@ -1295,7 +1376,7 @@ def cmd_cleanup_apply(args: argparse.Namespace) -> int:
         print("선택된 후보 없음.")
         return 0
 
-    dry_run = not args.apply
+    dry_run = args.dry_run or not args.apply
     results = apply_cleanup(plan, selected=selected, dry_run=dry_run, vault=vault)
     manifest = write_cleanup_manifest(vault, results)
 
@@ -2928,7 +3009,7 @@ def cmd_collect_codex(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="synapse-memory",
-        description="Personal knowledge memory & RAG layer.",
+        description="Personal knowledge memory & provider-only wiki layer.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
@@ -3254,6 +3335,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["project", "company", "all"],
         default="all",
     )
+    p_card_list.add_argument("--json", action="store_true", help="JSON 출력")
     p_card_list.set_defaults(func=cmd_card_list)
 
     p_card_show = card_sub.add_parser("show", help="Card 내용")
@@ -3324,6 +3406,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_watch_uninstall.set_defaults(func=cmd_watch_uninstall)
     p_watch_status = watch_sub.add_parser("status", help="설치 여부 + watermark")
+    p_watch_status.add_argument(
+        "--json",
+        action="store_true",
+        help="설치 여부와 source별 watermark를 JSON으로 출력",
+    )
     p_watch_status.set_defaults(func=cmd_watch_status)
 
     p_cluster = sub.add_parser(
@@ -3358,7 +3445,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_cl_class.set_defaults(func=cmd_cluster_classify)
 
     p_ask = sub.add_parser(
-        "ask", help="자연어 질의 → RAG retrieve → AI 답변"
+        "ask",
+        help="자연어 질의 → provider 선별 → AI 답변",
+        description="자연어 질의를 CardIndex와 provider 선별 결과로 답변합니다.",
     )
     p_ask.add_argument("query", help="자연어 질문")
     p_ask.add_argument("--top-k", type=int, default=None)
@@ -3371,7 +3460,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ask.add_argument(
         "--hybrid",
         action="store_true",
-        help="dense + BM25 RRF 결합 검색",
+        help="호환 플래그: provider-only에서는 ranking 차이 없음",
     )
     p_ask.add_argument(
         "--save",
@@ -3493,12 +3582,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_wdt.add_argument(
         "--hybrid",
         action="store_true",
-        help="distance 모드에서 dense + BM25 RRF 결합 검색",
+        help="호환 플래그: provider-only에서는 ranking 차이 없음",
     )
     p_wdt.set_defaults(func=cmd_me_what_did_i_think)
 
     p_dec = me_sub.add_parser(
-        "decide", help="의사결정 코파일럿 (Profile + Patterns + RAG)"
+        "decide", help="의사결정 코파일럿 (Profile + Patterns + provider 선별 Card)"
     )
     p_dec.add_argument("situation", help="결정할 상황")
     p_dec.add_argument("--top-k", type=int, default=None)
@@ -3596,7 +3685,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Quick mode — 최근 N일 modified 노트만 처리 + classify cluster 수 제한 "
             "+ update_profile auto-skip. 첫 답변 ~3분 목표. full pipeline 은 "
-            "별도 cron 또는 수동 `daily` (no flag) 호출 (ChromaDB 동시성 회피)."
+            "별도 cron 또는 수동 `daily` (no flag) 호출 (wiki write 동시성 회피)."
         ),
     )
     p_daily.add_argument(
@@ -3640,7 +3729,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_ingest_audit = sub.add_parser(
         "ingest-audit",
-        help="watermark 이후 raw queue 비용을 LLM 호출 없이 점검",
+        help="watermark 이후 raw queue 비용과 raw/sample provider 전송 정책을 LLM 호출 없이 점검",
+        description=(
+            "watermark 이후 raw queue 비용과 raw/sample provider 전송 정책을 LLM 호출 없이 "
+            "점검합니다. privacy_mode=raw_or_sampled_raw_to_provider 는 small raw 전체 또는 "
+            "sampled raw 일부가 ingest/backfill/watch에서 provider로 갈 수 있음을 뜻합니다."
+        ),
     )
     p_ingest_audit.add_argument(
         "--source", default="claude-code", choices=["claude-code", "codex"],
@@ -3658,6 +3752,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="관련 페이지 선별 호출을 제외한 저비용 예상 호출 수 계산",
     )
+    p_ingest_audit.add_argument("--json", action="store_true", help="JSON 출력")
     p_ingest_audit.set_defaults(func=cmd_ingest_audit)
 
     p_backfill = sub.add_parser(
@@ -3673,6 +3768,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_backfill.add_argument(
         "--max-batches", type=int, default=None, help="최대 배치 수 (생략 시 소진까지)",
+    )
+    p_backfill.add_argument(
+        "--wait-lock",
+        action="store_true",
+        help="다른 ingest가 실행 중이면 lock이 풀릴 때까지 대기",
     )
     p_backfill.add_argument(
         "--no-semantic-retrieval",
@@ -3761,16 +3861,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_cleanup_scan.add_argument("--resume-days", type=int, default=90)
     p_cleanup_scan.add_argument("--memory-inbox-days", type=int, default=60)
     p_cleanup_scan.add_argument("--report-days", type=int, default=90)
+    p_cleanup_scan.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="scan은 항상 read-only이므로 호환용 no-op",
+    )
     p_cleanup_scan.set_defaults(func=cmd_cleanup_scan)
 
     p_cleanup_apply = cleanup_sub.add_parser(
         "apply",
         help="선택된 청소 후보를 archive 폴더로 이동 + 매니페스트 작성 (기본 dry-run)",
     )
-    p_cleanup_apply.add_argument(
+    cleanup_apply_mode = p_cleanup_apply.add_mutually_exclusive_group()
+    cleanup_apply_mode.add_argument(
         "--apply",
         action="store_true",
         help="실제 이동 실행 (생략 시 dry-run)",
+    )
+    cleanup_apply_mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="명시적 dry-run (기본값)",
     )
     p_cleanup_apply.add_argument(
         "--category",

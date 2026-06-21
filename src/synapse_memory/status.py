@@ -70,7 +70,7 @@ class DailyAlreadyRunningError(RuntimeError):
 class DailyRunLock:
     """daily 중복 실행 방지용 advisory file lock.
 
-    ChromaDB / status 파일 같은 machine-local write surface는 동시 실행에 취약하다.
+    wiki/status 파일 같은 machine-local write surface는 동시 실행에 취약하다.
     lock 획득 실패 시 기존 pid를 포함해 즉시 실패시킨다.
     """
 

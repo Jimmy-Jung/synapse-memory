@@ -42,7 +42,7 @@ class ClaudeModelsConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
-    # 020: 로컬 임베딩 대체 — wiki 관련 페이지 선별(LLM-as-retriever). 싼 티어.
+    # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
     relevance: str = "haiku"
 
 
@@ -57,7 +57,7 @@ class CodexModelsConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
-    # 020: 로컬 임베딩 대체 — wiki 관련 페이지 선별(LLM-as-retriever). 싼 티어.
+    # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
     relevance: str = "gpt-5.5"
 
 
@@ -79,6 +79,7 @@ class TopKConfig:
     decide: int = 6
     recall: int = 8
     resume: int = 6
+    # Legacy compatibility no-op after provider-only migration.
     rag_search: int = 5
 
 
@@ -234,8 +235,10 @@ class MaintenanceConfig:
 
 @dataclass
 class AdvancedRagConfig:
+    """Deprecated compatibility surface for pre-020 local retrieval settings."""
+
     rrf_k: int = 60
-    embedding_model: str = "bge-m3"  # 변경 시 색인 재생성 필요
+    embedding_model: str = "provider-only-disabled"
 
 
 @dataclass
@@ -267,6 +270,15 @@ class SynapseConfig:
     advanced: AdvancedConfig = field(default_factory=AdvancedConfig)
 
 
+@dataclass(frozen=True)
+class PrivacyMode:
+    """현재 데이터 흐름의 외부 provider 전송 경계."""
+
+    ingest: str
+    query: str
+    note: str
+
+
 ADVANCED_PREFIXES: tuple[str, ...] = ("advanced.",)
 
 PROTECTED_PREFIXES: tuple[str, ...] = (
@@ -278,6 +290,24 @@ PROTECTED_PREFIXES: tuple[str, ...] = (
 def is_advanced_path(path: str) -> bool:
     """advanced 섹션 키인지 — set 전 경고 대상."""
     return path.startswith(ADVANCED_PREFIXES)
+
+
+def describe_privacy_mode(cfg: SynapseConfig) -> PrivacyMode:
+    """현재 설정 기준 privacy/dataflow 정책을 사람이 읽을 수 있게 요약한다."""
+    if cfg.maintenance.engine in {"claude", "codex"}:
+        return PrivacyMode(
+            ingest="raw_or_sampled_raw_to_provider",
+            query="wiki_cards_and_approved_profile_to_provider",
+            note=(
+                "ingest/backfill/watch may send small raw docs or sampled raw text "
+                "to the configured provider; query paths use wiki/cards/approved profile."
+            ),
+        )
+    return PrivacyMode(
+        ingest="local_only_or_disabled",
+        query="provider_dependent",
+        note="maintenance ingest is not configured for a supported provider engine.",
+    )
 
 
 def is_protected_path(path: str) -> bool:
@@ -564,8 +594,14 @@ def _flatten(obj: Any, prefix: str = "") -> dict[str, Any]:
 def render_config(cfg: SynapseConfig, *, show_advanced: bool = False) -> str:
     """사람용 한 페이지 요약. advanced 섹션은 옵션."""
     flat = _flatten(cfg)
+    privacy_mode = describe_privacy_mode(cfg)
     lines: list[str] = []
     lines.append(f"# config: {DEFAULT_CONFIG_PATH}")
+    lines.append("")
+    lines.append("[privacy_mode]")
+    lines.append(f"  ingest = {privacy_mode.ingest}")
+    lines.append(f"  query = {privacy_mode.query}")
+    lines.append(f"  note = {privacy_mode.note}")
     lines.append("")
     sections: dict[str, list[tuple[str, Any]]] = {}
     for key, val in flat.items():

@@ -89,5 +89,61 @@ def test_cmd_doctor_reports_hook_install_status(
 
     assert rc == 0
     out = capsys.readouterr().out
+    assert "privacy mode ingest: raw_or_sampled_raw_to_provider" in out
+    assert "privacy mode query: wiki_cards_and_approved_profile_to_provider" in out
     assert "Claude Code hook 미설치" in out
     assert "synapse-memory hook install" in out
+
+
+def test_cmd_doctor_reports_hook_not_ready_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ok_diag = DiagnosticResult("test", DiagnosticStatus.OK, "ok")
+
+    monkeypatch.setattr(
+        cli_mod,
+        "detect_ai_environment",
+        lambda: SimpleNamespace(
+            ready=True,
+            provider="claude",
+            path="/usr/local/bin/claude",
+            version="1.0",
+            model=None,
+        ),
+    )
+    monkeypatch.setattr(
+        "synapse_memory.config.load_config",
+        lambda: SimpleNamespace(
+            vault=str(tmp_path),
+            maintenance=SimpleNamespace(engine="claude"),
+        ),
+    )
+    monkeypatch.setattr(cli_mod, "diagnose_wiki_pages", lambda _vault: ok_diag)
+    monkeypatch.setattr(cli_mod, "diagnose_wiki_maintenance", lambda: ok_diag)
+    monkeypatch.setattr(
+        "synapse_memory.doctor.diagnose_dataview_plugin",
+        lambda _vault: ok_diag,
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "diagnose_vault_config_consistency",
+        lambda _vault: ok_diag,
+    )
+    monkeypatch.setattr(
+        "synapse_memory.hooks.install.diagnose_session_hook",
+        lambda: SimpleNamespace(
+            installed=True,
+            ready=False,
+            message="hook 설치됨; 현재 프로젝트 미등록",
+        ),
+    )
+
+    rc = cmd_doctor(argparse.Namespace(fix=False, fix_config=False, yes=False))
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "현재 프로젝트 미등록" in out
+    assert "synapse-memory setup --no-marker" in out
+    assert "synapse-memory context render" in out

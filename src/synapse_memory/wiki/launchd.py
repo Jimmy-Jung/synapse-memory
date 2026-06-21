@@ -15,7 +15,6 @@ import os
 import plistlib
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 from synapse_memory.storage.l0 import l0_root
@@ -33,6 +32,10 @@ _UNSTABLE_PATH_MARKERS = (
     "/tmp/",
     "/var/tmp/",
 )
+
+
+class LaunchctlError(RuntimeError):
+    """launchctl load/unload 실패."""
 
 
 def _known_user_bin_paths() -> tuple[str, ...]:
@@ -103,10 +106,9 @@ def _launchctl(*args: str) -> None:
     """유일한 subprocess seam — 테스트는 이 함수를 monkeypatch한다."""
     result = subprocess.run(["launchctl", *args], check=False, capture_output=True)
     if result.returncode != 0:
-        print(
-            f"warning: launchctl {args} failed (rc={result.returncode}): "
-            f"{result.stderr.decode(errors='replace').strip()}",
-            file=sys.stderr,
+        stderr = result.stderr.decode(errors="replace").strip()
+        raise LaunchctlError(
+            f"launchctl {' '.join(args)} failed (rc={result.returncode}): {stderr}"
         )
 
 

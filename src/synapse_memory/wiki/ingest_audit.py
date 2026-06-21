@@ -14,6 +14,12 @@ from synapse_memory.wiki.watermark import load_watermark
 @dataclass(frozen=True)
 class IngestAuditResult:
     source: str
+    privacy_mode: str = "raw_or_sampled_raw_to_provider"
+    provider_payload: str = "small_raw_or_sampled_raw"
+    privacy_note: str = (
+        "small docs may send raw text; sampled docs send a bounded raw sample; "
+        "oversize docs are skipped without provider text."
+    )
     docs_pending: int = 0
     docs_small: int = 0
     docs_sampled: int = 0

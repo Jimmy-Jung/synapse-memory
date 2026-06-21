@@ -36,7 +36,7 @@ def _default_semantic(
 ) -> list[str]:
     """provider LLM(claude|codex)로 관련 wiki 페이지 slug를 선별 (020).
 
-    로컬 임베딩(bge-m3) 제거 — PageIndex를 provider에 넘겨 LLM-as-retriever로 선별.
+    로컬 임베딩 제거 — PageIndex를 provider에 넘겨 LLM-as-retriever로 선별.
     실패/빈 인덱스 → ``[]`` (graceful, ingest 진행 보존). ``pages`` 주입 시 디스크
     재로드를 피한다.
     """

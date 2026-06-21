@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from synapse_memory.wiki.index_md import write_index
+from synapse_memory.wiki.index_md import ReviewItem, write_index
 from synapse_memory.wiki.log import append_log
 from synapse_memory.wiki.page import (
     VALID_TYPES,
@@ -114,7 +114,7 @@ class LintReport:
     backlinks_added: int = 0
     dead_links_removed: int = 0
     orphans: list[str] = field(default_factory=list)
-    review_items: list[dict] = field(default_factory=list)
+    review_items: list[ReviewItem] = field(default_factory=list)
 
 
 def _all_pages(*, vault_path: Path | None = None) -> list[WikiPage]:
@@ -139,16 +139,16 @@ def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
     dead_targets_by_slug: dict[str, set[str]] = {}
     for src, target in dead:
         dead_targets_by_slug.setdefault(src, set()).add(target)
-    for page in pages:
-        bad = dead_targets_by_slug.get(page.slug)
+    for source_page in pages:
+        bad = dead_targets_by_slug.get(source_page.slug)
         if not bad:
             continue
         kept = tuple(
-            link for link in page.related if _link_target(link) not in bad
+            link for link in source_page.related if _link_target(link) not in bad
         )
-        removed = len(page.related) - len(kept)
+        removed = len(source_page.related) - len(kept)
         if removed:
-            save_page(dataclasses.replace(page, related=kept), vault_path=vault_path)
+            save_page(dataclasses.replace(source_page, related=kept), vault_path=vault_path)
             report.dead_links_removed += removed
 
     # ② 누락 역링크 보강 (죽은 링크 제거 후 재수집)
@@ -156,11 +156,11 @@ def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
     by_slug = {p.slug: p for p in pages}
     broken = find_broken_backlinks(pages)
     for needs_backlink, link_to in broken:
-        page = by_slug.get(needs_backlink)
-        if page is None:
+        target_page = by_slug.get(needs_backlink)
+        if target_page is None:
             continue
-        updated = with_related(page, f"[[{link_to}]]")
-        if updated is not page and updated.related != page.related:
+        updated = with_related(target_page, f"[[{link_to}]]")
+        if updated is not target_page and updated.related != target_page.related:
             save_page(updated, vault_path=vault_path)
             by_slug[needs_backlink] = updated
             report.backlinks_added += 1
@@ -240,11 +240,9 @@ def run_lint(
     orphans = find_orphans(pages)
     stale = stale_candidates(pages, today=today)
     merges = merge_candidates(pages)
-    review_items: list[dict] = [
-        {"kind": "stale", "slug": s} for s in stale
-    ] + [
-        {"kind": "merge", "slug": a, "other": b} for a, b in merges
-    ]
+    review_items: list[ReviewItem] = []
+    review_items.extend({"kind": "stale", "slug": s} for s in stale)
+    review_items.extend({"kind": "merge", "slug": a, "other": b} for a, b in merges)
     report.orphans = orphans
     report.review_items = review_items
 

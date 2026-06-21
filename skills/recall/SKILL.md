@@ -10,7 +10,7 @@ description: Use when the user wants to recall how their thinking on a topic evo
 ## 실행
 
 ```bash
-SYNAPSE_FROM_AGENT=1 synapse-memory recall "<주제>" [--hybrid] [--timeline] [--by time|distance] [--limit N]
+SYNAPSE_FROM_AGENT=1 synapse-memory persona what-did-i-think "<주제>" [--hybrid] [--timeline] [--by time|distance] [--limit N]
 ```
 
 - `--timeline`: 날짜순으로 입장 변화 요약

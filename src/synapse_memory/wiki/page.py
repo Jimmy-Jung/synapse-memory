@@ -189,7 +189,7 @@ def page_dir(
     if page_type == "insight":
         return year_month_path(_insight_base(vault_path), when or date.today())
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    sub = getattr(get_config().vault_folders.wiki, _TYPE_FOLDER_ATTR[page_type])
+    sub = str(getattr(get_config().vault_folders.wiki, _TYPE_FOLDER_ATTR[page_type]))
     return vault / sub
 
 

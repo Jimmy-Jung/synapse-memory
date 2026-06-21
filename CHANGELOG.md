@@ -2,6 +2,30 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.0] — 2026-06-21
+
+Codex/Claude 플러그인에서 가장 기본적인 hook과 skill 진입점이 실제 CLI 계약과
+일치하는지 재검토하고, 자동 점검이 가능한 read-only 표면을 보강했다.
+
+### Fixed
+
+- SessionStart hook 설치/진단 경로를 절대 경로 기반으로 정렬해 Codex 설정에서
+  legacy hook 명령이 남아도 `doctor`가 ready 여부를 정확히 판단하도록 했다.
+- `$recall`, `$resume`, `$decide`, `$assistant`, `$config`, `$cleanup`,
+  `$onboard` skill 문서가 존재하지 않는 예전 top-level CLI를 안내하던 문제를
+  실제 `persona`, `assistant-status`, `config <subcommand>`, `cleanup <action>`
+  명령으로 수정했다.
+- Codex wrapper skill(`plugins/sm/skills`)을 root skill과 다시 동기화해
+  marketplace 설치 경로와 source checkout 경로의 동작 차이를 없앴다.
+
+### Changed
+
+- `synapse-memory ingest-audit --json`, `synapse-memory card list --json`,
+  `synapse-memory cleanup scan --dry-run`, `synapse-memory cleanup apply --dry-run`
+  을 지원해 플러그인/자동화가 read-only 점검 결과를 구조적으로 읽을 수 있게 했다.
+- 패키지 버전, Claude/Codex manifest, Codex marketplace, README installer 링크를
+  `1.19.0`으로 정렬했다.
+
 ## [1.18.1] — 2026-06-20
 
 Codex plugin marketplace가 1.18.0 이후 추가된 install source 보정까지

@@ -23,7 +23,12 @@ def test_backfill_loops_until_drained(tmp_path, monkeypatch) -> None:
         return r
 
     monkeypatch.setattr(bf, "ingest_source", fake_ingest)
-    result = run_backfill(source="claude-code", vault_path=tmp_path, batch_size=2)
+    result = run_backfill(
+        source="claude-code",
+        vault_path=tmp_path,
+        batch_size=2,
+        lock_path=tmp_path / "ingest.lock",
+    )
     assert result.batches == 3
     assert result.docs_processed == 4
     assert set(result.pages_written) == {"a", "b", "c"}
@@ -32,7 +37,13 @@ def test_backfill_loops_until_drained(tmp_path, monkeypatch) -> None:
 def test_backfill_respects_max_batches(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(bf, "ingest_source",
         lambda source, **kw: IngestResult(source=source, docs_processed=kw["limit"], pages_written=["x"]))
-    result = run_backfill(source="claude-code", vault_path=tmp_path, batch_size=5, max_batches=2)
+    result = run_backfill(
+        source="claude-code",
+        vault_path=tmp_path,
+        batch_size=5,
+        max_batches=2,
+        lock_path=tmp_path / "ingest.lock",
+    )
     assert result.batches == 2
 
 
@@ -42,7 +53,12 @@ def test_backfill_breaks_on_all_failed_batch(tmp_path, monkeypatch) -> None:
         return IngestResult(source=source, docs_processed=kw["limit"],
                             pages_written=[], errors=["x"] * kw["limit"])
     monkeypatch.setattr(bf, "ingest_source", fake_ingest)
-    result = run_backfill(source="claude-code", vault_path=tmp_path, batch_size=3)  # max_batches=None
+    result = run_backfill(
+        source="claude-code",
+        vault_path=tmp_path,
+        batch_size=3,
+        lock_path=tmp_path / "ingest.lock",
+    )  # max_batches=None
     assert result.batches == 1  # 첫 배치 전부 실패 → 즉시 중단 (무한루프 아님)
 
 
@@ -59,7 +75,12 @@ def test_backfill_continues_after_skipped_batch(tmp_path, monkeypatch) -> None:
         return result
 
     monkeypatch.setattr(bf, "ingest_source", fake_ingest)
-    result = run_backfill(source="codex", vault_path=tmp_path, batch_size=1)
+    result = run_backfill(
+        source="codex",
+        vault_path=tmp_path,
+        batch_size=1,
+        lock_path=tmp_path / "ingest.lock",
+    )
     assert result.batches == 2
     assert result.docs_processed == 1
     assert result.docs_skipped == 1
@@ -79,7 +100,49 @@ def test_backfill_can_disable_semantic_retrieval(tmp_path, monkeypatch) -> None:
         batch_size=5,
         max_batches=1,
         semantic_retrieval=False,
+        lock_path=tmp_path / "ingest.lock",
     )
 
     assert result.batches == 1
     assert captured["semantic_retrieval"] is False
+
+
+def test_backfill_holds_shared_lock_for_entire_loop(tmp_path, monkeypatch) -> None:
+    captured = {}
+
+    def fake_locked(**kwargs):
+        captured.update(kwargs)
+        return kwargs["operation"]()
+
+    monkeypatch.setattr(bf, "run_with_ingest_lock", fake_locked)
+    monkeypatch.setattr(
+        bf,
+        "ingest_source",
+        lambda source, **kw: IngestResult(source=source, docs_processed=0),
+    )
+
+    result = run_backfill(source="codex", vault_path=tmp_path, batch_size=2)
+
+    assert result.batches == 1
+    assert captured["source"] == "codex"
+    assert captured["mode"] == "backfill"
+    assert captured["on_locked"] == "fail"
+
+
+def test_backfill_wait_lock_uses_wait_policy(tmp_path, monkeypatch) -> None:
+    captured = {}
+
+    def fake_locked(**kwargs):
+        captured.update(kwargs)
+        return kwargs["operation"]()
+
+    monkeypatch.setattr(bf, "run_with_ingest_lock", fake_locked)
+    monkeypatch.setattr(
+        bf,
+        "ingest_source",
+        lambda source, **kw: IngestResult(source=source, docs_processed=0),
+    )
+
+    run_backfill(source="codex", vault_path=tmp_path, wait_lock=True)
+
+    assert captured["on_locked"] == "wait"

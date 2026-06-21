@@ -1,5 +1,11 @@
 # Implementation Plan: Raw RAG Hybrid
 
+> **SUPERSEDED_BY_PROVIDER_ONLY / HISTORICAL ONLY**
+>
+> 이 문서는 provider-only 전환 전의 과거 구현 계획입니다. 현재 구현은 local
+> embeddings/vector/BM25/hybrid ranking을 쓰지 않고 provider 선별로 일원화되어 있습니다.
+> 현재 source of truth는 `specs/020-provider-only-retrieval/design.md`입니다.
+
 **Branch**: `006-raw-rag-hybrid` | **Date**: 2026-05-12 | **Spec**: [spec.md](./spec.md)  
 **Input**: Feature specification from `specs/006-raw-rag-hybrid/spec.md`
 

@@ -12,7 +12,7 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
     8.  collect obsidian              (변경 .md만)
     9.  cluster classify --resume     (새 cluster만)
     10. card generate (--force=False) (새 cluster만 Card 생성)
-    11. rag index                     (Card upsert)
+    11. wiki/card provider sync       (provider-only context refresh)
     12. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
     13. report                        (DailyReport 작성)
 
@@ -1218,7 +1218,7 @@ def run_daily(
             - classify: ``max_new_clusters=quick_max_clusters`` cap
             - update_profile: auto-skip (heavy AI 호출 회피)
             full pipeline 은 별도 cron 또는 수동 ``daily`` (no flag) 호출.
-            ChromaDB write 동시성 회피를 위해 quick + full 동시 실행 금지.
+            wiki/card write 동시성 회피를 위해 quick + full 동시 실행 금지.
         quick_days: ``quick=True`` 일 때 mtime cutoff 일수. 기본 7.
         quick_max_clusters: ``quick=True`` 일 때 classify 최대 cluster 수. 기본 10.
         dry_run: True면 단계 이름만 출력.

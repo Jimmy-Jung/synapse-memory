@@ -1,5 +1,11 @@
 # Feature Specification: Recipe Hybrid Retrieval
 
+> **SUPERSEDED_BY_PROVIDER_ONLY / HISTORICAL ONLY**
+>
+> 이 문서는 provider-only 전환 전의 과거 설계 기록입니다. 현재 recipe/persona/ask
+> 검색은 local hybrid ranking이 아니라 CardIndex + provider 선별 경로를 사용합니다.
+> 현재 source of truth는 `specs/020-provider-only-retrieval/design.md`입니다.
+
 **Feature Branch**: `008-recipe-hybrid-retrieval`  
 **Created**: 2026-05-12  
 **Status**: Draft  

@@ -26,3 +26,22 @@ def test_cycle_skips_when_locked(tmp_path, monkeypatch) -> None:
         outcome = d.run_watch_cycle(source="claude-code", lock_path=p, idle_minutes=3)
     assert outcome.ran is False
     assert outcome.skipped_reason == "locked"
+
+
+def test_cycle_uses_shared_locked_ingest_skip_policy(tmp_path, monkeypatch) -> None:
+    calls = {}
+
+    def fake_locked(**kwargs):
+        calls.update(kwargs)
+        from synapse_memory.wiki.lock import LockedOutcome
+
+        return LockedOutcome(source=kwargs["source"], mode=kwargs["mode"])
+
+    monkeypatch.setattr(d, "run_with_ingest_lock", fake_locked)
+    outcome = d.run_watch_cycle(source="codex", lock_path=tmp_path / "l.lock", idle_minutes=3)
+
+    assert outcome.ran is False
+    assert outcome.skipped_reason == "locked"
+    assert calls["source"] == "codex"
+    assert calls["mode"] == "watch"
+    assert calls["on_locked"] == "skip"

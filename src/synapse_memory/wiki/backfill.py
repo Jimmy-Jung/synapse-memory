@@ -13,7 +13,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from synapse_memory.llm import AIEnvironment, ClaudeEnvironment, CodexEnvironment
 from synapse_memory.wiki.ingest import ingest_source
+from synapse_memory.wiki.lock import (
+    IngestAlreadyRunningError,
+    LockedOutcome,
+    run_with_ingest_lock,
+)
+
+AIEnv = AIEnvironment | ClaudeEnvironment | CodexEnvironment | None
 
 
 @dataclass
@@ -30,17 +38,52 @@ def run_backfill(
     *,
     source: str = "claude-code",
     vault_path: Path | None = None,
-    ai_env: object | None = None,
+    ai_env: AIEnv = None,
     batch_size: int = 20,
     max_batches: int | None = None,
     today: str | None = None,
     semantic_retrieval: bool = True,
+    wait_lock: bool = False,
+    lock_path: Path | None = None,
 ) -> BackfillResult:
     """배치 단위로 ``ingest_source``를 소진될 때까지 반복 호출.
 
     각 배치는 ``checkpoint_each=True``(doc마다 watermark 저장)와 ``min_age_seconds=None``
     (유휴 필터 끔)로 실행된다. ``docs_processed == 0``(소진) 또는 ``max_batches`` 도달 시 종료.
     """
+    def _run_unlocked() -> BackfillResult:
+        return _run_backfill_unlocked(
+            source=source,
+            vault_path=vault_path,
+            ai_env=ai_env,
+            batch_size=batch_size,
+            max_batches=max_batches,
+            today=today,
+            semantic_retrieval=semantic_retrieval,
+        )
+
+    locked = run_with_ingest_lock(
+        source=source,
+        mode="backfill",
+        on_locked="wait" if wait_lock else "fail",
+        lock_path=lock_path,
+        operation=_run_unlocked,
+    )
+    if isinstance(locked, LockedOutcome):
+        raise IngestAlreadyRunningError(source, "backfill")
+    return locked
+
+
+def _run_backfill_unlocked(
+    *,
+    source: str,
+    vault_path: Path | None,
+    ai_env: AIEnv,
+    batch_size: int,
+    max_batches: int | None,
+    today: str | None,
+    semantic_retrieval: bool,
+) -> BackfillResult:
     result = BackfillResult(source=source)
     while True:
         batch = ingest_source(
