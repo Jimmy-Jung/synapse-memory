@@ -15,6 +15,8 @@ from typing import Any, Protocol
 
 from synapse_memory.llm import ai_api
 
+AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
+
 # 프롬프트에 넣는 doc 발췌 상한 — 거대 세션 전문 통째 투입 금지(메모리/토큰 폭발 방지).
 MAX_DOC_CHARS = 6000
 DEFAULT_MAX_PAGES = 12
@@ -57,13 +59,17 @@ _ANSWER_SYSTEM = (
 )
 
 
-def _provider() -> str | None:
+def _provider() -> ai_api.AIProvider | None:
     """config.ai_provider — auto면 None(ai_api가 런타임 감지)."""
     try:
         from synapse_memory.config import get_config
 
         provider = get_config().ai_provider
-        return None if provider == "auto" else provider
+        if provider == "claude":
+            return "claude"
+        if provider == "codex":
+            return "codex"
+        return None
     except Exception:
         return None
 
@@ -87,7 +93,7 @@ def select_related(
     index: SelectableIndex,
     *,
     max_pages: int = DEFAULT_MAX_PAGES,
-    env: object | None = None,
+    env: AIEnv = None,
     model: str | None = None,
     timeout: int = 60,
 ) -> list[str]:
@@ -137,7 +143,7 @@ def retrieve_then_answer(
     query: str,
     index: SelectableIndex,
     *,
-    env: object | None = None,
+    env: AIEnv = None,
     model: str | None = None,
     timeout: int = 120,
 ) -> str:

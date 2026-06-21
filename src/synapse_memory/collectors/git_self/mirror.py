@@ -143,7 +143,7 @@ def _git_log_records(
     repo: Path,
     self_email: str,
     last_sha: str | None,
-) -> list[dict]:
+) -> list[dict[str, str]]:
     """본인 commit 목록 (오래된 → 최신). 각 dict = JSONL record."""
     rev_range = f"{last_sha}..HEAD" if last_sha else "HEAD"
     try:
@@ -171,7 +171,7 @@ def _git_log_records(
             return _git_log_records(repo, self_email, None)
         return []
 
-    out: list[dict] = []
+    out: list[dict[str, str]] = []
     repo_name = repo.name
     for line in result.stdout.splitlines():
         if _FIELD_SEP not in line:
@@ -192,7 +192,7 @@ def _git_log_records(
     return out
 
 
-def _append_jsonl(dst: Path, records: list[dict]) -> int:
+def _append_jsonl(dst: Path, records: list[dict[str, str]]) -> int:
     """records 를 dst 에 append. 반환: 추가된 byte 수."""
     if not records:
         return 0

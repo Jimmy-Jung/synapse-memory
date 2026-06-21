@@ -86,54 +86,54 @@ def build_card_index(
     entries: list[CardEntry] = []
 
     if "project" in kinds:
-        for c in list_project_cards(vault_path=vault_path):
+        for project in list_project_cards(vault_path=vault_path):
             entries.append(
                 CardEntry(
-                    card_id=c.project_id,
+                    card_id=project.project_id,
                     kind="project",
-                    title=c.display_name,
-                    summary=_summarize(c.body, max_chars=summary_chars),
+                    title=project.display_name,
+                    summary=_summarize(project.body, max_chars=summary_chars),
                     meta={
                         "source_kind": "card_project",
-                        "display_name": c.display_name,
-                        "status": c.status,
-                        "period_end": c.period_end or "",
-                        "created": c.created,
-                        "last_reviewed": c.last_reviewed,
+                        "display_name": project.display_name,
+                        "status": project.status,
+                        "period_end": project.period_end or "",
+                        "created": project.created,
+                        "last_reviewed": project.last_reviewed,
                     },
                 )
             )
 
     if "company" in kinds:
-        for c in list_company_cards(vault_path=vault_path):
+        for company in list_company_cards(vault_path=vault_path):
             entries.append(
                 CardEntry(
-                    card_id=c.company_id,
+                    card_id=company.company_id,
                     kind="company",
-                    title=c.display_name,
-                    summary=_summarize(c.body or c.notes, max_chars=summary_chars),
+                    title=company.display_name,
+                    summary=_summarize(company.body or company.notes, max_chars=summary_chars),
                     meta={
                         "source_kind": "card_company",
-                        "display_name": c.display_name,
-                        "status": c.status,
-                        "created": c.created,
-                        "last_reviewed": c.last_reviewed,
+                        "display_name": company.display_name,
+                        "status": company.status,
+                        "created": company.created,
+                        "last_reviewed": company.last_reviewed,
                     },
                 )
             )
 
     if "insight" in kinds:
-        for c in list_insight_cards(vault_path=vault_path):
+        for insight in list_insight_cards(vault_path=vault_path):
             entries.append(
                 CardEntry(
-                    card_id=c.insight_id,
+                    card_id=insight.insight_id,
                     kind="insight",
-                    title=c.question,
-                    summary=_summarize(c.body, max_chars=summary_chars),
+                    title=insight.question,
+                    summary=_summarize(insight.body, max_chars=summary_chars),
                     meta={
                         "source_kind": "card_insight",
-                        "display_name": c.question,
-                        "created": c.created,
+                        "display_name": insight.question,
+                        "created": insight.created,
                     },
                 )
             )

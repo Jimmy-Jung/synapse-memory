@@ -22,11 +22,28 @@
 | 검토 범위 | `README.md`, `docs/`, `specs/`, `src/synapse_memory/`, `tests/`, 실제 Documents vault 사용 흔적 |
 | 검증 | targeted pytest 69개 통과, 전체 ruff 통과, 전체 pytest 1012개 통과(위임 검증), full strict mypy 24개 오류 |
 
+## release/1.19.0 적용 결과
+
+`release/1.19.0`에서는 이 문서의 Phase 0~3 개선을 phase별 커밋으로 적용했습니다.
+
+| Phase | 적용 결과 |
+| --- | --- |
+| Phase 0 | raw-to-provider 정책 A를 공식화하고 `privacy_mode=raw_or_sampled_raw_to_provider`를 `ingest-audit`, `doctor`, `config show`, README/docs에 노출 |
+| Phase 1 | provider error sanitization, shared ingest lock, source별 `watch status --json`, `launchctl` 실패 전파, doctor watermark/error freshness 점검 도입 |
+| Phase 2 | `AGENTS.md` source-of-truth를 provider-only 설계로 교체, superseded spec 배너 추가, active CLI/config/source의 legacy RAG/Chroma/BM25/RRF 표현 정리 |
+| Phase 3 | full strict mypy debt 해결, CI/release-check static gate를 전체 `src/synapse_memory`/`tests`로 확대 |
+
+적용 후 검증:
+
+- `uv run python -m ruff check src/synapse_memory tests` 통과
+- `uv run python -m mypy --strict src/synapse_memory` 통과
+- `uv run python -m pytest tests/ -W ignore::DeprecationWarning` → `1030 passed`
+
 ## 우선순위 요약
 
 | 우선순위 | 문제 | 영향 | 개선 방향 |
 | --- | --- | --- | --- |
-| P0 | 개인정보/데이터 흐름 정책 충돌 | 사용자가 무엇이 외부 AI로 나가는지 잘못 이해할 수 있음 | raVw-to-provider 정책 결정 후 문서와 코드 경계 통일 |
+| P0 | 개인정보/데이터 흐름 정책 충돌 | 사용자가 무엇이 외부 AI로 나가는지 잘못 이해할 수 있음 | raw-to-provider 정책 결정 후 문서와 코드 경계 통일 |
 | P0 | vault-visible 운영 로그 누출 | provider error JSON, session id 같은 운영 식별자가 synced vault에 남음 | provider error sanitization 도입 |
 | P1 | shared ingest lock 부재 | watch/manual ingest/backfill이 같은 vault page, watermark, `log.md`를 동시에 쓸 수 있음 | 모든 ingest writer를 같은 lock 정책으로 묶기 |
 | P1 | source-of-truth drift | 새 agent가 superseded spec을 현재 설계로 오해할 수 있음 | `AGENTS.md`와 stale spec에 상태 배너 추가 |

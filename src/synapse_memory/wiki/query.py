@@ -32,6 +32,8 @@ from synapse_memory.wiki.page import (
     slugify,
 )
 
+AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
+
 ASK_WIKI_SYSTEM = """당신은 사용자의 개인 지식 wiki를 근거로 답하는 세컨드 브레인입니다.
 
 # 원칙
@@ -103,7 +105,7 @@ def ask_wiki(
     vault_path: Path | None = None,
     top_k: int = DEFAULT_TOP_K,
     model: str | None = None,
-    ai_env: object | None = None,
+    ai_env: AIEnv = None,
     save: bool = False,
     today: str | None = None,
 ) -> WikiAnswer:

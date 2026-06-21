@@ -51,6 +51,8 @@ _SIGNAL_PATTERNS = (
     "git ",
 )
 
+AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
+
 
 @dataclass
 class IngestResult:
@@ -165,7 +167,7 @@ def ingest_source(
     vault_path: Path | None = None,
     raw_root: Path | None = None,
     watermark_path: Path | None = None,
-    ai_env: object | None = None,
+    ai_env: AIEnv = None,
     model: str | None = None,
     dry_run: bool = False,
     limit: int | None = None,

@@ -34,7 +34,7 @@ def default_source_root(source: str) -> Path:
     return l0_root() / "raw" / source
 
 
-def _extract_text(event: dict) -> str:
+def _extract_text(event: dict[str, object]) -> str:
     """claude-code jsonl 이벤트에서 사람이 읽는 텍스트 추출 (best-effort)."""
     msg = event.get("message")
     if not isinstance(msg, dict):
@@ -72,7 +72,7 @@ def _join_content_text(content: object) -> str:
     return ""
 
 
-def _extract_text_codex(event: dict) -> str:
+def _extract_text_codex(event: dict[str, object]) -> str:
     """codex rollout jsonl 이벤트에서 사람이 읽는 대화 텍스트 추출 (best-effort).
 
     codex 스키마는 ``{"type": "...", "payload": {...}}`` 래퍼. 채널별 특성:

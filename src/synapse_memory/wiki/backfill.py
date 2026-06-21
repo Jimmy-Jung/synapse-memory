@@ -13,12 +13,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from synapse_memory.llm import AIEnvironment, ClaudeEnvironment, CodexEnvironment
 from synapse_memory.wiki.ingest import ingest_source
 from synapse_memory.wiki.lock import (
     IngestAlreadyRunningError,
     LockedOutcome,
     run_with_ingest_lock,
 )
+
+AIEnv = AIEnvironment | ClaudeEnvironment | CodexEnvironment | None
 
 
 @dataclass
@@ -35,7 +38,7 @@ def run_backfill(
     *,
     source: str = "claude-code",
     vault_path: Path | None = None,
-    ai_env: object | None = None,
+    ai_env: AIEnv = None,
     batch_size: int = 20,
     max_batches: int | None = None,
     today: str | None = None,
@@ -75,7 +78,7 @@ def _run_backfill_unlocked(
     *,
     source: str,
     vault_path: Path | None,
-    ai_env: object | None,
+    ai_env: AIEnv,
     batch_size: int,
     max_batches: int | None,
     today: str | None,

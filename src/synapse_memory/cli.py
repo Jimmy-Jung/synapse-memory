@@ -127,7 +127,7 @@ from synapse_memory.storage.l0 import l0_root  # noqa: E402
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
-from synapse_memory.wiki.ingest import ingest_source  # noqa: E402
+from synapse_memory.wiki.ingest import IngestResult, ingest_source  # noqa: E402
 from synapse_memory.wiki.ingest_audit import audit_ingest_queue  # noqa: E402
 from synapse_memory.wiki.launchd import (  # noqa: E402
     LaunchctlError,
@@ -669,7 +669,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     """wiki ingest 엔진 1회 실행."""
     dry = bool(getattr(args, "dry_run", False))
     try:
-        result = run_with_ingest_lock(
+        locked_result = run_with_ingest_lock(
             source=args.source,
             mode="manual",
             on_locked="fail",
@@ -683,6 +683,10 @@ def cmd_ingest(args: argparse.Namespace) -> int:
     except IngestAlreadyRunningError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)
         return 1
+    if not isinstance(locked_result, IngestResult):
+        print(f"{FAIL} ingest already running: {locked_result.reason}", file=sys.stderr)
+        return 1
+    result = locked_result
     label = "(dry-run) " if dry else ""
     print(f"{label}ingest {result.source}: docs={result.docs_processed}, "
           f"pages={len(result.pages_written)}, skipped={result.docs_skipped}")
