@@ -2,6 +2,7 @@
 """ingest CLI 서브커맨드 — 인자 파싱 + 오케스트레이터 위임."""
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import synapse_memory.cli as cli
@@ -100,6 +101,29 @@ def test_ingest_audit_prints_queue_cost_summary(monkeypatch, capsys) -> None:
     assert "estimated_llm_calls=3" in out
     assert "privacy_mode=raw_or_sampled_raw_to_provider" in out
     assert "provider_payload=small_raw_or_sampled_raw" in out
+
+
+def test_ingest_audit_json_output(monkeypatch, capsys) -> None:
+    def fake_audit(source, **kwargs):
+        return IngestAuditResult(
+            source=source,
+            docs_pending=2,
+            docs_small=1,
+            docs_sampled=1,
+            docs_oversize=0,
+            estimated_llm_calls=4,
+            max_chars=12_000,
+        )
+
+    monkeypatch.setattr(cli, "audit_ingest_queue", fake_audit)
+    rc = cli.main(["ingest-audit", "--source", "codex", "--json"])
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["source"] == "codex"
+    assert payload["docs_pending"] == 2
+    assert payload["estimated_llm_calls"] == 4
+    assert payload["privacy_mode"] == "raw_or_sampled_raw_to_provider"
 
 
 def test_ingest_audit_no_semantic_retrieval_flag(monkeypatch) -> None:

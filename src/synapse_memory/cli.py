@@ -465,10 +465,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def cmd_card_list(args: argparse.Namespace) -> int:
     """Project / Company Card 목록."""
     kind = args.type
+    project_cards = list_project_cards() if kind in ("project", "all") else []
+    company_cards = list_company_cards() if kind in ("company", "all") else []
+
+    if args.json:
+        from dataclasses import asdict
+
+        print(
+            json.dumps(
+                {
+                    "type": kind,
+                    "total": len(project_cards) + len(company_cards),
+                    "projects": [asdict(card) for card in project_cards],
+                    "companies": [asdict(card) for card in company_cards],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
+
     shown = 0
 
     if kind in ("project", "all"):
-        cards = list_project_cards()
+        cards = project_cards
         if cards:
             print(f"\n[Project Cards]   {projects_dir()}")
             print(
@@ -486,7 +506,7 @@ def cmd_card_list(args: argparse.Namespace) -> int:
             shown += len(cards)
 
     if kind in ("company", "all"):
-        cards_c = list_company_cards()
+        cards_c = company_cards
         if cards_c:
             print(f"\n[Company Cards]   {companies_dir()}")
             print(
@@ -713,6 +733,12 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
         min_age_seconds=args.min_age_seconds,
         semantic_retrieval=not args.no_semantic_retrieval,
     )
+    if args.json:
+        from dataclasses import asdict
+
+        print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
+        return 0
+
     print(
         f"ingest-audit {result.source}: pending={result.docs_pending}, "
         f"small={result.docs_small}, sampled={result.docs_sampled}, "
@@ -1350,7 +1376,7 @@ def cmd_cleanup_apply(args: argparse.Namespace) -> int:
         print("선택된 후보 없음.")
         return 0
 
-    dry_run = not args.apply
+    dry_run = args.dry_run or not args.apply
     results = apply_cleanup(plan, selected=selected, dry_run=dry_run, vault=vault)
     manifest = write_cleanup_manifest(vault, results)
 
@@ -3309,6 +3335,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["project", "company", "all"],
         default="all",
     )
+    p_card_list.add_argument("--json", action="store_true", help="JSON 출력")
     p_card_list.set_defaults(func=cmd_card_list)
 
     p_card_show = card_sub.add_parser("show", help="Card 내용")
@@ -3725,6 +3752,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="관련 페이지 선별 호출을 제외한 저비용 예상 호출 수 계산",
     )
+    p_ingest_audit.add_argument("--json", action="store_true", help="JSON 출력")
     p_ingest_audit.set_defaults(func=cmd_ingest_audit)
 
     p_backfill = sub.add_parser(
@@ -3833,16 +3861,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_cleanup_scan.add_argument("--resume-days", type=int, default=90)
     p_cleanup_scan.add_argument("--memory-inbox-days", type=int, default=60)
     p_cleanup_scan.add_argument("--report-days", type=int, default=90)
+    p_cleanup_scan.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="scan은 항상 read-only이므로 호환용 no-op",
+    )
     p_cleanup_scan.set_defaults(func=cmd_cleanup_scan)
 
     p_cleanup_apply = cleanup_sub.add_parser(
         "apply",
         help="선택된 청소 후보를 archive 폴더로 이동 + 매니페스트 작성 (기본 dry-run)",
     )
-    p_cleanup_apply.add_argument(
+    cleanup_apply_mode = p_cleanup_apply.add_mutually_exclusive_group()
+    cleanup_apply_mode.add_argument(
         "--apply",
         action="store_true",
         help="실제 이동 실행 (생략 시 dry-run)",
+    )
+    cleanup_apply_mode.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="명시적 dry-run (기본값)",
     )
     p_cleanup_apply.add_argument(
         "--category",

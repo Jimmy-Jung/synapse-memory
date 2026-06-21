@@ -6,5 +6,5 @@ cloud LLM(claude/codex CLI)으로 합성·추론하는 second-brain 백엔드.
 저자: Synapse Memory Maintainers
 """
 
-__version__ = "1.18.1"
+__version__ = "1.19.0"
 __all__ = ["__version__"]

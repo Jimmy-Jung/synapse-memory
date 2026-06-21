@@ -10,7 +10,7 @@ description: Use when the user faces a decision and wants a recommendation groun
 ## 실행
 
 ```bash
-SYNAPSE_FROM_AGENT=1 synapse-memory decide "<상황 설명>"
+SYNAPSE_FROM_AGENT=1 synapse-memory persona decide "<상황 설명>"
 ```
 
 내부적으로 vault 의 `Profile.md` + `DecisionPatterns.md` + 관련 Card 를 RAG 로 retrieve 한 뒤 합성합니다. 결과는 추천 + 근거 패턴 + 출처 Card 인용.
