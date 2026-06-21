@@ -58,6 +58,47 @@ def test_ingest_dry_run_writes_nothing(tmp_path, monkeypatch) -> None:
     assert load_watermark("claude-code", path=state) is None
 
 
+def test_ingest_passes_configured_provider_to_integration(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import synapse_memory.config as config_module
+
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "provider", "provider selection check")
+    state = tmp_path / "state.json"
+    providers: list[str | None] = []
+
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "no_config.yaml")
+
+    def fake_complete(
+        prompt,
+        *,
+        system=None,
+        model=None,
+        json_schema=None,
+        env=None,
+        timeout=120,
+        provider=None,
+        **kw,
+    ):
+        providers.append(provider)
+        return {"operations": []}
+
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", fake_complete)
+
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=state,
+        ai_env=None,
+        today="2026-06-21",
+    )
+
+    assert result.docs_processed == 1
+    assert providers == ["codex"]
+
+
 def test_ingest_error_isolation(tmp_path, monkeypatch) -> None:
     raw_root = tmp_path / "raw" / "claude-code"
     _write_session(raw_root, "aaa", "first doc")
