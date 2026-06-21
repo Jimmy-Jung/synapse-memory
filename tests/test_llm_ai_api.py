@@ -15,8 +15,14 @@ from synapse_memory.llm.claude import ClaudeEnvironment, ClaudeError
 from synapse_memory.llm.codex import CodexEnvironment
 
 
-def test_auto_provider_uses_codex_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_auto_provider_uses_codex_runtime(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import synapse_memory.config as config_module
+
     monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "no_config.yaml")
+    config_module.clear_cache()
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
 
     with patch("synapse_memory.llm.ai_api.codex.detect_codex_environment") as detect:
@@ -28,6 +34,47 @@ def test_auto_provider_uses_codex_runtime(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_explicit_provider_uses_claude(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SYNAPSE_AI_PROVIDER", "claude")
+
+    with patch("synapse_memory.llm.ai_api.claude.detect_claude_environment") as detect:
+        detect.return_value = ClaudeEnvironment("/x/claude", "2.1", "sonnet")
+        env = detect_ai_environment()
+
+    assert env.provider == "claude"
+
+
+def test_auto_provider_defaults_to_codex(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import synapse_memory.config as config_module
+
+    monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    monkeypatch.delenv("CODEX_CI", raising=False)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("CODEX_INTERNAL_ORIGINATOR_OVERRIDE", raising=False)
+    monkeypatch.delenv("CLAUDECODE", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE", raising=False)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "no_config.yaml")
+    config_module.clear_cache()
+
+    with patch("synapse_memory.llm.ai_api.codex.detect_codex_environment") as detect:
+        detect.return_value = CodexEnvironment("/x/codex", "codex 1.0", "gpt-5.5")
+        env = detect_ai_environment()
+
+    assert env.provider == "codex"
+
+
+def test_configured_provider_overrides_runtime_detection(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import synapse_memory.config as config_module
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("ai_provider: claude\n", encoding="utf-8")
+    monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", cfg_path)
+    config_module.clear_cache()
 
     with patch("synapse_memory.llm.ai_api.claude.detect_claude_environment") as detect:
         detect.return_value = ClaudeEnvironment("/x/claude", "2.1", "sonnet")

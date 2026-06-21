@@ -11,7 +11,7 @@ def test_maintenance_defaults(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "no_config.yaml")
     cfg = get_config(refresh=True)
-    assert cfg.maintenance.engine == "claude"
+    assert cfg.maintenance.engine == "codex"
     assert cfg.maintenance.idle_minutes == 3
 
 

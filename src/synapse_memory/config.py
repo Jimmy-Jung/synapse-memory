@@ -226,7 +226,7 @@ class MaintenanceConfig:
     idle_minutes: watch 데몬이 "대화 종료"로 간주하는 무변경 임계값(분).
     """
 
-    engine: str = "claude"
+    engine: str = "codex"
     idle_minutes: int = 3
     # 020: bounded 단명 잡 — 사이클당 doc 상한(메모리 천장) + 스케줄 주기(분).
     max_docs_per_cycle: int = 25
@@ -257,7 +257,7 @@ class AdvancedConfig:
 class SynapseConfig:
     vault: str | None = None
     vault_folders: VaultFoldersConfig = field(default_factory=VaultFoldersConfig)
-    ai_provider: str = "claude"  # claude | codex | auto
+    ai_provider: str = "codex"  # claude | codex | auto
     models: ModelsConfig = field(default_factory=ModelsConfig)
     top_k: TopKConfig = field(default_factory=TopKConfig)
     cleanup: CleanupConfig = field(default_factory=CleanupConfig)

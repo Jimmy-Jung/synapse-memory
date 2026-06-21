@@ -28,7 +28,7 @@ def test_load_returns_default_when_no_file(tmp_path):
     assert isinstance(cfg, SynapseConfig)
     assert cfg.cleanup.inbox_stale_days == 30
     assert cfg.cleanup.dormant_project_days == 90
-    assert cfg.ai_provider == "claude"
+    assert cfg.ai_provider == "codex"
 
 
 def test_load_returns_default_when_empty_yaml(tmp_path):
@@ -170,7 +170,7 @@ def test_is_advanced_path():
 def test_get_value():
     cfg = SynapseConfig()
     assert get_value(cfg, "cleanup.inbox_stale_days") == 30
-    assert get_value(cfg, "ai_provider") == "claude"
+    assert get_value(cfg, "ai_provider") == "codex"
     assert get_value(cfg, "advanced.rag.rrf_k") == 60
 
 

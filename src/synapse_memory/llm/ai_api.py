@@ -20,7 +20,7 @@ ConcreteAIProvider: TypeAlias = Literal["claude", "codex"]
 AIProviderEnv: TypeAlias = ClaudeEnvironment | CodexEnvironment
 
 AI_PROVIDER_ENV_VAR = "SYNAPSE_AI_PROVIDER"
-DEFAULT_PROVIDER: ConcreteAIProvider = "claude"
+DEFAULT_PROVIDER: ConcreteAIProvider = "codex"
 
 
 class AIError(RuntimeError):
@@ -312,12 +312,30 @@ def _coerce_env(
 
 
 def _resolve_provider(provider: AIProvider | None) -> ConcreteAIProvider:
-    requested = (provider or os.environ.get(AI_PROVIDER_ENV_VAR) or "auto").lower()
+    requested = (
+        provider or os.environ.get(AI_PROVIDER_ENV_VAR) or _configured_provider() or "auto"
+    ).lower()
     if requested == "auto":
         return _runtime_provider()
     if requested in {"claude", "codex"}:
         return cast(ConcreteAIProvider, requested)
     raise ValueError(f"unknown AI provider: {requested}")
+
+
+def _configured_provider() -> AIProvider | None:
+    try:
+        from synapse_memory.config import get_config
+
+        requested = get_config().ai_provider.lower()
+    except Exception:
+        return None
+    if requested == "claude":
+        return "claude"
+    if requested == "codex":
+        return "codex"
+    if requested == "auto":
+        return "auto"
+    return None
 
 
 def _runtime_provider() -> ConcreteAIProvider:

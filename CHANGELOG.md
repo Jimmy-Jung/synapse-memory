@@ -2,6 +2,25 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.1] — 2026-06-21
+
+watch/ingest 기본 실행 provider를 Codex로 전환하고, 런타임 자동감지보다
+사용자 config가 우선되도록 정렬했다.
+
+### Changed
+
+- 기본 `ai_provider`와 `maintenance.engine`을 `codex`로 변경했다.
+- provider 미지정 AI 호출이 `~/.synapse/config.yaml`의 `ai_provider`를 먼저
+  따르도록 해 Codex/Claude 실행 환경 변수에 따라 watch/ingest provider가
+  흔들리지 않게 했다.
+- `ingest_source()` 통합 호출이 config provider를 명시 전달하도록 보강했다.
+- README installer 링크와 Claude/Codex plugin manifest, marketplace version을
+  `1.19.1`로 정렬했다.
+
+### Documentation
+
+- 비용 문서의 Claude 전용 표현을 설정된 provider 기준 설명으로 수정했다.
+
 ## [1.19.0] — 2026-06-21
 
 Codex/Claude 플러그인에서 가장 기본적인 hook과 skill 진입점이 실제 CLI 계약과
