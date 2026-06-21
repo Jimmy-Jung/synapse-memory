@@ -89,5 +89,7 @@ def test_cmd_doctor_reports_hook_install_status(
 
     assert rc == 0
     out = capsys.readouterr().out
+    assert "privacy mode ingest: raw_or_sampled_raw_to_provider" in out
+    assert "privacy mode query: wiki_cards_and_approved_profile_to_provider" in out
     assert "Claude Code hook 미설치" in out
     assert "synapse-memory hook install" in out

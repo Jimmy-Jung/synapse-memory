@@ -15,14 +15,18 @@ Synapse Memory는 "내 자료를 AI가 다시 쓸 수 있게 정리하는 도구
 - 새 AI 대화를 열 때마다 프로젝트 배경을 다시 설명합니다.
 - 이력서, 회고, 의사결정처럼 "내가 예전에 무엇을 했는지"가 필요한 작업을 매번 다시 정리합니다.
 
-Synapse Memory는 이 흐름을 매일 조금씩 정리합니다. 원본을 그대로 외부 AI에 던지는
-대신, 내 Mac 안에서 먼저 모으고 요약하고 민감정보를 가린 뒤, 질문에 필요한 자료만
-보냅니다.
+Synapse Memory는 이 흐름을 매일 조금씩 정리합니다. 원본은 먼저 내 Mac의
+`~/.synapse/private/`에 mirror합니다. 이후 `ingest`/`backfill`/`watch`가 wiki로 통합할
+때는 small raw 대화 전체 또는 sampled raw 일부가 설정된 provider로 갈 수 있고,
+`ask`/`persona` 같은 질문 경로는 wiki 카드와 사용자가 승인한 Profile/DecisionPatterns를
+중심으로 보냅니다.
 
 ## 2. 어떤 데이터를 수집하나요?
 
-v1.17+ 기준으로 다음 소스를 자동으로 mirror합니다. 모두 `~/.synapse/private/`(0700)
-안에만 저장되고 외부 AI에는 절대 직접 전송되지 않습니다.
+v1.17+ 기준으로 다음 소스를 자동으로 mirror합니다. mirror/collect 단계에서는 모두
+`~/.synapse/private/`(0700) 안에 저장되고 외부 AI 호출은 없습니다. 이후
+ingest/backfill/watch 단계에서는 wiki 통합을 위해 small raw 또는 sampled raw가 provider로
+전송될 수 있습니다.
 
 | 분류 | 소스 | 활성화 |
 | --- | --- | --- |

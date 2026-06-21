@@ -383,15 +383,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     # v2 wiki 자동 유지 데몬 점검 — launchd watch LaunchAgent + maintenance engine
     try:
-        from synapse_memory.config import load_config
+        from synapse_memory.config import describe_privacy_mode, load_config
 
         wm_result = diagnose_wiki_maintenance()
         if wm_result.status == DiagnosticStatus.OK:
             print(f"{OK} {wm_result.message}")
         else:
             print(f"⚠ {wm_result.message}")
-        engine = load_config().maintenance.engine
+        cfg = load_config()
+        engine = cfg.maintenance.engine
         print(f"{OK} wiki maintenance engine: {engine}")
+        privacy_mode = describe_privacy_mode(cfg)
+        print(f"{OK} privacy mode ingest: {privacy_mode.ingest}")
+        print(f"{OK} privacy mode query: {privacy_mode.query}")
     except Exception as exc:
         print(f"⚠ wiki 유지 데몬 진단 실패: {exc}")
 
@@ -695,6 +699,11 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
         f"estimated_llm_calls={result.estimated_llm_calls}, "
         f"max_chars={result.max_chars}"
     )
+    print(
+        f"privacy_mode={result.privacy_mode}, "
+        f"provider_payload={result.provider_payload}"
+    )
+    print(f"privacy_note: {result.privacy_note}")
     return 0
 
 
@@ -3640,7 +3649,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_ingest_audit = sub.add_parser(
         "ingest-audit",
-        help="watermark 이후 raw queue 비용을 LLM 호출 없이 점검",
+        help="watermark 이후 raw queue 비용과 raw/sample provider 전송 정책을 LLM 호출 없이 점검",
+        description=(
+            "watermark 이후 raw queue 비용과 raw/sample provider 전송 정책을 LLM 호출 없이 "
+            "점검합니다. privacy_mode=raw_or_sampled_raw_to_provider 는 small raw 전체 또는 "
+            "sampled raw 일부가 ingest/backfill/watch에서 provider로 갈 수 있음을 뜻합니다."
+        ),
     )
     p_ingest_audit.add_argument(
         "--source", default="claude-code", choices=["claude-code", "codex"],

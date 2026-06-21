@@ -11,6 +11,7 @@ import yaml
 
 from synapse_memory.config import (
     SynapseConfig,
+    describe_privacy_mode,
     get_value,
     is_advanced_path,
     is_protected_path,
@@ -220,6 +221,8 @@ def test_render_hides_advanced_by_default():
     text = render_config(cfg, show_advanced=False)
     assert "cleanup" in text
     assert "hook.suggest_register" in text
+    assert "privacy_mode" in text
+    assert "raw_or_sampled_raw_to_provider" in text
     assert "rrf_k" not in text
 
 
@@ -228,6 +231,14 @@ def test_render_shows_advanced_when_requested():
     text = render_config(cfg, show_advanced=True)
     assert "rrf_k" in text
     assert "embedding_model" in text
+
+
+def test_describe_privacy_mode_documents_ingest_and_query_boundaries():
+    mode = describe_privacy_mode(SynapseConfig())
+
+    assert mode.ingest == "raw_or_sampled_raw_to_provider"
+    assert mode.query == "wiki_cards_and_approved_profile_to_provider"
+    assert "small raw docs" in mode.note
 
 
 def test_load_ignores_unknown_keys(tmp_path):

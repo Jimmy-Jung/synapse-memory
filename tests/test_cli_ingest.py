@@ -86,6 +86,8 @@ def test_ingest_audit_prints_queue_cost_summary(monkeypatch, capsys) -> None:
     assert "sampled=2" in out
     assert "oversize=1" in out
     assert "estimated_llm_calls=3" in out
+    assert "privacy_mode=raw_or_sampled_raw_to_provider" in out
+    assert "provider_payload=small_raw_or_sampled_raw" in out
 
 
 def test_ingest_audit_no_semantic_retrieval_flag(monkeypatch) -> None:
