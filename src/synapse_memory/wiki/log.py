@@ -21,7 +21,7 @@ MAX_LOG_MESSAGE_CHARS = 240
 _SAFE_ERROR_FIELDS = ("provider", "status", "category", "retry_after", "message")
 _SENSITIVE_FIELD_RE = re.compile(
     r"(?i)(session[_-]?id|request[_-]?id|api[_-]?key|authorization|token)"
-    r"([\"']?\s*[:=]\s*[\"']?)[^\"'\s,}]+"
+    r"([\"']?\s*[:=]\s*[\"']?)(?:(?:bearer|basic|token)\s+)?[^\"'\s,}]+"
 )
 _STATUS_RE = re.compile(r"\b(?:status|code|error code)\D{0,8}(\d{3})\b", re.IGNORECASE)
 

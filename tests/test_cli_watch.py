@@ -75,6 +75,16 @@ def test_cli_watch_install_returns_nonzero_on_launchctl_failure(monkeypatch, cap
     assert "launchctl load failed" in capsys.readouterr().err
 
 
+def test_cli_watch_uninstall_returns_nonzero_on_launchctl_failure(monkeypatch, capsys):
+    def fail_uninstall(**kwargs):
+        raise LaunchctlError("launchctl unload failed")
+
+    monkeypatch.setattr(cli, "uninstall_watch", fail_uninstall)
+
+    assert cli.main(["watch", "uninstall"]) == 1
+    assert "launchctl unload failed" in capsys.readouterr().err
+
+
 def test_cli_watch_status_prints_all_sources(monkeypatch, tmp_path, capsys):
     plist = tmp_path / "watch.plist"
     plist.write_text("<plist></plist>", encoding="utf-8")

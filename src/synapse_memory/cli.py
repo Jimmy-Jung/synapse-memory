@@ -818,7 +818,11 @@ def cmd_watch_install(args: argparse.Namespace) -> int:
 
 def cmd_watch_uninstall(args: argparse.Namespace) -> int:
     """launchd LaunchAgent 제거."""
-    uninstall_watch()
+    try:
+        uninstall_watch()
+    except LaunchctlError as exc:
+        print(f"{FAIL} {exc}", file=sys.stderr)
+        return 1
     print("uninstalled")
     return 0
 

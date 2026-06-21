@@ -38,6 +38,19 @@ def test_append_log_redacts_operational_ids_and_truncates(tmp_path: Path) -> Non
     assert len(text.splitlines()[-1]) < 320
 
 
+def test_append_log_redacts_bearer_authorization_values(tmp_path: Path) -> None:
+    append_log(
+        "provider failed Authorization: Bearer sk-live-secret-123",
+        vault_path=tmp_path,
+        when="2026-06-21T10:00:00",
+    )
+
+    text = (tmp_path / "log.md").read_text(encoding="utf-8")
+    assert "Bearer" not in text
+    assert "sk-live-secret-123" not in text
+    assert "Authorization: <redacted>" in text
+
+
 def test_summarize_provider_error_keeps_safe_json_fields_only() -> None:
     exc = RuntimeError(
         '{"error":{"message":"rate limited","type":"rate_limit_error"},'
@@ -51,3 +64,16 @@ def test_summarize_provider_error_keeps_safe_json_fields_only() -> None:
     assert "retry_after" in summary
     assert "sess_abc" not in summary
     assert "usage" not in summary
+
+
+def test_summarize_provider_error_redacts_bearer_values_in_message() -> None:
+    exc = RuntimeError(
+        '{"error":{"message":"Authorization: Bearer sk-live-secret-123",'
+        '"type":"provider_error"}}'
+    )
+
+    summary = summarize_provider_error(exc)
+
+    assert "Bearer" not in summary
+    assert "sk-live-secret-123" not in summary
+    assert "Authorization: <redacted>" in summary

@@ -32,12 +32,13 @@
 | Phase 1 | provider error sanitization, shared ingest lock, source별 `watch status --json`, `launchctl` 실패 전파, doctor watermark/error freshness 점검 도입 |
 | Phase 2 | `AGENTS.md` source-of-truth를 provider-only 설계로 교체, superseded spec 배너 추가, active CLI/config/source의 legacy RAG/Chroma/BM25/RRF 표현 정리 |
 | Phase 3 | full strict mypy debt 해결, CI/release-check static gate를 전체 `src/synapse_memory`/`tests`로 확대 |
+| Review 보완 | Bearer-style Authorization redaction, `watch uninstall` launchctl 실패 전파, 오래된 `watch.err.log` 무시, mypy dev dependency pin 적용 |
 
 적용 후 검증:
 
 - `uv run python -m ruff check src/synapse_memory tests` 통과
 - `uv run python -m mypy --strict src/synapse_memory` 통과
-- `uv run python -m pytest tests/ -W ignore::DeprecationWarning` → `1030 passed`
+- `uv run python -m pytest tests/ -W ignore::DeprecationWarning` → `1034 passed`
 
 ## 우선순위 요약
 

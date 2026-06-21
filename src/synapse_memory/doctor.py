@@ -84,8 +84,21 @@ def _parse_watermark(value: str) -> datetime | None:
     return parsed
 
 
-def _recent_watch_errors(path: Path, *, limit: int = 3) -> list[str]:
+def _recent_watch_errors(
+    path: Path,
+    *,
+    limit: int = 3,
+    fresh_after: timedelta = timedelta(hours=24),
+    now: datetime | None = None,
+) -> list[str]:
     if not path.is_file():
+        return []
+    try:
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime).astimezone()
+    except OSError:
+        return []
+    reference_now = now or datetime.now().astimezone()
+    if reference_now - modified_at > fresh_after:
         return []
     try:
         lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
@@ -101,6 +114,7 @@ def diagnose_wiki_maintenance(
     err_log_path: Path | None = None,
     sources: tuple[str, ...] = ("claude-code", "codex"),
     stale_after: timedelta = timedelta(days=7),
+    error_fresh_after: timedelta = timedelta(hours=24),
 ) -> DiagnosticResult:
     """v2 wiki 자동 유지 watch 데몬(launchd LaunchAgent) 설치 점검."""
     from synapse_memory.storage.l0 import l0_root
@@ -122,7 +136,11 @@ def diagnose_wiki_maintenance(
                 continue
             if now - parsed.astimezone() > stale_after:
                 issues.append(f"{source} watermark stale: {watermark}")
-        errors = _recent_watch_errors(err_log_path or (l0_root() / "watch.err.log"))
+        errors = _recent_watch_errors(
+            err_log_path or (l0_root() / "watch.err.log"),
+            fresh_after=error_fresh_after,
+            now=now,
+        )
         if errors:
             issues.append(f"watch.err.log 최근 오류 {len(errors)}건")
         if issues:
