@@ -56,6 +56,27 @@ def test_build_plist_includes_daemon_path(monkeypatch) -> None:
     assert "/Users/jimmy/.codex/tmp/arg0" not in path
 
 
+def test_build_plist_includes_codex_dir(monkeypatch) -> None:
+    """engine=codex가 nvm 등 비표준 경로일 때 데몬 PATH에 포함돼야 한다(회귀)."""
+    monkeypatch.setenv("HOME", "/Users/jimmy")
+    monkeypatch.setenv("PATH", "/usr/bin")
+    resolved = {
+        "claude": "/Users/jimmy/.local/bin/claude",
+        "codex": "/Users/jimmy/.nvm/versions/node/v22.18.0/bin/codex",
+    }
+    monkeypatch.setattr(
+        "synapse_memory.wiki.launchd.shutil.which",
+        lambda name: resolved.get(name),
+    )
+
+    xml = build_plist(
+        program_args=["/opt/synapse/bin/synapse-memory", "watch", "run"],
+        interval_seconds=3600,
+    )
+    path = plistlib.loads(xml.encode("utf-8"))["EnvironmentVariables"]["PATH"]
+    assert "/Users/jimmy/.nvm/versions/node/v22.18.0/bin" in path.split(":")
+
+
 def test_plist_path_under_launchagents(tmp_path) -> None:
     assert plist_path(home=tmp_path) == tmp_path / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 

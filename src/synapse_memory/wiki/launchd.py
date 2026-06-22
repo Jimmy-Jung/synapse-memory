@@ -58,11 +58,15 @@ def _daemon_path(program_args: list[str]) -> str:
         program_dir = os.path.dirname(program)
         if _is_persistent_path(program_dir):
             parts.append(program_dir)
-    claude = shutil.which("claude")
-    if claude:
-        claude_dir = os.path.dirname(claude)
-        if _is_persistent_path(claude_dir):
-            parts.append(claude_dir)
+    # engine CLI(claude/codex)는 nvm/brew 등 비표준 경로에 설치될 수 있어 install
+    # 시점에 실제 위치를 해석해 PATH에 넣는다. 누락 시 데몬이 CLI를 못 찾아
+    # AIUnavailableError로 전 doc 실패(pages=0).
+    for cli_name in ("claude", "codex"):
+        resolved = shutil.which(cli_name)
+        if resolved:
+            cli_dir = os.path.dirname(resolved)
+            if _is_persistent_path(cli_dir):
+                parts.append(cli_dir)
     parts.extend(_known_user_bin_paths())
     parts.append("/opt/homebrew/bin")
     parts.extend(_STANDARD_PATHS)
