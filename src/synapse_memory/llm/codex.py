@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -15,16 +14,12 @@ from typing import Any
 
 from synapse_memory.cost.events import append_cost_event, build_cost_event
 from synapse_memory.cost.pricing import price_usage
+from synapse_memory.llm._json import parse_json_with_fallback as _parse_json_base
 from synapse_memory.llm.tokens import estimate_tokens
 
 CODEX_BIN = "codex"
 DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_TIMEOUT_SEC = 240
-
-_CODE_FENCE_RE = re.compile(
-    r"^\s*```(?:json|JSON)?\s*\n?(?P<body>.*?)\n?\s*```\s*$",
-    re.DOTALL,
-)
 
 
 class CodexError(RuntimeError):
@@ -295,59 +290,5 @@ _DEFAULT_STRUCTURED_SYSTEM = (
 )
 
 
-def _strip_code_fence(text: str) -> str:
-    m = _CODE_FENCE_RE.match(text.strip())
-    if m:
-        return m.group("body").strip()
-    return text.strip()
-
-
-def _extract_first_json_value(text: str) -> str | None:
-    in_string = False
-    escape = False
-    depth = 0
-    start = -1
-    open_char = ""
-    close_char = ""
-    for i, c in enumerate(text):
-        if in_string:
-            if escape:
-                escape = False
-            elif c == "\\":
-                escape = True
-            elif c == '"':
-                in_string = False
-            continue
-        if c == '"':
-            in_string = True
-            continue
-        if depth == 0 and c in "{[":
-            open_char = c
-            close_char = "}" if c == "{" else "]"
-            start = i
-            depth = 1
-        elif depth > 0:
-            if c == open_char:
-                depth += 1
-            elif c == close_char:
-                depth -= 1
-                if depth == 0:
-                    return text[start : i + 1]
-    return None
-
-
 def _parse_json_with_fallback(content: str) -> Any:
-    candidates = [content]
-    stripped = _strip_code_fence(content)
-    if stripped != content:
-        candidates.append(stripped)
-    extracted = _extract_first_json_value(stripped)
-    if extracted is not None and extracted not in candidates:
-        candidates.append(extracted)
-    last_err: Exception | None = None
-    for candidate in candidates:
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError as exc:
-            last_err = exc
-    raise CodexError(f"Codex 응답이 JSON 아님: {content[:200]!r}") from last_err
+    return _parse_json_base(content, error_cls=CodexError, provider="Codex")

@@ -17,8 +17,6 @@ from pathlib import Path
 
 from synapse_memory.collectors._sqlite_mirror import (
     SqliteCollectStats as CollectStats,
-)
-from synapse_memory.collectors._sqlite_mirror import (
     mirror_sqlite_tree,
 )
 from synapse_memory.storage.l0 import l0_root

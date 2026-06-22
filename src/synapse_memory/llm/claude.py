@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -29,16 +28,14 @@ from typing import Any, cast
 
 from synapse_memory.cost.events import append_cost_event, build_cost_event
 from synapse_memory.cost.pricing import price_usage
+from synapse_memory.llm._json import (
+    parse_json_with_fallback as _parse_json_base,
+)
 from synapse_memory.llm.tokens import estimate_tokens
 
 CLAUDE_BIN = "claude"
 DEFAULT_MODEL = "sonnet"
 DEFAULT_TIMEOUT_SEC = 60
-
-_CODE_FENCE_RE = re.compile(
-    r"^\s*```(?:json|JSON)?\s*\n?(?P<body>.*?)\n?\s*```\s*$",
-    re.DOTALL,
-)
 
 
 def _known_claude_paths() -> tuple[str, ...]:
@@ -492,63 +489,5 @@ _DEFAULT_STRUCTURED_SYSTEM = (
 )
 
 
-def _strip_code_fence(text: str) -> str:
-    m = _CODE_FENCE_RE.match(text.strip())
-    if m:
-        return m.group("body").strip()
-    return text.strip()
-
-
-def _extract_first_json_value(text: str) -> str | None:
-    in_str = False
-    escape = False
-    depth = 0
-    start = -1
-    open_c = ""
-    close_c = ""
-    for i, c in enumerate(text):
-        if in_str:
-            if escape:
-                escape = False
-            elif c == "\\":
-                escape = True
-            elif c == '"':
-                in_str = False
-            continue
-        if c == '"':
-            in_str = True
-            continue
-        if depth == 0 and c in "{[":
-            open_c = c
-            close_c = "}" if c == "{" else "]"
-            start = i
-            depth = 1
-        elif depth > 0:
-            if c == open_c:
-                depth += 1
-            elif c == close_c:
-                depth -= 1
-                if depth == 0:
-                    return text[start : i + 1]
-    return None
-
-
 def _parse_json_with_fallback(content: str) -> Any:
-    candidates: list[str] = [content]
-    stripped = _strip_code_fence(content)
-    if stripped != content:
-        candidates.append(stripped)
-    extracted = _extract_first_json_value(stripped)
-    if extracted is not None and extracted not in candidates:
-        candidates.append(extracted)
-
-    last_err: Exception | None = None
-    for cand in candidates:
-        try:
-            return json.loads(cand)
-        except json.JSONDecodeError as exc:
-            last_err = exc
-            continue
-    raise ClaudeError(
-        f"Claude 응답이 JSON 아님: {content[:200]!r}"
-    ) from last_err
+    return _parse_json_base(content, error_cls=ClaudeError, provider="Claude")

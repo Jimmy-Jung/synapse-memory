@@ -76,8 +76,8 @@ from synapse_memory.collectors.codex import (  # noqa: E402
 from synapse_memory.collectors.obsidian import (  # noqa: E402
     collect_obsidian,
     get_vault_path,
+    get_vault_path as get_obsidian_vault,
 )
-from synapse_memory.collectors.obsidian import get_vault_path as get_obsidian_vault  # noqa: E402
 from synapse_memory.cost.events import command_context  # noqa: E402
 from synapse_memory.cost.summary import (  # noqa: E402
     load_summary,
@@ -1534,8 +1534,6 @@ def cmd_persona_design_project(args: argparse.Namespace) -> int:
         InputValidationError,
         RecipeNotFoundError,
         RecipeValidationError,
-    )
-    from synapse_memory.recipes import (
         generate as recipes_generate,
     )
 
@@ -1632,8 +1630,6 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
         RecipeNotFoundError,
         RecipePromptTooLargeError,
         RecipeValidationError,
-    )
-    from synapse_memory.recipes import (
         generate as recipes_generate,
     )
 
