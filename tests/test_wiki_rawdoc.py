@@ -160,15 +160,15 @@ def test_offsets_send_only_appended_tail(tmp_path: Path) -> None:
     f.write_text(first, encoding="utf-8")
 
     # 1회차: offset 없음 → 전문.
-    d1 = list(iter_new_raw("claude-code", since=None, root=root))[0]
+    d1 = next(iter(iter_new_raw("claude-code", since=None, root=root)))
     assert "첫줄" in d1.text
     assert d1.byte_size == len(first.encode("utf-8"))
 
     # append 후 2회차: 이전 byte_size를 offset으로 주면 새 줄만.
     f.write_text(first + '{"message":{"role":"user","content":"둘째줄"}}\n', encoding="utf-8")
-    d2 = list(
-        iter_new_raw("claude-code", since=None, root=root, offsets={d1.ref: d1.byte_size})
-    )[0]
+    d2 = next(
+        iter(iter_new_raw("claude-code", since=None, root=root, offsets={d1.ref: d1.byte_size}))
+    )
     assert "둘째줄" in d2.text
     assert "첫줄" not in d2.text  # 이미 ingest한 부분 재전송 안 함
     assert d2.byte_size > d1.byte_size
