@@ -151,6 +151,42 @@ def test_no_skip_with_shared_second_mtimes_and_limit(tmp_path: Path) -> None:
     assert len(set(seen)) == 5, f"중복 없어야 함, got {seen}"
 
 
+def test_offsets_send_only_appended_tail(tmp_path: Path) -> None:
+    """레버 2: offset 이후 tail만 읽고, byte_size로 새 offset을 노출한다."""
+    root = tmp_path / "raw" / "claude-code"
+    f = root / "s.jsonl"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    first = '{"message":{"role":"user","content":"첫줄"}}\n'
+    f.write_text(first, encoding="utf-8")
+
+    # 1회차: offset 없음 → 전문.
+    d1 = list(iter_new_raw("claude-code", since=None, root=root))[0]
+    assert "첫줄" in d1.text
+    assert d1.byte_size == len(first.encode("utf-8"))
+
+    # append 후 2회차: 이전 byte_size를 offset으로 주면 새 줄만.
+    f.write_text(first + '{"message":{"role":"user","content":"둘째줄"}}\n', encoding="utf-8")
+    d2 = list(
+        iter_new_raw("claude-code", since=None, root=root, offsets={d1.ref: d1.byte_size})
+    )[0]
+    assert "둘째줄" in d2.text
+    assert "첫줄" not in d2.text  # 이미 ingest한 부분 재전송 안 함
+    assert d2.byte_size > d1.byte_size
+
+
+def test_offset_past_eof_reparses_full(tmp_path: Path) -> None:
+    """offset이 현재 크기를 벗어나면(로테이션/축소) 전문 재처리 — 데이터 유실 방지."""
+    root = tmp_path / "raw" / "claude-code"
+    f = root / "s.jsonl"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text('{"message":{"role":"user","content":"리셋후"}}\n', encoding="utf-8")
+    docs = list(
+        iter_new_raw("claude-code", since=None, root=root, offsets={"claude-code:s.jsonl": 999_999})
+    )
+    assert len(docs) == 1
+    assert "리셋후" in docs[0].text  # offset 무시하고 전문
+
+
 def test_codex_filters_noise_events(tmp_path: Path) -> None:
     """developer 보일러플레이트 / token_count / function_call / user role-주입 은 제외."""
     root = tmp_path / "raw" / "codex"

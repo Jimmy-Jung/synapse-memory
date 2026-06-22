@@ -28,6 +28,7 @@ class RawDoc:
     ref: str          # "claude-code:projects/demo/sess1.jsonl"
     text: str
     mtime_iso: str    # 파일 수정 시각 (watermark 갱신용)
+    byte_size: int = 0  # 처리 시점 파일 byte 크기 (레버 2 offset 갱신용)
 
 
 def default_source_root(source: str) -> Path:
@@ -114,10 +115,17 @@ _SOURCE_EXTRACTORS = {
 }
 
 
-def _file_text(path: Path, source: str) -> str:
+def _file_text(path: Path, source: str, *, start_byte: int = 0) -> str:
     extract = _SOURCE_EXTRACTORS.get(source, _extract_text)
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return ""
+    # 레버 2: start_byte 이후 tail만 파싱. jsonl은 라인 단위라 byte offset이 항상
+    # 줄 경계(settled 파일은 정지 → 완결 라인). 중간 잘린 라인은 json 파싱 실패로 skip.
+    chunk = data[start_byte:] if start_byte else data
     lines: list[str] = []
-    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for raw_line in chunk.decode("utf-8", errors="replace").splitlines():
         raw_line = raw_line.strip()
         if not raw_line:
             continue
@@ -139,6 +147,7 @@ def iter_new_raw(
     root: Path | None = None,
     min_age_seconds: float | None = None,
     now: float | None = None,
+    offsets: dict[str, int] | None = None,
 ) -> Iterator[RawDoc]:
     """source의 새 RawDoc을 **mtime 오름차순**으로 **lazy yield** (mtime > since).
 
@@ -190,15 +199,28 @@ def iter_new_raw(
         # settled 필터: 너무 최근에 변경된 파일(진행 중 대화)은 건너뛴다.
         if settled_before_us is not None and mtime_us > settled_before_us:
             continue
-        text = _file_text(path, source)
+        rel = path.relative_to(base).as_posix()
+        ref = f"{source}:{rel}"
+        try:
+            size = path.stat().st_size
+        except OSError:
+            continue
+        # 레버 2: offset 이후 tail만 읽는다. offset이 현재 크기를 벗어나면(파일
+        # 로테이션/축소) 0으로 리셋해 전문 재처리(데이터 유실 방지).
+        start = 0
+        if offsets:
+            prev = offsets.get(ref, 0)
+            if 0 < prev <= size:
+                start = prev
+        text = _file_text(path, source, start_byte=start)
         if not text:
             continue
-        rel = path.relative_to(base).as_posix()
         yield RawDoc(
             source=source,
-            ref=f"{source}:{rel}",
+            ref=ref,
             text=text,
             mtime_iso=datetime.fromtimestamp(mtime_us / 1_000_000).isoformat(
                 timespec="microseconds"
             ),
+            byte_size=size,
         )

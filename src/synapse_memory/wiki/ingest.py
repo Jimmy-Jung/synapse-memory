@@ -23,10 +23,15 @@ from synapse_memory.wiki.integration import (
     parse_ops,
 )
 from synapse_memory.wiki.log import append_log, summarize_provider_error
-from synapse_memory.wiki.rawdoc import iter_new_raw
+from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw
 from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
 from synapse_memory.wiki.schema import ensure_schema
-from synapse_memory.wiki.watermark import load_watermark, save_watermark
+from synapse_memory.wiki.watermark import (
+    load_offsets,
+    load_watermark,
+    save_offsets,
+    save_watermark,
+)
 
 LARGE_DOC_CHAR_THRESHOLD = 40_000
 SAMPLED_DOC_CHAR_LIMIT = 120_000
@@ -185,7 +190,9 @@ def ingest_source(
     today: str | None = None,
     min_age_seconds: float | None = None,
     checkpoint_each: bool = False,
-    semantic_retrieval: bool = True,
+    # 토큰 절감(레버 4): small doc의 provider 관련-페이지 선별 호출을 끄면 doc당 LLM이
+    # 2→1회. 선별은 lexical 휴리스틱(semantic_fn=None)으로 대체된다.
+    semantic_retrieval: bool = False,
 ) -> IngestResult:
     """source의 새 RawDoc을 ingest. dry_run이면 적용/watermark/로그 생략.
 
@@ -197,8 +204,10 @@ def ingest_source(
     실패하면 skipped로 격리하고 watermark를 전진시켜 backfill jam을 막는다.
     """
     since = load_watermark(source, path=watermark_path)
+    offsets = load_offsets(path=watermark_path)
     docs_all = iter_new_raw(
-        source, since=since, root=raw_root, min_age_seconds=min_age_seconds
+        source, since=since, root=raw_root, min_age_seconds=min_age_seconds,
+        offsets=offsets,
     )
     # 020: limit는 islice로 — 사이클당 doc 상한(메모리 천장). limit 없으면 전체.
     docs = islice(docs_all, limit) if limit is not None else docs_all
@@ -211,6 +220,17 @@ def ingest_source(
     # 020: 관련 페이지 선별용 전체 페이지를 사이클 1회 로드 — doc마다 재읽기 제거.
     all_pages = _all_pages(vault_path)
     max_mtime = since
+    consumed: dict[str, int] = {}  # 레버 2: 소비 확정한 ref → byte offset
+
+    def _checkpoint(doc: RawDoc) -> None:
+        """doc 소비 확정 — watermark 전진 + offset 기록. checkpoint면 즉시 저장."""
+        nonlocal max_mtime
+        max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
+        consumed[doc.ref] = doc.byte_size
+        if checkpoint_each and not dry_run and max_mtime:
+            save_watermark(source, max_mtime, path=watermark_path)
+            save_offsets({doc.ref: doc.byte_size}, path=watermark_path)
+
     for doc in docs:
         result.docs_processed += 1
         is_large_doc = len(doc.text) > LARGE_DOC_CHAR_THRESHOLD
@@ -223,9 +243,7 @@ def ingest_source(
                     f"(chars={len(doc.text)}, limit={SAMPLED_DOC_CHAR_LIMIT})",
                     vault_path=vault_path,
                 )
-                max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
-                if checkpoint_each and max_mtime:
-                    save_watermark(source, max_mtime, path=watermark_path)
+                _checkpoint(doc)
             continue
         try:
             for chunk in chunks:
@@ -272,18 +290,16 @@ def ingest_source(
                         f"after {error_summary}",
                         vault_path=vault_path,
                     )
-                max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
-                if checkpoint_each and not dry_run and max_mtime:
-                    save_watermark(source, max_mtime, path=watermark_path)
+                _checkpoint(doc)
                 continue
             # 실패한 작은 doc은 watermark를 전진시키지 않는다 → 재실행 시 재시도.
             result.errors.append(f"{doc.ref}: {error_summary}")
             continue
         # 성공 경로에서만 watermark 후보를 전진시킨다.
-        max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
-        if checkpoint_each and not dry_run and max_mtime:
-            save_watermark(source, max_mtime, path=watermark_path)
+        _checkpoint(doc)
 
     if not dry_run and max_mtime and max_mtime != since:
         save_watermark(source, max_mtime, path=watermark_path)
+    if not dry_run:
+        save_offsets(consumed, path=watermark_path)
     return result
