@@ -250,12 +250,13 @@ synapse-memory list-pending-profiles --json   # 슬래시 prompt가 파싱
 
 ## 다른 프로젝트에서 sm 컨텍스트 활용하기
 
-다른 프로젝트 디렉터리에서도 Claude Code/Codex가 vault Profile·Patterns 요약을 자연스럽게 인식하게 만들 수 있습니다. `synapse-memory setup` 명령이 그 프로젝트의 `AGENTS.md`(Codex 표준)와 `CLAUDE.md`(Claude Code 표준)에 marker로 감싼 컨텍스트 블록을 삽입하고, `~/.synapse/projects.yaml`에 등록합니다.
+다른 프로젝트 디렉터리에서도 Claude Code/Codex가 vault Profile·Patterns 요약을 자연스럽게 인식하게 만들 수 있습니다. `synapse-memory setup` 명령은 기본적으로 repo 파일을 수정하지 않고 현재 프로젝트를 `~/.synapse/projects.yaml`에 등록합니다. marker 파일이 필요한 경우에만 `--target`을 지정합니다.
 
 ```bash
 # 새 프로젝트 디렉터리에서 1회 실행
 cd ~/proj/my-ios-app
-synapse-memory setup                    # both (AGENTS.md + CLAUDE.md, 기본)
+synapse-memory setup                    # repo 파일 수정 없이 hook 등록
+synapse-memory setup --target both      # AGENTS.md + CLAUDE.md marker
 synapse-memory setup --target agents    # AGENTS.md만 (Codex 전용)
 synapse-memory setup --target claude    # CLAUDE.md만 (Claude Code 전용)
 synapse-memory setup --dry-run          # 변경 미리보기

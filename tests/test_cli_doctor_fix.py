@@ -145,5 +145,6 @@ def test_cmd_doctor_reports_hook_not_ready_status(
     assert rc == 0
     out = capsys.readouterr().out
     assert "현재 프로젝트 미등록" in out
-    assert "synapse-memory setup --no-marker" in out
+    assert "synapse-memory setup" in out
+    assert "--no-marker" not in out
     assert "synapse-memory context render" in out

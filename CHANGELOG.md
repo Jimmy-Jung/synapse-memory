@@ -2,6 +2,16 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.3] — 2026-06-22
+
+### Changed
+
+- `synapse-memory setup`의 기본 동작을 repo 파일 수정 없는 hook 등록으로
+  변경했다. `AGENTS.md`/`CLAUDE.md` marker 삽입은 이제 `--target`을 명시한
+  경우에만 수행한다.
+- `--no-marker` 옵션을 제거하고, doctor/hook 안내와 README, slash command,
+  skill 문서를 새 기본값에 맞춰 정리했다.
+
 ## [1.19.2] — 2026-06-22
 
 코드베이스 감사 결과 중 안전한 중복 제거만 적용했다. 동작 변화 없음.

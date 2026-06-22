@@ -55,7 +55,7 @@
 - `synapse-memory assistant-status`
 - `synapse-memory config show|get|set|validate`
 - `synapse-memory cleanup scan|apply`
-- onboarding skill은 전용 CLI 대신 `doctor`, `setup --no-marker --dry-run`,
+- onboarding skill은 전용 CLI 대신 `doctor`, `setup --dry-run`,
   `context render`, `daily --quick --dry-run`의 실제 명령 조합으로 안내
 
 ### 자동 점검에 불편한 read-only 출력

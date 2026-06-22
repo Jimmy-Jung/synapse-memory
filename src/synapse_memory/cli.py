@@ -433,7 +433,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 print("  설치: synapse-memory hook install")
             else:
                 print("  정비: synapse-memory hook install")
-                print("  현재 프로젝트 등록: synapse-memory setup --no-marker")
+                print("  현재 프로젝트 등록: synapse-memory setup")
                 print("  캐시 갱신: synapse-memory context render")
     except Exception as exc:
         print(f"⚠ SessionStart hook 진단 실패: {exc}")
@@ -2250,7 +2250,7 @@ def _render_hook_settings_cache(*, max_inject_bytes: int | None = None) -> Path:
 
 
 def cmd_setup(args: argparse.Namespace) -> int:
-    """현재 디렉터리 프로젝트에 marker 삽입 + registry 등록."""
+    """현재 디렉터리 프로젝트를 registry에 등록하고, 요청 시 marker를 삽입."""
     import datetime as _datetime
 
     from synapse_memory.projects.marker import MarkerParseError, inject_or_replace
@@ -2268,24 +2268,24 @@ def cmd_setup(args: argparse.Namespace) -> int:
     _, _, max_inject_bytes = _hook_runtime_settings()
 
     project = Path.cwd().resolve()
+    setup_target = args.target or "hook"
     targets_for = {
         "codex": ["AGENTS.md"],
         "agents": ["AGENTS.md"],
         "claude": ["CLAUDE.md"],
         "both": ["AGENTS.md", "CLAUDE.md"],
         "hook": [],
-    }["hook" if args.no_marker else args.target]
+    }[setup_target]
 
     if args.dry_run:
         print(f"[dry-run] project: {project}")
         if not targets_for:
-            print("  marker: 생성/갱신 안 함 (--no-marker)")
+            print("  marker: 생성/갱신 안 함 (hook 등록만)")
         for name in targets_for:
             target_file = project / name
             status = "신규 생성" if not target_file.is_file() else "갱신"
             print(f"  {status}: {target_file}")
-        target = "hook" if args.no_marker else args.target
-        print(f"  registry: {_setup_registry_path()} (등록 예정, target={target})")
+        print(f"  registry: {_setup_registry_path()} (등록 예정, target={setup_target})")
         return 0
 
     for name in targets_for:
@@ -2302,7 +2302,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     entries = load_registry(registry)
     new = ProjectEntry(
         path=project,
-        target="hook" if args.no_marker else args.target,
+        target=setup_target,
         registered_at=_datetime.date.today(),
         last_sync=None,
         state="active",
@@ -3081,18 +3081,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_setup = sub.add_parser(
         "setup",
-        help="현재 디렉터리에 SYNAPSE-MEMORY marker 삽입 + ~/.synapse/projects.yaml 등록",
+        help="현재 디렉터리를 hook 주입 대상으로 등록",
     )
     p_setup.add_argument(
         "--target",
         choices=("agents", "claude", "both", "codex"),
-        default="both",
-        help="대상 파일 (기본: both)",
-    )
-    p_setup.add_argument(
-        "--no-marker",
-        action="store_true",
-        help="AGENTS.md/CLAUDE.md 수정 없이 registry와 hook cache만 등록",
+        default=None,
+        help="marker를 삽입할 대상 파일 (미지정 시 파일 수정 없이 hook 등록)",
     )
     p_setup.add_argument(
         "--dry-run",

@@ -11,7 +11,7 @@ description: Use for FIRST-TIME users — "synapse-memory 어떻게 써?", "처�
 
 ```bash
 synapse-memory doctor
-synapse-memory setup --no-marker --dry-run
+synapse-memory setup --dry-run
 synapse-memory context render
 synapse-memory daily --quick --dry-run
 ```
