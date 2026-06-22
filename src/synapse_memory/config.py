@@ -227,10 +227,15 @@ class MaintenanceConfig:
     """
 
     engine: str = "codex"
-    idle_minutes: int = 3
+    # 토큰 절감: live 세션 jsonl이 자라며 settled를 반복 통과해 전문 재청구되는 것을
+    # 막으려 30분으로 상향. 대화 종료 후 1회만 ingest(갱신 ~30분 지연 트레이드오프).
+    idle_minutes: int = 30
     # 020: bounded 단명 잡 — 사이클당 doc 상한(메모리 천장) + 스케줄 주기(분).
-    max_docs_per_cycle: int = 25
-    interval_minutes: int = 20
+    # 사이클당 LLM 호출 천장. checkpoint_each=True라 초과분은 다음 사이클로 무손실 이월.
+    max_docs_per_cycle: int = 10
+    # 토큰 절감: wakeup 빈도 ↓ (72→24회/일). idle_minutes(30)와 스케일 일치.
+    # 변경 시 launchd plist 재설치 필요(StartInterval에 구워짐).
+    interval_minutes: int = 60
 
 
 @dataclass
