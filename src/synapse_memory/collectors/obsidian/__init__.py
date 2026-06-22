@@ -6,12 +6,12 @@
 저자: Synapse Memory Maintainers
 """
 
+from synapse_memory.collectors._filestate import FileState
 from synapse_memory.collectors.obsidian.mirror import (
     DEFAULT_VAULT_PATH,
     ENV_VAR_VAULT,
     EXCLUDED_DIRS,
     CollectStats,
-    FileState,
     collect_obsidian,
     get_vault_path,
 )
