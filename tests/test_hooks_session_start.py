@@ -92,7 +92,8 @@ def test_session_start_suggests_registration_once_for_unregistered_git_repo(
     assert first_rc == 0
     assert second_rc == 0
     assert "미등록" in first_out
-    assert "synapse-memory setup --no-marker" in first_out
+    assert "synapse-memory setup" in first_out
+    assert "--no-marker" not in first_out
     assert second_out == ""
 
 
@@ -125,7 +126,9 @@ def test_session_start_suggests_registration_from_settings_sidecar(
     rc = session_start.main()
 
     assert rc == 0
-    assert "synapse-memory setup --no-marker" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "synapse-memory setup" in out
+    assert "--no-marker" not in out
 
 
 def test_session_start_respects_settings_max_inject_bytes(

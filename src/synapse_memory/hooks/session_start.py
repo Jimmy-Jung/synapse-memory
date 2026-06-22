@@ -18,7 +18,7 @@ MAX_BYTES = 2048
 FALLBACK = "Synapse Memory: 컨텍스트 캐시 없음 — `synapse-memory sync` 실행으로 생성 가능."
 SUGGEST_REGISTER = (
     "Synapse Memory: 이 프로젝트는 미등록입니다. "
-    "`synapse-memory setup --no-marker`로 등록하면 다음 세션부터 컨텍스트가 주입됩니다."
+    "`synapse-memory setup`으로 등록하면 다음 세션부터 컨텍스트가 주입됩니다."
 )
 
 

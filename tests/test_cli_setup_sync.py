@@ -61,7 +61,7 @@ def test_setup_target_both_creates_files(
     assert (registry.parent / ".synapse" / "context" / "settings.json").is_file()
 
 
-def test_setup_no_marker_registers_without_project_files(
+def test_setup_default_registers_without_project_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     vault = _scaffold_vault(tmp_path)
@@ -70,7 +70,7 @@ def test_setup_no_marker_registers_without_project_files(
     registry = tmp_path / "registry.yaml"
     _setup_env(monkeypatch, vault, registry, project)
 
-    rc = main(["setup", "--no-marker"])
+    rc = main(["setup"])
 
     assert rc == 0
     assert not (project / "AGENTS.md").exists()
