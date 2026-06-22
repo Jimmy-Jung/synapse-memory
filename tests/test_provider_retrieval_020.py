@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from synapse_memory.wiki import ingest as ingest_mod
-from synapse_memory.wiki import llm_retrieval as lr
+from synapse_memory.wiki import ingest as ingest_mod, llm_retrieval as lr
 from synapse_memory.wiki.ingest import ingest_source
 from synapse_memory.wiki.page import WikiPage
 from synapse_memory.wiki.page_index import PageIndex, build_page_index

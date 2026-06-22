@@ -13,14 +13,16 @@ from unittest.mock import patch
 
 import pytest
 
+from synapse_memory.llm._json import (
+    extract_first_json_value as _extract_first_json_value,
+    strip_code_fence as _strip_code_fence,
+)
 from synapse_memory.llm.claude import (
     ClaudeEnvironment,
     ClaudeError,
     ClaudeUnavailableError,
     _build_cmd,
-    _extract_first_json_value,
     _parse_json_with_fallback,
-    _strip_code_fence,
     complete,
     complete_structured,
     detect_claude_environment,
