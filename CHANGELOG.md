@@ -2,6 +2,22 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.2] — 2026-06-22
+
+코드베이스 감사 결과 중 안전한 중복 제거만 적용했다. 동작 변화 없음.
+
+### Changed
+
+- 9개 collector `mirror.py`가 각자 복제하던 파일 상태 헬퍼(`FileState`,
+  `file_sha256`, `load_states`, `save_states_atomic`)를 공용
+  `collectors/_filestate.py`로 통합했다. `_sqlite_mirror`는 하위 호환을 위해
+  re-export한다.
+- claude/codex 어댑터가 중복 보유하던 JSON 파싱 헬퍼(`strip_code_fence`,
+  `extract_first_json_value`, `parse_json_with_fallback`)를 공용 `llm/_json.py`로
+  통합하고, provider별 차이는 인자로 분리했다.
+- ruff `combine-as-imports`를 활성화해 alias·중복 import 블록을 단일 statement로
+  정리했다.
+
 ## [1.19.1] — 2026-06-21
 
 watch/ingest 기본 실행 provider를 Codex로 전환하고, 런타임 자동감지보다
