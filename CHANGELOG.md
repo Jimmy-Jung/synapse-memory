@@ -2,6 +2,27 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.4] — 2026-06-22
+
+wiki 자동 유지엔진의 토큰 소모를 줄였다. watch 데몬이 진행 중인 세션 jsonl을
+매 사이클 전문(全文) 재전송하던 것이 주원인이었다(유휴 사이클은 이미 LLM 0회라
+실행 주기 자체는 약한 레버).
+
+### Changed
+
+- `maintenance.idle_minutes` 기본값 3→30 (대화 종료 후 1회만 ingest),
+  `max_docs_per_cycle` 25→10 (사이클당 LLM 호출 천장),
+  `interval_minutes` 20→60 (wakeup 빈도 72→24회/일).
+- `ingest_source`의 `semantic_retrieval` 기본값을 끄로 변경해 small 문서의
+  provider 관련-페이지 선별 호출을 제거했다(문서당 LLM 2→1회).
+
+### Added
+
+- offset ingest: 세션 jsonl에서 이미 처리한 byte offset(`ingest_state.json`의
+  `__offsets__`)을 기록하고, 다음 사이클은 그 이후 tail만 전송한다. 자라는
+  단일 세션의 전문 재청구를 차단한다. 파일 로테이션/축소 시에는 전문 재처리해
+  데이터 유실을 막는다.
+
 ## [1.19.3] — 2026-06-22
 
 ### Changed
