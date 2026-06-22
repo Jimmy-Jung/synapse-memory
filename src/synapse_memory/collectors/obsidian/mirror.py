@@ -19,13 +19,17 @@ vault 경로
 from __future__ import annotations
 
 import contextlib
-import hashlib
-import json
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from synapse_memory.collectors._filestate import (
+    FileState,
+    file_sha256 as _file_sha256,
+    load_states as _load_states,
+    save_states_atomic as _save_states_atomic,
+)
 from synapse_memory.storage.l0 import (
     L0_FILE_MODE,
     ensure_l0_root_secure,
@@ -58,16 +62,6 @@ INCLUDED_EXT = ".md"
 # ---------------------------------------------------------------------------
 # 데이터
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class FileState:
-    """이전 mirror 시점의 파일 메타. 변경 감지용."""
-
-    rel_path: str
-    mtime: float
-    size: int
-    sha256: str
 
 
 @dataclass
@@ -123,15 +117,6 @@ def _is_excluded(rel_path: Path) -> bool:
     return any(sub in rel_str for sub in EXCLUDED_SUBSTRINGS)
 
 
-def _file_sha256(path: Path) -> str:
-    """파일 sha256 — 16자 prefix만 (전체는 과도, 충돌 거의 없음)."""
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()[:16]
-
-
 def _enumerate_md(vault: Path) -> list[Path]:
     """vault 안 .md 파일 목록 (exclude 적용)."""
     targets: list[Path] = []
@@ -143,51 +128,6 @@ def _enumerate_md(vault: Path) -> list[Path]:
             continue
         targets.append(p)
     return targets
-
-
-# ---------------------------------------------------------------------------
-# state 로드/저장
-# ---------------------------------------------------------------------------
-
-
-def _load_states(meta_path: Path) -> dict[str, FileState]:
-    if not meta_path.exists():
-        return {}
-    try:
-        raw = json.loads(meta_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    states: dict[str, FileState] = {}
-    for item in raw:
-        try:
-            s = FileState(
-                rel_path=str(item["rel_path"]),
-                mtime=float(item["mtime"]),
-                size=int(item["size"]),
-                sha256=str(item["sha256"]),
-            )
-            states[s.rel_path] = s
-        except (KeyError, TypeError, ValueError):
-            continue
-    return states
-
-
-def _save_states_atomic(meta_path: Path, states: dict[str, FileState]) -> None:
-    ensure_secure_dir(meta_path.parent)
-    payload = json.dumps(
-        [asdict(s) for s in states.values()],
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    )
-    tmp = meta_path.with_suffix(meta_path.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(payload)
-        f.flush()
-        os.fsync(f.fileno())
-    with contextlib.suppress(OSError):
-        os.chmod(tmp, L0_FILE_MODE)
-    os.replace(tmp, meta_path)
 
 
 # ---------------------------------------------------------------------------

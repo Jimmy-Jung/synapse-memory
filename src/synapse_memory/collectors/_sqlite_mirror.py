@@ -14,14 +14,18 @@
 from __future__ import annotations
 
 import contextlib
-import hashlib
-import json
 import os
 import sqlite3
 from collections.abc import Callable, Iterable
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from synapse_memory.collectors._filestate import (
+    FileState,
+    file_sha256,
+    load_states,
+    save_states_atomic,
+)
 from synapse_memory.storage.l0 import (
     L0_FILE_MODE,
     ensure_l0_root_secure,
@@ -33,13 +37,13 @@ DEFAULT_SQLITE_EXTS: tuple[str, ...] = (".sqlite", ".db", ".vscdb", ".storedata"
 META_DIR = ".meta"
 STATES_FILE = "states.json"
 
-
-@dataclass
-class FileState:
-    rel_path: str
-    mtime: float
-    size: int
-    sha256: str
+# 변경 감지 state 헬퍼는 _filestate 에서 공용화. 하위 호환 위해 re-export.
+__all__ = [
+    "FileState",
+    "file_sha256",
+    "load_states",
+    "save_states_atomic",
+]
 
 
 @dataclass
@@ -56,14 +60,6 @@ class SqliteCollectStats:
             f"unchanged={self.files_unchanged} bytes+={self.bytes_added} "
             f"errors={len(self.errors)}"
         )
-
-
-def file_sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()[:16]
 
 
 def _is_sidecar(name: str) -> bool:
@@ -102,46 +98,6 @@ def enumerate_sqlite(
                 continue
             targets.append(p)
     return targets
-
-
-def load_states(meta_path: Path) -> dict[str, FileState]:
-    if not meta_path.exists():
-        return {}
-    try:
-        raw = json.loads(meta_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    out: dict[str, FileState] = {}
-    for item in raw:
-        try:
-            s = FileState(
-                rel_path=str(item["rel_path"]),
-                mtime=float(item["mtime"]),
-                size=int(item["size"]),
-                sha256=str(item["sha256"]),
-            )
-            out[s.rel_path] = s
-        except (KeyError, TypeError, ValueError):
-            continue
-    return out
-
-
-def save_states_atomic(meta_path: Path, states: dict[str, FileState]) -> None:
-    ensure_secure_dir(meta_path.parent)
-    payload = json.dumps(
-        [asdict(s) for s in states.values()],
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    )
-    tmp = meta_path.with_suffix(meta_path.suffix + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(payload)
-        f.flush()
-        os.fsync(f.fileno())
-    with contextlib.suppress(OSError):
-        os.chmod(tmp, L0_FILE_MODE)
-    os.replace(tmp, meta_path)
 
 
 def sqlite_backup(src: Path, dst: Path) -> None:
