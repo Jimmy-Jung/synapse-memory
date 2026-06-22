@@ -2,6 +2,18 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.5] — 2026-06-22
+
+### Fixed
+
+- launchd watch 데몬이 `engine=codex`에서 모든 문서를 `AIUnavailableError`(Codex
+  CLI 미설치)로 실패시키던 버그를 고쳤다. `_daemon_path`가 `claude`만 실제 위치를
+  해석해 PATH에 넣고 `codex`는 누락했기에, codex가 nvm/brew 등 비표준 경로에 설치된
+  환경에서 데몬이 CLI를 찾지 못했다. 결과적으로 매시간 사이클이 돌아도 wiki 페이지가
+  하나도 생성되지 않았다(`pages=0`). 이제 claude/codex 모두 설치 시점에 위치를 해석해
+  데몬 PATH에 추가한다. 설정 변경 적용에는 `synapse-memory watch install` 재실행이
+  필요하다.
+
 ## [1.19.4] — 2026-06-22
 
 wiki 자동 유지엔진의 토큰 소모를 줄였다. watch 데몬이 진행 중인 세션 jsonl을
