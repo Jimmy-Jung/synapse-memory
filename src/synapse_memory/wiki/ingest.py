@@ -23,7 +23,7 @@ from synapse_memory.wiki.integration import (
     parse_ops,
 )
 from synapse_memory.wiki.log import append_log, summarize_provider_error
-from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw
+from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw, source_date_from_ref
 from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
 from synapse_memory.wiki.schema import ensure_schema
 from synapse_memory.wiki.watermark import (
@@ -233,6 +233,10 @@ def ingest_source(
 
     for doc in docs:
         result.docs_processed += 1
+        # 노트의 권위 있는 날짜는 처리일(today)이 아니라 원본이 기록된 날이다.
+        # codex ref 경로(sessions/YYYY/MM/DD/)에서 뽑고, 없으면 today로 폴백.
+        # 제목/slug(LLM)와 updated(apply_ops) 양쪽에 같은 날짜를 흘려 보낸다.
+        doc_date = source_date_from_ref(doc.ref) or today
         is_large_doc = len(doc.text) > LARGE_DOC_CHAR_THRESHOLD
         chunks = _integration_chunks(doc.ref, doc.text)
         if not chunks:
@@ -258,7 +262,9 @@ def ingest_source(
                     related = find_related_pages(
                         chunk.text, vault_path=vault_path, pages=all_pages
                     )
-                prompt = build_integration_prompt(chunk.text, related)
+                prompt = build_integration_prompt(
+                    chunk.text, related, source_date=doc_date
+                )
                 payload = ai_api.complete_structured(
                     prompt, system=INTEGRATION_SYSTEM, model=model,
                     json_schema=INTEGRATION_SCHEMA, env=ai_env,
@@ -270,7 +276,7 @@ def ingest_source(
                     # dry-run은 디스크에 아무것도 쓰지 않으며 pages_written도 비워 둔다
                     # (계획서 테스트 계약: result.pages_written == []).
                     continue
-                written = apply_ops(ops, vault_path=vault_path, today=today)
+                written = apply_ops(ops, vault_path=vault_path, today=doc_date)
                 result.pages_written.extend(written)
                 # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever).
                 # 로컬 임베딩 로드를 핫패스에서 영구 차단. 페이지는 디스크에만 기록.
