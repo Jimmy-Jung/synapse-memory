@@ -59,14 +59,30 @@ class PageOp:
     page: WikiPage
 
 
-def build_integration_prompt(text: str, related: list[WikiPage]) -> str:
-    """엔진에 보낼 user 프롬프트 (새 내용 + 관련 기존 페이지 전문)."""
+def build_integration_prompt(
+    text: str, related: list[WikiPage], *, source_date: str | None = None
+) -> str:
+    """엔진에 보낼 user 프롬프트 (새 내용 + 관련 기존 페이지 전문).
+
+    ``source_date``(YYYY-MM-DD)가 주어지면 — 원본이 기록된 날 — 제목/slug에
+    날짜를 박을 때 처리일(오늘) 대신 이 날짜를 쓰도록 명시한다. activity-log류는
+    본문이 상대 타임스탬프(00:00:00~)만 담아, 날짜를 안 주면 LLM이 자기 오늘로
+    채워 넣어 며칠 어긋난 노트명이 생긴다.
+    """
     related_block = (
         "\n\n".join(serialize_page(p) for p in related)
         if related
         else "(관련 기존 페이지 없음)"
     )
+    date_block = (
+        f"# 원본 기록일\n"
+        f"이 내용은 {source_date}에 기록되었다. 제목(title)이나 slug에 날짜를 넣을 때는 "
+        f"반드시 이 날짜({source_date})를 사용한다. 오늘/처리 날짜를 쓰지 않는다.\n\n"
+        if source_date
+        else ""
+    )
     return (
+        f"{date_block}"
         f"# 새 대화/노트 내용\n{text}\n\n"
         f"# 관련 기존 페이지 (있으면 갱신 대상)\n{related_block}\n\n"
         f"위 내용을 wiki에 통합하는 operations를 반환하세요."

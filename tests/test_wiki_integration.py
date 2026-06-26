@@ -24,6 +24,16 @@ def test_build_prompt_includes_text_and_related() -> None:
     assert "기존 본문" in prompt
 
 
+def test_build_prompt_injects_source_date() -> None:
+    prompt = build_integration_prompt("내용", [], source_date="2026-06-16")
+    assert "2026-06-16" in prompt
+    assert "원본 기록일" in prompt
+
+
+def test_build_prompt_omits_date_block_when_absent() -> None:
+    assert "원본 기록일" not in build_integration_prompt("내용", [])
+
+
 def test_parse_ops_valid() -> None:
     payload = {"operations": [
         {"op": "update", "type": "project", "slug": "synapse-memory",

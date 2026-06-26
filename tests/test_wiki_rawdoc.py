@@ -6,7 +6,20 @@ import json
 import os
 from pathlib import Path
 
-from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw
+from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw, source_date_from_ref
+
+
+def test_source_date_from_codex_ref() -> None:
+    ref = "codex:sessions/2026/06/16/rollout-2026-06-16T11-13-56-abc.jsonl"
+    assert source_date_from_ref(ref) == "2026-06-16"
+
+
+def test_source_date_none_for_claude_code_ref() -> None:
+    assert source_date_from_ref("claude-code:projects/demo/sess1.jsonl") is None
+
+
+def test_source_date_rejects_invalid_date() -> None:
+    assert source_date_from_ref("codex:sessions/2026/13/40/rollout.jsonl") is None
 
 
 def _write_jsonl(path: Path, events: list[dict]) -> None:

@@ -9,15 +9,38 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from synapse_memory.storage.l0 import l0_root
 
 SUPPORTED_SOURCES = ("claude-code", "codex")
+
+# raw ref 경로/파일명에 박힌 기록일(YYYY-MM-DD 또는 YYYY/MM/DD) 추출용.
+_REF_DATE_RE = re.compile(r"(\d{4})[/-](\d{2})[/-](\d{2})")
+
+
+def source_date_from_ref(ref: str) -> str | None:
+    """raw ref에서 출처(기록)일 ``YYYY-MM-DD``를 추출. 없으면 None.
+
+    codex ref는 ``codex:sessions/2026/06/16/rollout-2026-06-16T...jsonl`` 처럼
+    경로와 파일명 양쪽에 세션 발생일을 담는다 — 이 값이 노트의 권위 있는 날짜다.
+    claude-code ref(``claude-code:projects/...``)는 날짜가 없어 None을 반환하고,
+    호출측이 처리일(today)로 폴백한다. 이 함수가 없으면 ingest가 codex 세션을
+    며칠 뒤 배치 처리할 때 노트 제목/slug/updated에 처리일이 박히는 버그가 난다.
+    """
+    m = _REF_DATE_RE.search(ref)
+    if not m:
+        return None
+    year, month, day = (int(g) for g in m.groups())
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
