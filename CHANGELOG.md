@@ -2,6 +2,12 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.6] — 2026-06-26
+
+### Fixed
+
+- TODO: 변경 내역 작성 (release-check 가 TODO 잔존 시 실패시킴)
+
 ## [1.19.5] — 2026-06-22
 
 ### Fixed
