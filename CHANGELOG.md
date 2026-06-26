@@ -6,7 +6,13 @@ All notable changes to Synapse Memory are documented here.
 
 ### Fixed
 
-- TODO: 변경 내역 작성 (release-check 가 TODO 잔존 시 실패시킴)
+- wiki ingest가 노트의 날짜(`title`/`slug`/파일명/`updated`)에 원본 기록일이 아니라
+  **처리일(today)**을 박던 버그를 고쳤다. codex 세션을 며칠 뒤 배치 처리하면, 화면
+  녹화 activity-log류는 본문이 상대 타임스탬프(`00:00:00~`)만 담아 LLM이 제목/slug
+  날짜를 자기 오늘로 채우고 `apply_ops`도 today로 stamp해, 양쪽이 처리일로 수렴했다
+  (예: 06-16 세션이 06-26로 기록). 이제 `rawdoc.source_date_from_ref()`가 codex ref
+  경로(`sessions/YYYY/MM/DD/`)에서 기록일을 뽑아 통합 프롬프트와 `apply_ops` 양쪽에
+  주입한다. 날짜가 없는 source(claude-code)는 기존대로 today로 폴백한다.
 
 ## [1.19.5] — 2026-06-22
 
