@@ -255,6 +255,5 @@ def run_lint(
     append_log(
         f"lint: +{report.backlinks_added} backlinks, "
         f"-{report.dead_links_removed} dead, {len(review_items)} review",
-        vault_path=vault_path,
     )
     return report

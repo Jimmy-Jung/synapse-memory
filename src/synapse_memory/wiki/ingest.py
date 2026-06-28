@@ -245,7 +245,6 @@ def ingest_source(
                 append_log(
                     f"ingest {source}: skipped oversize doc from {doc.ref} "
                     f"(chars={len(doc.text)}, limit={SAMPLED_DOC_CHAR_LIMIT})",
-                    vault_path=vault_path,
                 )
                 _checkpoint(doc)
             continue
@@ -284,7 +283,6 @@ def ingest_source(
                     append_log(
                         f"ingest {source}: {len(written)} pages "
                         f"({', '.join(written)}) from {chunk.ref}",
-                        vault_path=vault_path,
                     )
         except Exception as exc:
             error_summary = summarize_provider_error(exc)
@@ -294,7 +292,6 @@ def ingest_source(
                     append_log(
                         f"ingest {source}: skipped large doc from {doc.ref} "
                         f"after {error_summary}",
-                        vault_path=vault_path,
                     )
                 _checkpoint(doc)
                 continue

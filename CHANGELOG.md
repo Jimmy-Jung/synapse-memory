@@ -2,6 +2,18 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.7] — 2026-06-28
+
+### Changed
+
+- wiki `log.md`(ingest/lint changelog)를 iCloud-synced vault 루트에서 vault 밖
+  `~/.synapse/private/`(0700, iCloud sync 제외)로 이전했다. 매 ingest마다 1줄씩
+  무한 append되어 Obsidian 파일목록·그래프와 iCloud 동기화에 잡음을 쌓던 문제를
+  없앤다. 이 로그는 코드가 다시 읽지 않는 write-only audit trail이라 위치만 옮겨도
+  안전하며, cost/feedback 로그와 같은 L0 디렉터리에 모인다. 줄 형식(`- <iso> <msg>`)과
+  redaction은 그대로다. `log_path()`/`append_log()`의 `vault_path` 인자는 제거됐다.
+  기존 vault의 `log.md`는 새 위치로 1회 이전하면 된다(이력 보존).
+
 ## [1.19.6] — 2026-06-26
 
 ### Fixed
