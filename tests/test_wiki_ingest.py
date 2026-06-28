@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import synapse_memory.wiki.ingest as ingest_mod
+from synapse_memory.storage.l0 import l0_root
 from synapse_memory.wiki.ingest import ingest_source
 from synapse_memory.wiki.page import load_page
 from synapse_memory.wiki.watermark import load_watermark
@@ -236,7 +237,7 @@ def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypat
     assert result.docs_skipped == 1
     assert result.errors == []
     assert load_watermark("claude-code", path=state) == expected
-    assert "skipped large doc" in (tmp_path / "log.md").read_text(encoding="utf-8")
+    assert "skipped large doc" in (l0_root() / "log.md").read_text(encoding="utf-8")
 
 
 def test_large_doc_provider_error_is_sanitized_in_log(tmp_path, monkeypatch) -> None:
@@ -262,7 +263,7 @@ def test_large_doc_provider_error_is_sanitized_in_log(tmp_path, monkeypatch) -> 
         checkpoint_each=True,
     )
 
-    text = (tmp_path / "log.md").read_text(encoding="utf-8")
+    text = (l0_root() / "log.md").read_text(encoding="utf-8")
     assert result.docs_skipped == 1
     assert "rate limited" in text
     assert "rate_limit_error" in text
@@ -328,4 +329,4 @@ def test_oversize_doc_skips_without_llm_and_advances_watermark(tmp_path, monkeyp
     assert result.docs_skipped == 1
     assert result.errors == []
     assert load_watermark("claude-code", path=state) == expected
-    assert "skipped oversize doc" in (tmp_path / "log.md").read_text(encoding="utf-8")
+    assert "skipped oversize doc" in (l0_root() / "log.md").read_text(encoding="utf-8")

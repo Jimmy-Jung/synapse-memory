@@ -1,5 +1,8 @@
 # src/synapse_memory/wiki/log.py
-"""vault 루트 log.md — ingest/lint 변경의 시간순 1줄 기록 (grep 친화).
+"""~/.synapse/private/log.md — ingest/lint 변경의 시간순 1줄 기록.
+
+vault 외부(iCloud sync 제외, 0700)에 두어 Obsidian/동기화 잡음을 만들지 않으면서
+grep 친화 audit trail은 유지한다. cost/feedback 로그와 같은 L0 디렉터리에 산다.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-06-14
@@ -13,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
+from synapse_memory.storage.l0 import ensure_l0_root_secure, l0_root
 
 LOG_FILENAME = "log.md"
 _HEADER = "# Wiki Change Log\n\n"
@@ -26,9 +29,9 @@ _SENSITIVE_FIELD_RE = re.compile(
 _STATUS_RE = re.compile(r"\b(?:status|code|error code)\D{0,8}(\d{3})\b", re.IGNORECASE)
 
 
-def log_path(*, vault_path: Path | None = None) -> Path:
-    vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / LOG_FILENAME
+def log_path() -> Path:
+    ensure_l0_root_secure()
+    return l0_root() / LOG_FILENAME
 
 
 def _truncate(text: str, max_chars: int = MAX_LOG_MESSAGE_CHARS) -> str:
@@ -95,10 +98,9 @@ def summarize_provider_error(exc: Exception) -> str:
     return _truncate(f"{type(exc).__name__}: {_redact_operational_ids(raw)}")
 
 
-def append_log(message: str, *, vault_path: Path | None = None, when: str | None = None) -> Path:
+def append_log(message: str, *, when: str | None = None) -> Path:
     """log.md에 '- <iso> <message>' 한 줄 추가. 파일/헤더 없으면 생성."""
-    path = log_path(vault_path=vault_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = log_path()
     stamp = when or datetime.now().astimezone().isoformat(timespec="seconds")
     line = f"- {stamp} {sanitize_log_message(message)}\n"
     if not path.is_file():
