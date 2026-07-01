@@ -2,6 +2,25 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.19.8] — 2026-07-01
+
+### Changed
+
+- `resume` 스킬을 얇은 CLI 한 방 합성에서 **4단계 네이티브 워크플로**(회사 심층조사 → 프로젝트 매칭 → 초안 → 최종)로 재작성했다.
+- 실행 정책을 "필수(최고 모델·Ultracode)"에서 **best-effort**로 현실화했다. 모델·effort·병렬성은 호출 환경 설정이며 스킬은 단계 게이트(초안 검토·팩트체크)만 보장한다.
+
+### Added
+
+- `skills/resume/references/` 5종을 추가해 이력서 양식을 통일했다: `resume-template`, `style-guide`, `company-analysis-template`, `draft-template`, `interview-guide`.
+- cold-start 인터뷰 분기(첫 사용·기존 이력서/자소서 없음), no-JD 모드, 복수 포지션 확정, idempotency 규칙(`status: draft|approved` 재생성 방지).
+- 이력서 소스 자료를 `Entities/Projects` 외 `Profile`/`Concepts`/`Insights` 전체로 확장했다.
+- **Phase 4 정직성 게이트**: 초안 "제출 전 팩트체크"의 미해결(증빙 준비·표현 주의) 항목이 최종본에 유출되지 않도록 강제한다.
+- `plans/resume-skill-improvements.md` — Codex + Claude 이중 리뷰 기반 개선 blueprint.
+
+### Fixed
+
+- 이력서 템플릿의 경로형 wikilink(`[[Entities/Projects/...]]`)를 vault가 유일 해석하는 bare `[[name]]` 형식으로 통일했다.
+
 ## [1.19.7] — 2026-06-28
 
 ### Changed
