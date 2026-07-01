@@ -7,6 +7,17 @@
 
 ---
 
+```yaml
+---
+type: resume
+company_id: {{slug}}
+position: {{포지션}}
+status: draft          # 사용자 승인 시 approved (재생성 방지)
+generated: '{{YYYY-MM-DD}}'
+author: {{Git 사용자명}}
+---
+```
+
 # {{이름}} {{직무}} {{연락처}} {{이메일}}
 
 # 한 줄 소개

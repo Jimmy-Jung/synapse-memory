@@ -1,7 +1,7 @@
 # 이력서 초안 템플릿 (draft-template)
 
 `/sm:resume` Phase 3 이 생성하는 `Companies/<slug>/resume-draft.md` 의 골격이다.
-**최종 이력서 직전 단계.** 회사 키워드를 내 프로젝트에 매핑하고(`[[Entities/Projects/*]]` 링크 필수), 각 섹션의 재료를 bullet 으로 깐다. 산문화는 다음 단계(resume.md). 여기서 출처·매칭 근거를 확정한다.
+**최종 이력서 직전 단계.** 회사 키워드를 내 프로젝트에 매핑하고(`[[*]]` 링크 필수), 각 섹션의 재료를 bullet 으로 깐다. 산문화는 다음 단계(resume.md). 여기서 출처·매칭 근거를 확정한다.
 
 `{{...}}` 치환 슬롯, `<!-- -->` 작성 지침.
 
@@ -14,7 +14,7 @@ company_id: {{slug}}
 position: {{포지션명}}
 based_on: analysis.md
 projects:
-  - "[[Entities/Projects/{{file}}]]"
+  - "[[{{file}}]]"
 created: '{{YYYY-MM-DD}}'
 author: {{Git 사용자명}}
 ---
@@ -31,7 +31,7 @@ author: {{Git 사용자명}}
 <!-- analysis.md §7을 확정. 각 행에 반드시 wikilink. 근거는 카드에서. -->
 | 회사 키워드 | 매칭 프로젝트 | 근거 (카드 출처) |
 |---|---|---|
-| {{kw}} | [[Entities/Projects/{{file}}]] | {{근거}} |
+| {{kw}} | [[{{file}}]] | {{근거}} |
 
 ## 한 줄 소개 후보
 1. {{후보 A}}
@@ -41,12 +41,12 @@ author: {{Git 사용자명}}
 {{2~4문장. 회사 매칭 성과 우선.}}
 
 ## 핵심 역량 후보
-- {{역량}} ← [[Entities/Projects/{{file}}]]
+- {{역량}} ← [[{{file}}]]
 
 ## 강조 프로젝트 (상위 3~5, 상단 배치 순서)
 <!-- 각 프로젝트를 STAR bullet 씨앗으로. 최종에서 산문화. 수치는 카드 근거만. -->
 
-### 1. {{프로젝트}} — [[Entities/Projects/{{file}}]]
+### 1. {{프로젝트}} — [[{{file}}]]
 - **왜 이 회사에**: {{매칭 이유}}
 - **문제**: {{...}}
 - **역할**: {{...}}
