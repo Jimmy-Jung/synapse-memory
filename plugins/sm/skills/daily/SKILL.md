@@ -19,7 +19,5 @@ synapse-memory daily [--quick] [--watch-status] [--profile-facts-only] [--resume
 - `--profile-facts-only`: ProfileFact 추출만
 - `--resume-from`: 실패 지점부터 이어서
 - 진행 상태 확인: `synapse-memory daily-status` 또는 `synapse-memory daily-status --watch`
-- 브라우저 History DB lock 으로 오래 멈추면:
-  `synapse-memory daily --skip collect_browser_history`
 
 종료 시 `DailyReport-YYYY-MM-DD.md` 가 vault `90_System/AI/DailyReports/` 에 생성됩니다.

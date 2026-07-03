@@ -29,7 +29,7 @@
    - Profile 후보 GUI 승인 (`/sm:apply-profile`, v0.12.0)
    - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
    - apply 중복 질문 5중 차단 + codex 통합 + 관찰성 (v0.14.0)
-   - 외부 데이터 수집기 13종 확장 — shell history, Cursor / Continue / Aider 세션, Apple Notes, Day One, VS Code Local History, iMessage, Gmail, Calendar, 브라우저 history, Screen Time, Apple Health (v0.15.0)
+   - 외부 데이터 수집기 — Cursor / Continue / Aider 세션, Day One, Gmail, Obsidian (v0.15.0 이후)
    - Codex 세션을 wiki 통합 소스로 추가 (`collect codex`, `ingest --source codex`, `backfill --source codex`)
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
 

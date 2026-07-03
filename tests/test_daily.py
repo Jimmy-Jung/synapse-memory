@@ -92,11 +92,9 @@ class TestRunDaily:
 
     def test_successful_collector_errors_are_counted_as_warnings(self) -> None:
         result = run_daily(
-            only={"collect_browser_history"},
+            only={"collect_cursor"},
             stage_actions={
-                "collect_browser_history": _ok(
-                    "scanned=2 mirrored=0 unchanged=0 bytes+=0 errors=2"
-                )
+                "collect_cursor": _ok("mirrored=0 unchanged=0 bytes+=0 errors=2")
             },
             on_log=lambda _line: None,
         )

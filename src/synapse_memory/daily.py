@@ -4,17 +4,18 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
 
     1.  collect claude-code           (mirror 새 줄만)
     2.  collect codex                 (~/.codex 새 줄만)
-    3.  collect shell-history         (~/.zsh_history, ~/.bash_history)
-    4.  collect cursor                (Cursor IDE SQLite snapshot)
-    5.  collect continue.dev          (~/.continue 세션 JSON)
-    6.  collect aider                 (~/.aider.* append-only)
-    7.  collect obsidian              (변경 .md만)
-    8.  cluster classify --resume     (새 cluster만)
-    9.  card generate (--force=False) (새 cluster만 Card 생성)
-    10. wiki/card provider sync       (provider-only context refresh)
-    11. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
-    12. report                        (DailyReport 작성)
-    13. lint                          (wiki 구조 lint)
+    3.  collect cursor                (Cursor IDE SQLite snapshot)
+    4.  collect continue.dev          (~/.continue 세션 JSON)
+    5.  collect aider                 (~/.aider.* append-only)
+    6.  collect day-one               (Day One journal)
+    7.  collect gmail-sent            (opt-in)
+    8.  collect obsidian              (변경 .md만)
+    9.  cluster classify --resume     (새 cluster만)
+    10. card generate (--force=False) (새 cluster만 Card 생성)
+    11. wiki/card provider sync       (provider-only context refresh)
+    12. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
+    13. report                        (DailyReport 작성)
+    14. lint                          (wiki 구조 lint)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -54,21 +55,11 @@ class DailyStage:
 DAILY_STAGES = (
     DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
     DailyStage("collect_codex", "Codex CLI 로그 mirror"),
-    DailyStage("collect_shell_history", "Shell history mirror"),
     DailyStage("collect_cursor", "Cursor IDE 로그 mirror"),
     DailyStage("collect_continue", "Continue.dev 세션 mirror"),
     DailyStage("collect_aider", "Aider 대화 mirror"),
-    DailyStage("collect_apple_notes", "Apple Notes mirror"),
     DailyStage("collect_day_one", "Day One journal mirror"),
-    DailyStage(
-        "collect_vscode_local_history", "VS Code Local History mirror"
-    ),
-    DailyStage("collect_imessage", "iMessage chat.db mirror"),
     DailyStage("collect_gmail_sent", "Gmail Sent mirror (opt-in)"),
-    DailyStage("collect_calendar", "Calendar ICS mirror"),
-    DailyStage("collect_browser_history", "브라우저 history mirror"),
-    DailyStage("collect_screen_time", "Screen Time (knowledgeC) mirror"),
-    DailyStage("collect_apple_health", "Apple Health export mirror"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -278,19 +269,11 @@ def _build_stage_actions(
     return {
         "collect_claude_code": _collect_claude_code_action,
         "collect_codex": _collect_codex_action,
-        "collect_shell_history": _collect_shell_history_action,
         "collect_cursor": _collect_cursor_action,
         "collect_continue": _collect_continue_action,
         "collect_aider": _collect_aider_action,
-        "collect_apple_notes": _collect_apple_notes_action,
         "collect_day_one": _collect_day_one_action,
-        "collect_vscode_local_history": _collect_vscode_local_history_action,
-        "collect_imessage": _collect_imessage_action,
         "collect_gmail_sent": _collect_gmail_sent_action,
-        "collect_calendar": _collect_calendar_action,
-        "collect_browser_history": _collect_browser_history_action,
-        "collect_screen_time": _collect_screen_time_action,
-        "collect_apple_health": _collect_apple_health_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -324,13 +307,6 @@ def _collect_codex_action() -> str:
     return stats.summary()
 
 
-def _collect_shell_history_action() -> str:
-    from synapse_memory.collectors.shell_history import collect_shell_history
-
-    stats = collect_shell_history()
-    return stats.summary()
-
-
 def _collect_cursor_action() -> str:
     from synapse_memory.collectors.cursor import collect_cursor
 
@@ -352,13 +328,6 @@ def _collect_aider_action() -> str:
     return stats.summary()
 
 
-def _collect_apple_notes_action() -> str:
-    from synapse_memory.collectors.apple_notes import collect_apple_notes
-
-    stats = collect_apple_notes()
-    return stats.summary()
-
-
 def _collect_day_one_action() -> str:
     from synapse_memory.collectors.day_one import collect_day_one
 
@@ -366,54 +335,10 @@ def _collect_day_one_action() -> str:
     return stats.summary()
 
 
-def _collect_vscode_local_history_action() -> str:
-    from synapse_memory.collectors.vscode_local_history import (
-        collect_vscode_local_history,
-    )
-
-    stats = collect_vscode_local_history()
-    return stats.summary()
-
-
-def _collect_imessage_action() -> str:
-    from synapse_memory.collectors.imessage import collect_imessage
-
-    stats = collect_imessage()
-    return stats.summary()
-
-
 def _collect_gmail_sent_action() -> str:
     from synapse_memory.collectors.gmail_sent import collect_gmail_sent
 
     stats = collect_gmail_sent()
-    return stats.summary()
-
-
-def _collect_calendar_action() -> str:
-    from synapse_memory.collectors.calendar import collect_calendar
-
-    stats = collect_calendar()
-    return stats.summary()
-
-
-def _collect_browser_history_action() -> str:
-    from synapse_memory.collectors.browser_history import collect_browser_history
-
-    stats = collect_browser_history()
-    return stats.summary()
-
-
-def _collect_screen_time_action() -> str:
-    from synapse_memory.collectors.screen_time import collect_screen_time
-
-    stats = collect_screen_time()
-    return stats.summary()
-
-
-def _collect_apple_health_action() -> str:
-    from synapse_memory.collectors.apple_health import collect_apple_health
-
-    stats = collect_apple_health()
     return stats.summary()
 
 
@@ -1037,13 +962,11 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
     if stage in (
         "collect_claude_code",
         "collect_codex",
-        "collect_shell_history",
         "collect_aider",
     ):
         labels = {
             "collect_claude_code": "Claude 활동 로그",
             "collect_codex": "Codex 활동 로그",
-            "collect_shell_history": "Shell 명령",
             "collect_aider": "Aider 대화",
         }
         label = labels[stage]
@@ -1065,24 +988,12 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
     elif stage in (
         "collect_cursor",
         "collect_continue",
-        "collect_apple_notes",
         "collect_day_one",
-        "collect_vscode_local_history",
-        "collect_imessage",
-        "collect_calendar",
-        "collect_screen_time",
-        "collect_apple_health",
     ):
         labels = {
             "collect_cursor": "Cursor DB",
             "collect_continue": "Continue.dev 세션",
-            "collect_apple_notes": "Apple Notes DB",
             "collect_day_one": "Day One DB",
-            "collect_vscode_local_history": "VS Code 히스토리",
-            "collect_imessage": "iMessage DB",
-            "collect_calendar": "Calendar ICS",
-            "collect_screen_time": "Screen Time DB",
-            "collect_apple_health": "Apple Health export",
         }
         label = labels[stage]
         kv = _parse_kv(raw)
@@ -1109,19 +1020,6 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
             ]
             if kv.get("bytes", 0) > 0:
                 parts.append(f"({_format_bytes(kv['bytes'])})")
-            if kv.get("errors", 0):
-                parts.append(f"· 에러 {kv['errors']}")
-            return " ".join(parts)
-    elif stage == "collect_browser_history":
-        kv = _parse_kv(raw)
-        if "scanned" in kv:
-            parts = [
-                f"브라우저 history {kv.get('mirrored', 0)}/{kv.get('scanned', 0)} mirror"
-            ]
-            if kv.get("bytes", 0) > 0:
-                parts.append(f"({_format_bytes(kv['bytes'])})")
-            if kv.get("unchanged", 0):
-                parts.append(f"· 변경 없음 {kv['unchanged']}")
             if kv.get("errors", 0):
                 parts.append(f"· 에러 {kv['errors']}")
             return " ".join(parts)

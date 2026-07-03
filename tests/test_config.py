@@ -290,6 +290,33 @@ def test_load_ignores_legacy_provider_only_config_keys(tmp_path):
     assert "embedding_model" not in text
 
 
+def test_load_ignores_removed_collector_config_keys(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "vault": "/tmp/example-vault",
+                "collectors": {
+                    "apple_health": {"enabled": True},
+                    "apple_notes": {"enabled": True},
+                    "browser_history": {"enabled": True},
+                    "calendar": {"enabled": True},
+                    "imessage": {"enabled": True},
+                    "screen_time": {"enabled": True},
+                    "shell_history": {"enabled": True},
+                    "vscode_local_history": {"enabled": True},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.vault == "/tmp/example-vault"
+    assert not hasattr(cfg, "collectors")
+
+
 def test_describe_privacy_mode_documents_ingest_and_query_boundaries():
     mode = describe_privacy_mode(SynapseConfig())
 

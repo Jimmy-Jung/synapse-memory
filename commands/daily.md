@@ -9,7 +9,7 @@ argument-hint: [--quick] [--watch-status] [--profile-facts-only] [--resume-from 
 
 파이프라인 흐름 (v0.15+):
 
-1. **collect_* (16종 컬렉터)**: claude_code, codex, shell_history, cursor, continue, aider, apple_notes, day_one, vscode_local_history, imessage (Full Disk Access), gmail_sent (opt-in), calendar, browser_history, screen_time, apple_health (drop-in), obsidian
+1. **collect_* 컬렉터**: claude_code, codex, cursor, continue, aider, day_one, gmail_sent (opt-in), obsidian
 2. **classify** (신규 cluster 분류) → **generate** (Card 생성)
 3. **update_profile** (Profile 후보 추출, full 모드만)
 4. **report** (DailyReport 작성)
@@ -47,7 +47,6 @@ SYNAPSE_FROM_AGENT=1 synapse-memory daily --resume-from classify
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --dry-run --resume-from index
 SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick --watch-status --quick-days 14
 SYNAPSE_FROM_AGENT=1 synapse-memory daily-status --watch
-SYNAPSE_FROM_AGENT=1 synapse-memory daily --skip collect_browser_history
 ```
 
 ## 종료 후 흐름 — apply 제안

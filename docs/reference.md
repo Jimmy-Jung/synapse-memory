@@ -459,19 +459,11 @@ synapse-memory doctor --fix-config
 |---|---|:---:|---|
 | `collect_claude_code` | `~/.claude/projects/<slug>/<id>.jsonl` | ✅ | Claude Code 세션 |
 | `collect_codex` | `~/.codex/sessions/.../*.jsonl` + `history.jsonl` | ✅ | Codex CLI |
-| `collect_shell_history` | `~/.zsh_history`, `~/.bash_history` | ✅ | 셸 명령 기록 |
 | `collect_cursor` | Cursor IDE `state.vscdb` (SQLite) | ✅ | macOS 표준 경로 |
 | `collect_continue` | `~/.continue/sessions/*.json` | ✅ | Continue.dev VS Code 확장 |
 | `collect_aider` | `~/.aider.chat.history.md`, `.input.history` | ✅ | terminal AI pair |
-| `collect_apple_notes` | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | ✅ | Full Disk Access 필요 시 errors |
 | `collect_day_one` | `~/Library/Group Containers/<TEAM_ID>.dayoneapp2/` | ✅ | `SYNAPSE_DAYONE_HOME` override 가능 |
-| `collect_vscode_local_history` | `~/Library/Application Support/Code/User/History/` | ✅ | VS Code 자동 snapshot |
-| `collect_imessage` | `~/Library/Messages/chat.db` | ✅ | Full Disk Access 필요. `SYNAPSE_IMESSAGE_DISABLE=1` 로 opt-out |
 | `collect_gmail_sent` | Gmail API (Sent 라벨) | ⛔ opt-in | `SYNAPSE_GMAIL_ENABLE=1` + OAuth credentials 필요 |
-| `collect_calendar` | `~/Library/Calendars/*.calendar/Events/*.ics` | ✅ | macOS Calendar.app 디스크 캐시 |
-| `collect_browser_history` | Chrome/Safari/Arc `History` SQLite | ✅ | 설치된 브라우저만 처리 |
-| `collect_screen_time` | `~/Library/Application Support/Knowledge/knowledgeC.db` | ✅ | 앱 사용 시간 / CoreDuet 통합 DB |
-| `collect_apple_health` | `~/Downloads/export*.zip` (또는 `SYNAPSE_HEALTH_DROP`) | ✅ | 수동 export 필요 — drop-in 디렉토리 |
 | `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
 
 ### `collect_gmail_sent` 켜기
@@ -497,38 +489,6 @@ export SYNAPSE_GMAIL_ENABLE=1
 
 token cache 는 `~/.config/synapse-memory/gmail-token.json`. refresh token 으로
 이후 호출 자동 갱신.
-
-### `collect_imessage` 끄기 (선택)
-
-iMessage 는 PII 가 매우 무겁습니다. 기본 활성이지만 비활성화하려면:
-
-```bash
-export SYNAPSE_IMESSAGE_DISABLE=1
-```
-
-Full Disk Access 권한이 없으면 mirror 가 errors 에 기록되고 daily 흐름은 계속
-진행됩니다 (블로킹 없음).
-
-### `collect_apple_health` 사용하기
-
-Apple Health 는 자동 sync 가 불가능합니다 (앱 격리). 다음 흐름으로 export:
-
-1. iPhone → Health 앱 → 우상단 프로필 → "내보내기"
-2. 생성된 `export.zip` 을 macOS 의 `~/Downloads` (또는 `SYNAPSE_HEALTH_DROP`)
-   디렉토리로 옮기기 (AirDrop, iCloud, 케이블 등)
-3. 다음 `/sm:daily` 실행 → `~/.synapse/private/raw/apple-health/export.zip` 으로
-   mirror
-
-같은 파일을 다시 떨어뜨리면 sha256 비교로 unchanged 처리. 새 export 본만
-교체됩니다.
-
-### `collect_browser_history` / `collect_screen_time`
-
-브라우저와 macOS 사용 패턴은 자동 mirror. 브라우저가 실행 중이어도
-`sqlite3.backup` 으로 안전한 read-consistent snapshot 을 뜹니다.
-
-knowledgeC.db 는 SIP 보호 영역 일부 — Full Disk Access 권한이 필요할 수 있고,
-없으면 errors 에 기록되고 daily 흐름은 진행됩니다.
 
 ## ingest / backfill / watch (엔진 명령)
 

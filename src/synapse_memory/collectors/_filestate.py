@@ -1,7 +1,6 @@
 """파일 변경 감지용 공통 state 헬퍼.
 
-여러 컬렉터(obsidian, calendar, browser_history, screen_time, apple_health,
-imessage, continue_dev, cursor, vscode_local_history 등)가 모두 같은 패턴 —
+여러 컬렉터(obsidian, continue_dev, cursor 등)가 모두 같은 패턴 —
 ``mtime``+``size``+``sha256`` prefix 로 파일 변경을 감지하고 ``states.json`` 에
 원자적으로 저장 — 을 쓴다. 본 모듈에 통합한다.
 

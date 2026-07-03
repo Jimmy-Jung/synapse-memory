@@ -1,6 +1,6 @@
 """Aider mirror 테스트.
 
-핵심 시나리오 (shell_history 와 유사 — 같은 mirror_jsonl 재사용)
+핵심 시나리오 (append-only 파일을 같은 mirror_jsonl 로 재사용)
 - chat.history.md + input.history 동시 mirror
 - 둘 다 미존재 → silent
 - 빈 파일 skip
