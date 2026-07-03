@@ -2,6 +2,31 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.20.0] — 2026-07-03
+
+### Added
+
+- `synapse-memory compact-raw`를 추가했다. 이미 ingest된 `claude-code`/`codex`
+  raw mirror에서 provider 통합에 쓰지 않는 tool I/O 라인을 gzip sidecar로 분리해
+  `~/.synapse/private/raw` 용량을 줄인다. 기본은 dry-run이며 실제 적용은
+  `synapse-memory compact-raw --apply --yes`, 원복은
+  `synapse-memory compact-raw --rehydrate --apply --yes`로 실행한다.
+
+### Changed
+
+- raw mirror offset 처리를 line-boundary 기준으로 보수화했다. compact나 rotation 뒤
+  offset이 중간 라인을 가리키면 기존 offset을 신뢰하지 않아 잘린 JSONL 조각을
+  ingest하지 않는다.
+- 자동 collector 표면을 실제로 쓰는 8개 소스로 줄였다. 기본 자동 mirror는
+  Claude Code, Codex, Cursor, Continue.dev, Aider, Obsidian, Day One이고,
+  Gmail Sent만 opt-in으로 유지한다.
+
+### Removed
+
+- 개인정보·운영 잡음이 크거나 유지 가치가 낮은 collector를 제거했다:
+  Apple Health, Apple Notes, Browser History, Calendar, `git_self`, iMessage,
+  Screen Time, Shell History, VS Code Local History.
+
 ## [1.19.8] — 2026-07-01
 
 ### Changed
@@ -578,8 +603,8 @@ v0.15.0 에서 13종 외부 데이터 수집기를 추가했지만 slash command
 *어떤 권한 / 환경변수가 opt-in 인지* 가이드가 없어 보강한다.
 
 - `commands/onboard.md` — 환경 점검 직후 "1.5단계 — 데이터 수집 범위 안내"
-  추가. iMessage(FDA), Gmail(`SYNAPSE_GMAIL_ENABLE`), git_self(`SYNAPSE_GIT_SELF_ROOTS`),
-  Apple Health(드롭인) 한 줄 안내. 첫 세션은 한 줄로만, 사용자가 명시적으로 물어볼 때만 자세히.
+  추가. iMessage(FDA), Gmail(`SYNAPSE_GMAIL_ENABLE`), Apple Health(드롭인)
+  한 줄 안내. 첫 세션은 한 줄로만, 사용자가 명시적으로 물어볼 때만 자세히.
 - `commands/assistant.md` — 우선순위 규칙 9개로 확장. 8번 신설:
   *우선순위 1~7 이 모두 OK 일 때만* Tier 3/4 opt-in 컬렉터 활성화 검토 안내.
 - `commands/daily.md` — 파이프라인 흐름 stage 목록을 17종 컬렉터로 갱신.
@@ -613,7 +638,6 @@ skip 하며 (`daily.py` 의 `_run_step` try/except 격리), 모든 SQLite 접근
 - `cursor` — Cursor IDE SQLite snapshot
 - `continue_dev` — Continue.dev (VS Code) 세션 JSON
 - `aider` — Aider 터미널 AI pair 대화
-- `git_self` — 본인 git commit 로그 (`SYNAPSE_GIT_SELF_ROOTS` opt-in)
 
 **Tier 2 — 로컬 파일 3종** (PR #22)
 

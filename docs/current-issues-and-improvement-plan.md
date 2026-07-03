@@ -354,7 +354,6 @@ def watch_status() -> WatchStatus:
 
 - `ask --hybrid` help가 dense + BM25 RRF라고 설명합니다.
 - persona `what-did-i-think --hybrid` help도 BM25/RRF를 암시합니다.
-- `config.py`에 `top_k.rag_search`, `advanced.rag.rrf_k`, `embedding_model = "bge-m3"`가 남아 있습니다.
 - `daily.py`와 `endpoints/persona.py`에 ChromaDB 관련 설명이 남아 있습니다.
 - 오래된 specs가 제거된 BM25/hybrid module을 현재처럼 설명합니다.
 
@@ -373,15 +372,14 @@ def watch_status() -> WatchStatus:
 
 1. `--hybrid`를 즉시 제거하지 말고 compatibility no-op으로 명시합니다.
 2. CLI help를 "호환 플래그, 현재 provider-only에서는 ranking 차이 없음"으로 바꿉니다.
-3. `advanced.rag.*`는 deprecation path를 둡니다.
-4. ChromaDB 주석과 daily stage 설명을 현재 구조로 고칩니다.
-5. 오래된 specs에는 `SUPERSEDED_BY_PROVIDER_ONLY` 배너를 붙입니다.
+3. ChromaDB 주석과 daily stage 설명을 현재 구조로 고칩니다.
+4. 오래된 specs에는 `SUPERSEDED_BY_PROVIDER_ONLY` 배너를 붙입니다.
 
 ### 검증 기준
 
 - `synapse-memory ask --help`가 BM25/RRF를 언급하지 않습니다.
 - `rg "ChromaDB|BM25|RRF|bge-m3" src docs specs` 결과가 의도된 legacy/spec 문맥만 남습니다.
-- config migration 테스트가 기존 `advanced.rag.*` 설정을 깨지 않고 deprecation warning으로 처리합니다.
+- config migration 테스트가 기존 provider-only 이전 설정을 깨지 않고 무시합니다.
 
 ## 7. CI static-check subset과 mypy debt
 
@@ -418,7 +416,6 @@ mypy/ruff를 hard-coded subset에만 실행하므로 CI green이 전체 type hea
 | 1 | `wiki/rawdoc.py`, `wiki/page.py`, `wiki/lint.py` | wiki ingest 주변 type 안정화 |
 | 2 | `cards/card_index.py` | provider selection contract 안정화 |
 | 3 | `wiki/llm_retrieval.py`, `wiki/query.py`, `wiki/ingest.py` | AIEnvironment/provider type 정리 |
-| 4 | `collectors/git_self/mirror.py` | collector metadata typing 정리 |
 | 5 | CI 전체 mypy | subset drift 제거 |
 
 ### 검증 기준

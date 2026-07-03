@@ -453,46 +453,23 @@ synapse-memory doctor --fix-config
 ## 외부 데이터 수집기 (Collectors v2)
 
 `/sm:daily` 가 매번 호출하는 입력 mirror 단계. 모든 데이터는 로컬
-``~/.synapse/private/raw/`` 에만 저장되고 외부로 나가지 않습니다.
+``~/.synapse/private/raw/`` 에 먼저 저장되며, mirror/collect 단계 자체는 외부 AI를
+호출하지 않습니다. 이후 wiki 통합 단계(`ingest`/`backfill`/`watch`)에서는 small raw
+또는 sampled raw가 설정된 provider로 갈 수 있습니다.
 
 | 수집기 | 소스 | 기본 켜짐 | 비고 |
 |---|---|:---:|---|
 | `collect_claude_code` | `~/.claude/projects/<slug>/<id>.jsonl` | ✅ | Claude Code 세션 |
 | `collect_codex` | `~/.codex/sessions/.../*.jsonl` + `history.jsonl` | ✅ | Codex CLI |
-| `collect_shell_history` | `~/.zsh_history`, `~/.bash_history` | ✅ | 셸 명령 기록 |
 | `collect_cursor` | Cursor IDE `state.vscdb` (SQLite) | ✅ | macOS 표준 경로 |
 | `collect_continue` | `~/.continue/sessions/*.json` | ✅ | Continue.dev VS Code 확장 |
 | `collect_aider` | `~/.aider.chat.history.md`, `.input.history` | ✅ | terminal AI pair |
-| `collect_git_self` | `SYNAPSE_GIT_SELF_ROOTS` 안의 본인 commit | ⛔ opt-in | 환경변수로 root 지정 시만 동작 |
-| `collect_apple_notes` | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | ✅ | Full Disk Access 필요 시 errors |
 | `collect_day_one` | `~/Library/Group Containers/<TEAM_ID>.dayoneapp2/` | ✅ | `SYNAPSE_DAYONE_HOME` override 가능 |
-| `collect_vscode_local_history` | `~/Library/Application Support/Code/User/History/` | ✅ | VS Code 자동 snapshot |
-| `collect_imessage` | `~/Library/Messages/chat.db` | ✅ | Full Disk Access 필요. `SYNAPSE_IMESSAGE_DISABLE=1` 로 opt-out |
 | `collect_gmail_sent` | Gmail API (Sent 라벨) | ⛔ opt-in | `SYNAPSE_GMAIL_ENABLE=1` + OAuth credentials 필요 |
-| `collect_calendar` | `~/Library/Calendars/*.calendar/Events/*.ics` | ✅ | macOS Calendar.app 디스크 캐시 |
-| `collect_browser_history` | Chrome/Safari/Arc `History` SQLite | ✅ | 설치된 브라우저만 처리 |
-| `collect_screen_time` | `~/Library/Application Support/Knowledge/knowledgeC.db` | ✅ | 앱 사용 시간 / CoreDuet 통합 DB |
-| `collect_apple_health` | `~/Downloads/export*.zip` (또는 `SYNAPSE_HEALTH_DROP`) | ✅ | 수동 export 필요 — drop-in 디렉토리 |
 | `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
 
-### `collect_git_self` 켜기
-
-본인 commit log 만 JSONL 로 mirror 합니다. (diff 본문은 미저장 — 후속 단계에서
-필요 시 lazy fetch.)
-
-```bash
-# 1. root 디렉토리 지정 (콜론 구분, 직계 자식까지만 탐색)
-export SYNAPSE_GIT_SELF_ROOTS="$HOME/Documents/GitHub:$HOME/work"
-
-# 2. (옵션) 본인 이메일 명시 — 미지정 시 repo 의 git config user.email
-export SYNAPSE_GIT_SELF_EMAIL="you@example.com"
-
-# 3. 다음 daily 실행부터 자동으로 mirror
-/sm:daily
-```
-
-각 repo 마다 마지막 처리한 commit SHA 가 `.offsets/<repo>.sha` 에 저장돼 다음
-호출 때 그 이후만 mirror — incremental 입니다.
+Apple Health, Apple Notes, Browser History, Calendar, iMessage, Screen Time, Shell
+History, VS Code Local History, `git_self` collector는 v1.20.0에서 제거됐습니다.
 
 ### `collect_gmail_sent` 켜기
 
@@ -517,38 +494,6 @@ export SYNAPSE_GMAIL_ENABLE=1
 
 token cache 는 `~/.config/synapse-memory/gmail-token.json`. refresh token 으로
 이후 호출 자동 갱신.
-
-### `collect_imessage` 끄기 (선택)
-
-iMessage 는 PII 가 매우 무겁습니다. 기본 활성이지만 비활성화하려면:
-
-```bash
-export SYNAPSE_IMESSAGE_DISABLE=1
-```
-
-Full Disk Access 권한이 없으면 mirror 가 errors 에 기록되고 daily 흐름은 계속
-진행됩니다 (블로킹 없음).
-
-### `collect_apple_health` 사용하기
-
-Apple Health 는 자동 sync 가 불가능합니다 (앱 격리). 다음 흐름으로 export:
-
-1. iPhone → Health 앱 → 우상단 프로필 → "내보내기"
-2. 생성된 `export.zip` 을 macOS 의 `~/Downloads` (또는 `SYNAPSE_HEALTH_DROP`)
-   디렉토리로 옮기기 (AirDrop, iCloud, 케이블 등)
-3. 다음 `/sm:daily` 실행 → `~/.synapse/private/raw/apple-health/export.zip` 으로
-   mirror
-
-같은 파일을 다시 떨어뜨리면 sha256 비교로 unchanged 처리. 새 export 본만
-교체됩니다.
-
-### `collect_browser_history` / `collect_screen_time`
-
-브라우저와 macOS 사용 패턴은 자동 mirror. 브라우저가 실행 중이어도
-`sqlite3.backup` 으로 안전한 read-consistent snapshot 을 뜹니다.
-
-knowledgeC.db 는 SIP 보호 영역 일부 — Full Disk Access 권한이 필요할 수 있고,
-없으면 errors 에 기록되고 daily 흐름은 진행됩니다.
 
 ## ingest / backfill / watch (엔진 명령)
 
@@ -588,6 +533,21 @@ Profile/DecisionPatterns를 중심으로 provider에 전달합니다. raw mirror
 `--no-semantic-retrieval`을 쓰면 40,000자 이하 문서도 provider 기반 관련 페이지 선별을
 생략합니다. 작은 문서는 보통 2회 호출에서 1회 호출로 줄지만, 제목/slug 이름 매칭과
 1-hop 링크만으로 기존 페이지 갱신 대상을 찾습니다.
+
+### raw mirror 수동 축소 — `compact-raw`
+
+이미 ingest된 `claude-code`/`codex` raw mirror에서 provider 통합에 쓰지 않는 tool I/O
+라인을 gzip sidecar로 분리합니다. 기본은 dry-run이라 파일을 바꾸지 않습니다.
+
+```bash
+synapse-memory compact-raw
+synapse-memory compact-raw --source codex
+synapse-memory compact-raw --apply --yes
+synapse-memory compact-raw --rehydrate --apply --yes
+```
+
+`--apply`는 공유 `ingest.lock`을 기다린 뒤 실행합니다. watch/backfill/ingest가 돌고
+있으면 먼저 끝나기를 기다리거나 해당 작업을 정상 종료한 뒤 실행하세요.
 
 ## 완전히 지우고 싶을 때
 

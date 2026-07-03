@@ -23,6 +23,7 @@ from synapse_memory.collectors.obsidian.mirror import (
     collect_obsidian,
     get_vault_path,
 )
+from synapse_memory.config import SynapseConfig
 from synapse_memory.storage.l0 import L0_DIR_MODE, L0_FILE_MODE
 
 # ---------------------------------------------------------------------------
@@ -109,6 +110,36 @@ class TestIsExcluded:
     def test_included(self, rel: str) -> None:
         assert _is_excluded(Path(rel)) is False
 
+    def test_configured_wiki_folders_are_excluded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cfg = SynapseConfig()
+        monkeypatch.setattr("synapse_memory.config.get_config", lambda: cfg)
+
+        generated = (
+            "Entities/Projects/Auto.md",
+            "Entities/Companies/Auto.md",
+            "Entities/People/Auto.md",
+            "Concepts/Auto.md",
+            "Insights/Auto.md",
+            "Profile/Auto.md",
+        )
+
+        for rel in generated:
+            assert _is_excluded(Path(rel)) is True
+
+        assert _is_excluded(Path("20_Reference/Projects/Human.md")) is False
+
+    def test_configured_wiki_folders_use_overrides(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cfg = SynapseConfig()
+        cfg.vault_folders.wiki.projects = "Generated/Projects"
+        monkeypatch.setattr("synapse_memory.config.get_config", lambda: cfg)
+
+        assert _is_excluded(Path("Generated/Projects/Auto.md")) is True
+        assert _is_excluded(Path("Entities/Projects/Human.md")) is False
+
 
 # ---------------------------------------------------------------------------
 # collect_obsidian
@@ -192,6 +223,27 @@ class TestCollectObsidian:
         assert stats.files_scanned == 1  # keep만 scan됨
         assert (dst / "00_Inbox" / "keep.md").is_file()
         assert not (dst / "90_System" / "AI" / "Profile.md").exists()
+
+    def test_generated_wiki_folders_not_mirrored(
+        self, vault: Path, dst: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        cfg = SynapseConfig()
+        monkeypatch.setattr("synapse_memory.config.get_config", lambda: cfg)
+
+        _write_md(vault, "00_Inbox/keep.md", "keep")
+        _write_md(vault, "20_Reference/Projects/human.md", "human")
+        _write_md(vault, "Entities/Projects/generated.md", "generated")
+        _write_md(vault, "Concepts/generated.md", "generated")
+        _write_md(vault, "90_System/AI/DailyReports/report.md", "generated")
+
+        stats = collect_obsidian(vault_path=vault, dst_root=dst)
+
+        assert stats.files_scanned == 2
+        assert (dst / "00_Inbox" / "keep.md").is_file()
+        assert (dst / "20_Reference" / "Projects" / "human.md").is_file()
+        assert not (dst / "Entities" / "Projects" / "generated.md").exists()
+        assert not (dst / "Concepts" / "generated.md").exists()
+        assert not (dst / "90_System" / "AI" / "DailyReports" / "report.md").exists()
 
     def test_korean_filename_handled(
         self, vault: Path, dst: Path

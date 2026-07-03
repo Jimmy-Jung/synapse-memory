@@ -6,8 +6,8 @@
 
 대상: ``~/.synapse/private/raw/aider/`` 아래 동일 파일명.
 
-shell_history 와 동일하게 :func:`mirror_jsonl` 재사용 — 한 줄 = 한 record.
-partial-line / rotation / atomic offset 보장 동일.
+:func:`mirror_jsonl` 재사용 — 한 줄 = 한 record. partial-line / rotation /
+atomic offset 보장 동일.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-18

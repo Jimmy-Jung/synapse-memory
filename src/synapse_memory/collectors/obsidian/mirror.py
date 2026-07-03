@@ -99,19 +99,33 @@ def get_vault_path() -> Path:
     return DEFAULT_VAULT_PATH
 
 
+def _normalized_prefix(path: str) -> str:
+    return path.strip().strip("/")
+
+
 def _is_excluded(rel_path: Path) -> bool:
     """exclude 패턴 매칭."""
     from synapse_memory.config import get_config
 
     rel_str = rel_path.as_posix()
     folders = get_config().vault_folders
+    wiki = folders.wiki
     excluded_dirs = (
         folders.system.ai.root,
         folders.system.attachments,
         folders.system.migration,
+        wiki.projects,
+        wiki.companies,
+        wiki.people,
+        wiki.concepts,
+        wiki.profile,
+        wiki.insights,
         *EXCLUDED_DIRS,
     )
     for ex in excluded_dirs:
+        ex = _normalized_prefix(ex)
+        if not ex:
+            continue
         if rel_str == ex or rel_str.startswith(ex + "/"):
             return True
     return any(sub in rel_str for sub in EXCLUDED_SUBSTRINGS)

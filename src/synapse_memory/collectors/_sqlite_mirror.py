@@ -1,6 +1,6 @@
 """SQLite file → L0 mirror 공통 헬퍼.
 
-여러 컬렉터(apple_notes, day_one, imessage, browser_history, screen_time 등)가
+여러 컬렉터(day_one 등)가
 모두 같은 패턴 — ``sqlite3.Connection.backup`` 으로 read-consistent snapshot 을
 뜨고, mtime+sha256 으로 변경 감지 — 을 쓴다. 본 모듈에 통합.
 

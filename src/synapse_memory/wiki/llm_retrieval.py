@@ -10,7 +10,6 @@
 """
 from __future__ import annotations
 
-import contextlib
 from typing import Any, Protocol
 
 from synapse_memory.llm import ai_api
@@ -51,13 +50,6 @@ _SELECT_SCHEMA = {
     "required": ["related"],
     "additionalProperties": False,
 }
-
-_ANSWER_SYSTEM = (
-    "당신은 사용자의 second-brain 어시스턴트입니다. 주어진 위키 페이지 인덱스에서 "
-    "질의와 관련된 페이지를 골라 근거로 삼아 한국어로 답합니다. 인용은 [slug] 형식. "
-    "인덱스에 근거가 없으면 모른다고 답하세요."
-)
-
 
 def _provider() -> ai_api.AIProvider | None:
     """config.ai_provider — auto면 None(ai_api가 런타임 감지)."""
@@ -137,32 +129,3 @@ def select_related(
         if len(out) >= max_pages:
             break
     return out
-
-
-def retrieve_then_answer(
-    query: str,
-    index: SelectableIndex,
-    *,
-    env: AIEnv = None,
-    model: str | None = None,
-    timeout: int = 120,
-) -> str:
-    """인덱스에서 관련 페이지 선별 후 답변 합성(출처 [slug] 인용). 벡터 없음."""
-    if not query.strip():
-        raise ai_api.AIError("빈 query는 답변 못 함")
-    prompt = (
-        f"# 위키 페이지 인덱스\n{index.render()}\n\n"
-        f"# 질의\n{query}\n\n"
-        "인덱스에서 관련 페이지를 근거로 답하세요. 인용은 [slug]."
-    )
-    answer = ai_api.complete(
-        prompt,
-        system=_ANSWER_SYSTEM,
-        model=model,
-        timeout=timeout,
-        env=env,
-        provider=_provider() if env is None else None,
-    )
-    with contextlib.suppress(Exception):
-        return answer.strip()
-    return answer

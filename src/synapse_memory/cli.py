@@ -126,6 +126,10 @@ from synapse_memory.status import DailyAlreadyRunningError  # noqa: E402
 from synapse_memory.storage.l0 import l0_root  # noqa: E402
 from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
+from synapse_memory.wiki.compact import (  # noqa: E402
+    CompactSourceResult,
+    compact_mirror_source,
+)
 from synapse_memory.wiki.daemon import run_watch_cycle  # noqa: E402
 from synapse_memory.wiki.ingest import IngestResult, ingest_source  # noqa: E402
 from synapse_memory.wiki.ingest_audit import audit_ingest_queue  # noqa: E402
@@ -752,6 +756,70 @@ def cmd_ingest_audit(args: argparse.Namespace) -> int:
     )
     print(f"privacy_note: {result.privacy_note}")
     return 0
+
+
+def _format_bytes(value: int) -> str:
+    units = ("B", "KiB", "MiB", "GiB")
+    amount = float(value)
+    for unit in units:
+        if amount < 1024 or unit == units[-1]:
+            return f"{amount:.1f}{unit}" if unit != "B" else f"{value}B"
+        amount /= 1024
+    return f"{value}B"
+
+
+def _confirm_apply_compact(args: argparse.Namespace) -> bool:
+    if not args.apply or args.yes:
+        return True
+    action = "rehydrate" if args.rehydrate else "compact"
+    if not sys.stdin.isatty():
+        print(f"{FAIL} --apply requires --yes in non-interactive mode", file=sys.stderr)
+        return False
+    answer = input(f"raw mirror {action}를 적용할까요? [y/N] ").strip().lower()
+    return answer in {"y", "yes"}
+
+
+def cmd_compact_raw(args: argparse.Namespace) -> int:
+    """이미 ingest된 raw mirror를 수동 compact/rehydrate."""
+    if not _confirm_apply_compact(args):
+        return 2
+    sources = ("claude-code", "codex") if args.source == "all" else (args.source,)
+    results: list[CompactSourceResult] = []
+    for source in sources:
+        def operation(target: str = source) -> CompactSourceResult:
+            return compact_mirror_source(
+                target,
+                apply=bool(args.apply),
+                rehydrate=bool(args.rehydrate),
+            )
+
+        outcome = run_with_ingest_lock(
+            source=source,
+            mode="compact",
+            on_locked="wait",
+            operation=operation,
+        )
+        if isinstance(outcome, CompactSourceResult):
+            results.append(outcome)
+
+    verb = "rehydrate" if args.rehydrate else "compact-raw"
+    mode = "apply" if args.apply else "dry-run"
+    for result in results:
+        print(
+            f"{verb} {result.source} ({mode}): "
+            f"seen={result.files_seen} eligible={result.files_eligible} "
+            f"changed={result.files_changed} skipped={result.files_skipped} "
+            f"aborted={result.files_aborted} "
+            f"reclaimable={_format_bytes(result.bytes_reclaimable)}"
+        )
+        for error in result.errors:
+            print(f"  error: {error}", file=sys.stderr)
+    if not args.apply:
+        print(
+            "dry-run: 파일 변경 없음. --apply --yes 적용 시 drop 라인은 "
+            ".toolio.jsonl.gz sidecar에 저장되며, 원복은 --rehydrate --apply --yes."
+        )
+    return 1 if any(result.errors for result in results) else 0
 
 
 def cmd_backfill(args: argparse.Namespace) -> int:
@@ -3745,6 +3813,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_ingest_audit.add_argument("--json", action="store_true", help="JSON 출력")
     p_ingest_audit.set_defaults(func=cmd_ingest_audit)
+
+    p_compact_raw = sub.add_parser(
+        "compact-raw",
+        help="이미 ingest된 raw mirror를 gzip sidecar로 수동 축소",
+        description=(
+            "이미 watermark 이하로 ingest된 claude-code projects/**/*.jsonl 및 "
+            "codex sessions/**/*.jsonl 만 대상으로 합니다. 기본은 dry-run 입니다."
+        ),
+    )
+    p_compact_raw.add_argument(
+        "--source",
+        default="all",
+        choices=["all", "claude-code", "codex"],
+        help="대상 raw source (기본: all)",
+    )
+    p_compact_raw.add_argument(
+        "--apply",
+        action="store_true",
+        help="실제 파일 변경 적용 (미지정 시 dry-run)",
+    )
+    p_compact_raw.add_argument(
+        "--yes",
+        action="store_true",
+        help="--apply 확인 프롬프트 생략",
+    )
+    p_compact_raw.add_argument(
+        "--rehydrate",
+        action="store_true",
+        help="sidecar에서 원본 raw mirror 복원",
+    )
+    p_compact_raw.set_defaults(func=cmd_compact_raw)
 
     p_backfill = sub.add_parser(
         "backfill",

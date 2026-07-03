@@ -35,7 +35,7 @@
 ## Stage 5 — rag 모듈 + pyproject 제거 (완료)
 - `rag/`에는 provider-only 이후에도 유효한 raw chunking utility만 남았다.
 - local embeddings/vector/BM25/hybrid/indexer 모듈과 무거운 ML 의존성은 제거됐다.
-- `advanced.rag.*`와 `top_k.rag_search`는 기존 사용자 config 호환을 위한 legacy no-op surface다.
+- 기존 사용자 config의 `advanced.rag.*`와 `top_k.rag_search`는 load 시 조용히 무시된다.
 
 ## 검증 게이트
 - 핫·질의 경로 `import` 시 torch/sentence_transformers/chromadb 미로드.

@@ -6,9 +6,8 @@
 대상:
     ``~/.synapse/private/raw/aider/``
 
-shell_history 와 동일하게 ``mirror_jsonl`` 의 newline-terminated record
-처리를 재사용한다. markdown 도 줄 단위 stream 으로 mirror 가능
-(마크다운 구조 보존은 후속 단계의 책임).
+``mirror_jsonl`` 의 newline-terminated record 처리를 재사용한다. markdown 도
+줄 단위 stream 으로 mirror 가능 (마크다운 구조 보존은 후속 단계의 책임).
 
 저자: Synapse Memory Maintainers
 """

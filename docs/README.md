@@ -29,9 +29,10 @@
    - Profile 후보 GUI 승인 (`/sm:apply-profile`, v0.12.0)
    - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
    - apply 중복 질문 5중 차단 + codex 통합 + 관찰성 (v0.14.0)
-   - 외부 데이터 수집기 13종 확장 — shell history, Cursor / Continue / Aider 세션, Apple Notes, Day One, VS Code Local History, iMessage, Gmail, Calendar, 브라우저 history, Screen Time, Apple Health (v0.15.0)
+   - 외부 데이터 수집기 — Claude Code / Codex / Cursor / Continue / Aider / Obsidian / Day One, Gmail Sent opt-in
    - Codex 세션을 wiki 통합 소스로 추가 (`collect codex`, `ingest --source codex`, `backfill --source codex`)
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
+   - raw mirror 수동 축소와 원복 (`compact-raw`, v1.20.0)
 
 4. [현재 문제점과 개선 방향](current-issues-and-improvement-plan.md)
 
@@ -41,8 +42,10 @@
 
 ## 한 문장으로 이해하기
 
-Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 정리해 요약 카드를 만들고,
-외부 AI에는 원본 대신 안전한 카드와 승인된 자료만 보내 답을 받는 도구입니다.
+Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 mirror하고 wiki 카드로
+정리합니다. 질문 경로는 요약 카드와 승인된 Profile/DecisionPatterns를 중심으로
+전송하지만, wiki 통합 경로(`ingest`/`backfill`/`watch`)는 small raw 또는 sampled raw를
+설정된 provider로 보낼 수 있습니다.
 
 ## 어디부터 시작해야 하나요?
 
