@@ -200,6 +200,24 @@ def test_offset_past_eof_reparses_full(tmp_path: Path) -> None:
     assert "리셋후" in docs[0].text  # offset 무시하고 전문
 
 
+def test_offset_not_on_line_boundary_reparses_full(tmp_path: Path) -> None:
+    """저장 offset이 줄 중간이면 신뢰하지 않고 전문을 다시 읽는다."""
+    root = tmp_path / "raw" / "claude-code"
+    f = root / "s.jsonl"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    first = '{"message":{"role":"user","content":"첫줄"}}\n'
+    second = '{"message":{"role":"user","content":"둘째줄"}}\n'
+    f.write_text(first + second, encoding="utf-8")
+
+    docs = list(
+        iter_new_raw("claude-code", since=None, root=root, offsets={"claude-code:s.jsonl": 5})
+    )
+
+    assert len(docs) == 1
+    assert "첫줄" in docs[0].text
+    assert "둘째줄" in docs[0].text
+
+
 def test_codex_filters_noise_events(tmp_path: Path) -> None:
     """developer 보일러플레이트 / token_count / function_call / user role-주입 은 제외."""
     root = tmp_path / "raw" / "codex"

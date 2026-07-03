@@ -163,6 +163,18 @@ def _file_text(path: Path, source: str, *, start_byte: int = 0) -> str:
     return "\n\n".join(lines)
 
 
+def _line_boundary_offset(path: Path, offset: int, size: int) -> int:
+    """저장 offset이 현재 파일의 줄 경계일 때만 tail-read 시작점으로 신뢰."""
+    if offset <= 0 or offset > size:
+        return 0
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(offset - 1)
+            return offset if handle.read(1) == b"\n" else 0
+    except OSError:
+        return 0
+
+
 def iter_new_raw(
     source: str,
     *,
@@ -228,13 +240,12 @@ def iter_new_raw(
             size = path.stat().st_size
         except OSError:
             continue
-        # 레버 2: offset 이후 tail만 읽는다. offset이 현재 크기를 벗어나면(파일
-        # 로테이션/축소) 0으로 리셋해 전문 재처리(데이터 유실 방지).
+        # 레버 2: offset 이후 tail만 읽는다. offset이 현재 크기를 벗어나거나 줄
+        # 경계가 아니면(로테이션/축소/compact crash) 0으로 리셋해 전문 재처리.
         start = 0
         if offsets:
             prev = offsets.get(ref, 0)
-            if 0 < prev <= size:
-                start = prev
+            start = _line_boundary_offset(path, prev, size)
         text = _file_text(path, source, start_byte=start)
         if not text:
             continue
