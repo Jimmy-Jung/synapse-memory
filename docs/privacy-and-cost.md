@@ -46,7 +46,7 @@ AI 호출이 발생하지 않습니다.
 
 ## 자동 수집 vs opt-in 컬렉터
 
-v0.15+ 의 외부 데이터 수집기 13종은 두 그룹으로 나뉩니다.
+v1.20+ 의 외부 데이터 수집기는 두 그룹으로 나뉩니다.
 
 **자동 활성** — 설치만 하면 동작 (소스 부재면 자동 skip):
 
@@ -59,6 +59,9 @@ v0.15+ 의 외부 데이터 수집기 13종은 두 그룹으로 나뉩니다.
 | 컬렉터 | 활성화 방법 | 비활성화 방법 |
 | --- | --- | --- |
 | `gmail_sent` | `SYNAPSE_GMAIL_ENABLE=1` + OAuth credentials 등록 | 환경변수 제거 |
+
+Apple Health, Apple Notes, Browser History, Calendar, iMessage, Screen Time, Shell
+History, VS Code Local History, `git_self` collector는 더 이상 mirror하지 않습니다.
 
 모든 수집은 `~/.synapse/private/`(0700) 내부에 mirror 됩니다. 수집 자체는 외부 AI에
 전송하지 않지만, 이후 ingest/backfill/watch가 wiki 통합을 수행할 때 small raw 또는
@@ -104,6 +107,10 @@ synapse-memory cost summary --days 30 --by command
 
 - 첫 실행은 `synapse-memory daily --quick`으로 시작합니다.
 - 매일은 quick, 주 1회만 full `daily`를 실행합니다.
+- 이미 ingest된 Claude/Codex raw mirror가 커졌다면 `synapse-memory compact-raw`로
+  회수 가능량을 먼저 확인하고, `synapse-memory compact-raw --apply --yes`로 tool I/O
+  라인을 gzip sidecar에 분리합니다. 원복은
+  `synapse-memory compact-raw --rehydrate --apply --yes`입니다.
 - Codex backfill 전에는 `synapse-memory ingest-audit --source codex --limit 50`으로
   pending queue의 `estimated_llm_calls`와 `oversize`를 먼저 확인합니다.
 - 백필 비용을 더 낮춰 검증할 때는

@@ -2,6 +2,31 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [1.20.0] — 2026-07-03
+
+### Added
+
+- `synapse-memory compact-raw`를 추가했다. 이미 ingest된 `claude-code`/`codex`
+  raw mirror에서 provider 통합에 쓰지 않는 tool I/O 라인을 gzip sidecar로 분리해
+  `~/.synapse/private/raw` 용량을 줄인다. 기본은 dry-run이며 실제 적용은
+  `synapse-memory compact-raw --apply --yes`, 원복은
+  `synapse-memory compact-raw --rehydrate --apply --yes`로 실행한다.
+
+### Changed
+
+- raw mirror offset 처리를 line-boundary 기준으로 보수화했다. compact나 rotation 뒤
+  offset이 중간 라인을 가리키면 기존 offset을 신뢰하지 않아 잘린 JSONL 조각을
+  ingest하지 않는다.
+- 자동 collector 표면을 실제로 쓰는 8개 소스로 줄였다. 기본 자동 mirror는
+  Claude Code, Codex, Cursor, Continue.dev, Aider, Obsidian, Day One이고,
+  Gmail Sent만 opt-in으로 유지한다.
+
+### Removed
+
+- 개인정보·운영 잡음이 크거나 유지 가치가 낮은 collector를 제거했다:
+  Apple Health, Apple Notes, Browser History, Calendar, `git_self`, iMessage,
+  Screen Time, Shell History, VS Code Local History.
+
 ## [1.19.8] — 2026-07-01
 
 ### Changed

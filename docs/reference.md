@@ -453,7 +453,9 @@ synapse-memory doctor --fix-config
 ## 외부 데이터 수집기 (Collectors v2)
 
 `/sm:daily` 가 매번 호출하는 입력 mirror 단계. 모든 데이터는 로컬
-``~/.synapse/private/raw/`` 에만 저장되고 외부로 나가지 않습니다.
+``~/.synapse/private/raw/`` 에 먼저 저장되며, mirror/collect 단계 자체는 외부 AI를
+호출하지 않습니다. 이후 wiki 통합 단계(`ingest`/`backfill`/`watch`)에서는 small raw
+또는 sampled raw가 설정된 provider로 갈 수 있습니다.
 
 | 수집기 | 소스 | 기본 켜짐 | 비고 |
 |---|---|:---:|---|
@@ -465,6 +467,9 @@ synapse-memory doctor --fix-config
 | `collect_day_one` | `~/Library/Group Containers/<TEAM_ID>.dayoneapp2/` | ✅ | `SYNAPSE_DAYONE_HOME` override 가능 |
 | `collect_gmail_sent` | Gmail API (Sent 라벨) | ⛔ opt-in | `SYNAPSE_GMAIL_ENABLE=1` + OAuth credentials 필요 |
 | `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
+
+Apple Health, Apple Notes, Browser History, Calendar, iMessage, Screen Time, Shell
+History, VS Code Local History, `git_self` collector는 v1.20.0에서 제거됐습니다.
 
 ### `collect_gmail_sent` 켜기
 
@@ -528,6 +533,21 @@ Profile/DecisionPatterns를 중심으로 provider에 전달합니다. raw mirror
 `--no-semantic-retrieval`을 쓰면 40,000자 이하 문서도 provider 기반 관련 페이지 선별을
 생략합니다. 작은 문서는 보통 2회 호출에서 1회 호출로 줄지만, 제목/slug 이름 매칭과
 1-hop 링크만으로 기존 페이지 갱신 대상을 찾습니다.
+
+### raw mirror 수동 축소 — `compact-raw`
+
+이미 ingest된 `claude-code`/`codex` raw mirror에서 provider 통합에 쓰지 않는 tool I/O
+라인을 gzip sidecar로 분리합니다. 기본은 dry-run이라 파일을 바꾸지 않습니다.
+
+```bash
+synapse-memory compact-raw
+synapse-memory compact-raw --source codex
+synapse-memory compact-raw --apply --yes
+synapse-memory compact-raw --rehydrate --apply --yes
+```
+
+`--apply`는 공유 `ingest.lock`을 기다린 뒤 실행합니다. watch/backfill/ingest가 돌고
+있으면 먼저 끝나기를 기다리거나 해당 작업을 정상 종료한 뒤 실행하세요.
 
 ## 완전히 지우고 싶을 때
 
