@@ -12,7 +12,6 @@ Tier 1 (PR #21):
 - ``cursor``                — Cursor IDE SQLite snapshot
 - ``continue_dev``          — Continue.dev (VS Code) 세션 JSON
 - ``aider``                 — Aider 터미널 AI pair 대화
-- ``git_self``              — 본인 git commit (``SYNAPSE_GIT_SELF_ROOTS`` opt-in)
 - ``obsidian``              — Obsidian vault 마크다운
 
 Tier 2 (PR #22):

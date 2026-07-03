@@ -8,13 +8,13 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
     4.  collect cursor                (Cursor IDE SQLite snapshot)
     5.  collect continue.dev          (~/.continue 세션 JSON)
     6.  collect aider                 (~/.aider.* append-only)
-    7.  collect git-self              (본인 commit JSONL — opt-in env 기반)
-    8.  collect obsidian              (변경 .md만)
-    9.  cluster classify --resume     (새 cluster만)
-    10. card generate (--force=False) (새 cluster만 Card 생성)
-    11. wiki/card provider sync       (provider-only context refresh)
-    12. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
-    13. report                        (DailyReport 작성)
+    7.  collect obsidian              (변경 .md만)
+    8.  cluster classify --resume     (새 cluster만)
+    9.  card generate (--force=False) (새 cluster만 Card 생성)
+    10. wiki/card provider sync       (provider-only context refresh)
+    11. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
+    12. report                        (DailyReport 작성)
+    13. lint                          (wiki 구조 lint)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -58,7 +58,6 @@ DAILY_STAGES = (
     DailyStage("collect_cursor", "Cursor IDE 로그 mirror"),
     DailyStage("collect_continue", "Continue.dev 세션 mirror"),
     DailyStage("collect_aider", "Aider 대화 mirror"),
-    DailyStage("collect_git_self", "본인 Git commit mirror"),
     DailyStage("collect_apple_notes", "Apple Notes mirror"),
     DailyStage("collect_day_one", "Day One journal mirror"),
     DailyStage(
@@ -79,6 +78,7 @@ DAILY_STAGES = (
         ("collect_claude_code", "classify", "generate"),
     ),
     DailyStage("report", "DailyReport 작성"),
+    DailyStage("lint", "Wiki 구조 lint"),
 )
 
 # 단계 이름 — CLI --only / --skip / --resume-from 에서 사용
@@ -282,7 +282,6 @@ def _build_stage_actions(
         "collect_cursor": _collect_cursor_action,
         "collect_continue": _collect_continue_action,
         "collect_aider": _collect_aider_action,
-        "collect_git_self": _collect_git_self_action,
         "collect_apple_notes": _collect_apple_notes_action,
         "collect_day_one": _collect_day_one_action,
         "collect_vscode_local_history": _collect_vscode_local_history_action,
@@ -307,6 +306,7 @@ def _build_stage_actions(
             result=result,
         ),
         "report": lambda: "",
+        "lint": _lint_action,
     }
 
 
@@ -349,13 +349,6 @@ def _collect_aider_action() -> str:
     from synapse_memory.collectors.aider import collect_aider
 
     stats = collect_aider()
-    return stats.summary()
-
-
-def _collect_git_self_action() -> str:
-    from synapse_memory.collectors.git_self import collect_git_self
-
-    stats = collect_git_self()
     return stats.summary()
 
 
@@ -832,6 +825,18 @@ def _run_report_step(
             result.steps.pop()
 
 
+def _lint_action() -> str:
+    from synapse_memory.wiki.lint import run_lint
+
+    report = run_lint()
+    return (
+        f"backlinks+={report.backlinks_added} "
+        f"dead_links-={report.dead_links_removed} "
+        f"orphans={len(report.orphans)} "
+        f"review={len(report.review_items)}"
+    )
+
+
 def write_daily_report(
     result: DailyResult,
     *,
@@ -1092,18 +1097,6 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
                 extras.append(f"에러 {kv['errors']}")
             if extras:
                 parts.append("· " + ", ".join(extras))
-            return " ".join(parts)
-    elif stage == "collect_git_self":
-        kv = _parse_kv(raw)
-        if "scanned" in kv:
-            parts = [
-                f"본인 commit {kv.get('commits', 0)}개 mirror "
-                f"(repo {kv.get('mirrored', 0)}/{kv.get('scanned', 0)})"
-            ]
-            if kv.get("bytes", 0) > 0:
-                parts.append(f"({_format_bytes(kv['bytes'])})")
-            if kv.get("errors", 0):
-                parts.append(f"· 에러 {kv['errors']}")
             return " ".join(parts)
     elif stage == "collect_gmail_sent":
         if raw.strip() == "disabled":

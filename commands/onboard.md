@@ -24,8 +24,8 @@ argument-hint: (인자 없음)
 > Synapse Memory는 기본적으로 Claude Code · Codex 로그, shell history, Cursor /
 > Continue / Aider 세션, Obsidian vault, Apple Notes, Day One, VS Code Local
 > History, macOS Calendar, 브라우저 history, Screen Time을 자동으로 수집합니다.
-> iMessage(Full Disk Access), Gmail(`SYNAPSE_GMAIL_ENABLE=1`), 본인 git
-> commit(`SYNAPSE_GIT_SELF_ROOTS=...`), Apple Health(`~/Downloads/export*.zip`)는
+> iMessage(Full Disk Access), Gmail(`SYNAPSE_GMAIL_ENABLE=1`),
+> Apple Health(`~/Downloads/export*.zip`)는
 > 본인이 명시적으로 권한 부여 / 환경변수 / 파일 드롭한 경우에만 수집됩니다.
 > 모든 raw 데이터는 `~/.synapse/private/`(0700) 격리 저장.
 

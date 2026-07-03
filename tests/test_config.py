@@ -106,6 +106,26 @@ def test_save_creates_backup_when_existing(tmp_path):
     assert len(backups) == 1
 
 
+def test_save_keeps_only_three_recent_backups(tmp_path):
+    path = tmp_path / "config.yaml"
+    save_config(SynapseConfig(), path, make_backup=False)
+    for stamp in (
+        "20200101-000000",
+        "20200102-000000",
+        "20200103-000000",
+        "20200104-000000",
+    ):
+        (tmp_path / f"config.yaml.bak-{stamp}").write_text(stamp, encoding="utf-8")
+
+    save_config(SynapseConfig(), path)
+
+    backups = sorted(p.name for p in tmp_path.glob("config.yaml.bak-*"))
+    assert len(backups) == 3
+    assert "config.yaml.bak-20200101-000000" not in backups
+    assert "config.yaml.bak-20200102-000000" not in backups
+    assert "config.yaml.bak-20200104-000000" in backups
+
+
 def test_set_value_dotted_path():
     cfg = SynapseConfig()
     set_value(cfg, "cleanup.inbox_stale_days", 60)
@@ -162,7 +182,6 @@ def test_is_protected_path():
 
 
 def test_is_advanced_path():
-    assert is_advanced_path("advanced.rag.rrf_k") is True
     assert is_advanced_path("advanced.llm.claude_timeout_seconds") is True
     assert is_advanced_path("cleanup.inbox_stale_days") is False
 
@@ -171,7 +190,6 @@ def test_get_value():
     cfg = SynapseConfig()
     assert get_value(cfg, "cleanup.inbox_stale_days") == 30
     assert get_value(cfg, "ai_provider") == "codex"
-    assert get_value(cfg, "advanced.rag.rrf_k") == 60
 
 
 def test_get_value_unknown_raises():
@@ -229,9 +247,47 @@ def test_render_hides_advanced_by_default():
 def test_render_shows_advanced_when_requested():
     cfg = SynapseConfig()
     text = render_config(cfg, show_advanced=True)
-    assert "rrf_k" in text
-    assert "embedding_model" in text
-    assert "provider-only-disabled" in text
+    assert "advanced.llm.claude_timeout_seconds" in text
+    assert "rrf_k" not in text
+    assert "embedding_model" not in text
+
+
+def test_load_ignores_legacy_provider_only_config_keys(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "top_k": {
+                    "ask": 7,
+                    "rag_search": 50,
+                },
+                "advanced": {
+                    "rag": {
+                        "rrf_k": 120,
+                        "embedding_model": "bge-m3",
+                    },
+                    "llm": {
+                        "claude_timeout_seconds": 90,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.top_k.ask == 7
+    assert not hasattr(cfg.top_k, "rag_search")
+    assert not hasattr(cfg.advanced, "rag")
+    assert cfg.advanced.llm.claude_timeout_seconds == 90
+
+    saved = tmp_path / "saved.yaml"
+    save_config(cfg, saved, make_backup=False)
+    text = saved.read_text(encoding="utf-8")
+    assert "rag_search" not in text
+    assert "rrf_k" not in text
+    assert "embedding_model" not in text
 
 
 def test_describe_privacy_mode_documents_ingest_and_query_boundaries():

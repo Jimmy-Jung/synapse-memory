@@ -82,13 +82,11 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 
 ## advanced 키를 묻는 경우
 
-사용자가 `advanced.rag.rrf_k`, `advanced.rag.embedding_model`, `advanced.llm.*_timeout_seconds`를 변경하려 하면 *추가 경고 단계* 한 번 더 거치세요.
+사용자가 `advanced.llm.*_timeout_seconds`를 변경하려 하면 *추가 경고 단계* 한 번 더 거치세요.
 
 ```
 ⚠ advanced 키 변경: <키>
   영향:
-    - rrf_k: 잘못 바꾸면 검색 품질 저하
-    - embedding_model: 변경 즉시 전체 색인 재생성 필요(`rag index --rebuild`)
     - *_timeout_seconds: 네트워크 느릴 때만 늘리세요
   정말 변경할까요? (advanced/cancel)
 ```

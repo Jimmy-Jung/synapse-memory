@@ -578,8 +578,8 @@ v0.15.0 에서 13종 외부 데이터 수집기를 추가했지만 slash command
 *어떤 권한 / 환경변수가 opt-in 인지* 가이드가 없어 보강한다.
 
 - `commands/onboard.md` — 환경 점검 직후 "1.5단계 — 데이터 수집 범위 안내"
-  추가. iMessage(FDA), Gmail(`SYNAPSE_GMAIL_ENABLE`), git_self(`SYNAPSE_GIT_SELF_ROOTS`),
-  Apple Health(드롭인) 한 줄 안내. 첫 세션은 한 줄로만, 사용자가 명시적으로 물어볼 때만 자세히.
+  추가. iMessage(FDA), Gmail(`SYNAPSE_GMAIL_ENABLE`), Apple Health(드롭인)
+  한 줄 안내. 첫 세션은 한 줄로만, 사용자가 명시적으로 물어볼 때만 자세히.
 - `commands/assistant.md` — 우선순위 규칙 9개로 확장. 8번 신설:
   *우선순위 1~7 이 모두 OK 일 때만* Tier 3/4 opt-in 컬렉터 활성화 검토 안내.
 - `commands/daily.md` — 파이프라인 흐름 stage 목록을 17종 컬렉터로 갱신.
@@ -613,7 +613,6 @@ skip 하며 (`daily.py` 의 `_run_step` try/except 격리), 모든 SQLite 접근
 - `cursor` — Cursor IDE SQLite snapshot
 - `continue_dev` — Continue.dev (VS Code) 세션 JSON
 - `aider` — Aider 터미널 AI pair 대화
-- `git_self` — 본인 git commit 로그 (`SYNAPSE_GIT_SELF_ROOTS` opt-in)
 
 **Tier 2 — 로컬 파일 3종** (PR #22)
 

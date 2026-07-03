@@ -36,7 +36,6 @@ ingest/backfill/watch 단계에서는 wiki 통합을 위해 small raw 또는 sam
 | macOS 시스템 | Calendar, 브라우저(Chrome/Safari/Arc) history, Screen Time | 자동 |
 | PII 민감 (선택) | iMessage `chat.db` | Full Disk Access 부여 시 |
 | 외부 서비스 (선택) | Gmail Sent | `SYNAPSE_GMAIL_ENABLE=1` + OAuth |
-| 본인 활동 (선택) | 본인 git commit | `SYNAPSE_GIT_SELF_ROOTS=...` 지정 시 |
 | 건강 (선택) | iOS Health export | `~/Downloads/export*.zip` 드롭 시 |
 
 각 소스가 존재하지 않거나 권한이 없으면 자동 skip — 실패 아닙니다. 상세 권한 절차 +

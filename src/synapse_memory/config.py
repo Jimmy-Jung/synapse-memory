@@ -7,7 +7,7 @@
 카테고리 분류:
 - A (자유 변경): vault, ai_provider, models.*, top_k.*, cleanup.*, profile.*, cost.*,
   interactive_guard.*, automation.*
-- C (advanced — 경고 후 변경): advanced.rag.*, advanced.llm.*
+- C (advanced — 경고 후 변경): advanced.llm.*
 - D (보안 핵심 — config 노출 X, set 시도 시 차단):
   ``storage.l0_permissions``, ``cleanup.protected_paths``
 
@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import os
 import tempfile
@@ -79,8 +80,6 @@ class TopKConfig:
     decide: int = 6
     recall: int = 8
     resume: int = 6
-    # Legacy compatibility no-op after provider-only migration.
-    rag_search: int = 5
 
 
 @dataclass
@@ -239,14 +238,6 @@ class MaintenanceConfig:
 
 
 @dataclass
-class AdvancedRagConfig:
-    """Deprecated compatibility surface for pre-020 local retrieval settings."""
-
-    rrf_k: int = 60
-    embedding_model: str = "provider-only-disabled"
-
-
-@dataclass
 class AdvancedLLMConfig:
     claude_timeout_seconds: int = 60
     codex_timeout_seconds: int = 240
@@ -254,7 +245,6 @@ class AdvancedLLMConfig:
 
 @dataclass
 class AdvancedConfig:
-    rag: AdvancedRagConfig = field(default_factory=AdvancedRagConfig)
     llm: AdvancedLLMConfig = field(default_factory=AdvancedLLMConfig)
 
 
@@ -385,6 +375,7 @@ def save_config(cfg: SynapseConfig, path: Path | None = None, *, make_backup: bo
         ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         backup = path.with_name(f"{path.name}.bak-{ts}")
         backup.write_bytes(path.read_bytes())
+        _prune_config_backups(path)
 
     text = yaml.safe_dump(
         asdict(cfg),
@@ -401,6 +392,13 @@ def save_config(cfg: SynapseConfig, path: Path | None = None, *, make_backup: bo
         if os.path.exists(tmp):
             os.unlink(tmp)
     return path
+
+
+def _prune_config_backups(path: Path, *, keep: int = 3) -> None:
+    backups = sorted(path.parent.glob(f"{path.name}.bak-*"), key=lambda p: p.name, reverse=True)
+    for backup in backups[keep:]:
+        with contextlib.suppress(OSError):
+            backup.unlink()
 
 
 def get_value(cfg: SynapseConfig, dotted_path: str) -> Any:
@@ -503,7 +501,7 @@ def validate_config(cfg: SynapseConfig) -> list[str]:
         if not isinstance(v, int) or v < 1:
             errors.append(f"cleanup.{field_name}는 1 이상 정수 — 현재: {v!r}")
 
-    for field_name in ("ask", "decide", "recall", "resume", "rag_search"):
+    for field_name in ("ask", "decide", "recall", "resume"):
         v = getattr(cfg.top_k, field_name)
         if not isinstance(v, int) or v < 1 or v > 50:
             errors.append(f"top_k.{field_name}는 1~50 — 현재: {v!r}")

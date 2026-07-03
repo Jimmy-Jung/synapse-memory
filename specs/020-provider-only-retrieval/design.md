@@ -55,7 +55,7 @@ Process (스케줄·단명 잡; launchd StartInterval)
      save_watermark(doc)                            # doc별 체크포인트
   EXIT  → OS가 전부 회수
 Ask (/sm:ask)
-  ai_api.retrieve_then_answer(query, index)         # 벡터 없이 provider 선별+답변
+  select_related(query, index) + ai_api.complete    # 벡터 없이 provider 선별+답변
 ```
 
 ### 메모리 결과
@@ -73,8 +73,7 @@ Ask (/sm:ask)
 
 ### 추가
 - `ai_api.select_related(doc_text, page_index, *, env, model) -> list[str]`  (관련 slug)
-- `ai_api.retrieve_then_answer(query, page_index, *, env, model) -> str`
-- claude.py / codex.py에 위 2개 프롬프트 구현
+- claude.py / codex.py에 provider 선별 프롬프트 구현
 - `wiki/page_index.py` — `build_page_index(pages) -> PageIndex` (slug/title/요약)
 - `MaintenanceConfig`: `max_docs_per_cycle:int=25`, `interval_minutes:int=20`
 - `models.<provider>.relevance` 키
@@ -95,12 +94,6 @@ def select_related(
 ) -> list[str]:
     """page_index에서 doc과 관련된 페이지 slug 목록(최대 max_pages). provider 호출.
     실패/빈 인덱스 → []. (graceful — ingest는 계속)"""
-
-def retrieve_then_answer(
-    query: str, page_index: "PageIndex", *,
-    env: object | None = None, model: str | None = None, timeout: int = 120,
-) -> str:
-    """인덱스에서 관련 페이지 선별 후 답변 합성. 출처 인용 포함."""
 ```
 
 ```python

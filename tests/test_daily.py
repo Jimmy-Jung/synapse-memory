@@ -67,6 +67,7 @@ class TestRunDaily:
         assert "index" not in STEPS  # 020: RAG index 단계 제거
         assert "update_profile" in STEPS
         assert "report" in STEPS
+        assert STEPS[-1] == "lint"
 
     def test_daily_stage_validation_rejects_duplicate_names(self) -> None:
         stages = (
@@ -121,12 +122,19 @@ class TestRunDaily:
                 "collect_obsidian": track("collect_obsidian", _ok("mirrored=0")),
                 "classify": track("classify", _fail("AI provider 미설치")),
                 "report": track("report", _ok("report skipped in test")),
+                "lint": track("lint", _ok("lint skipped in test")),
             },
             on_log=lambda _line: None,
         )
 
         by_name = {step.name: step for step in result.steps}
-        assert calls == ["collect_claude_code", "collect_obsidian", "classify", "report"]
+        assert calls == [
+            "collect_claude_code",
+            "collect_obsidian",
+            "classify",
+            "report",
+            "lint",
+        ]
         assert by_name["classify"].status == StageStatus.FAILED
         assert by_name["generate"].status == StageStatus.SKIPPED
         assert by_name["generate"].skip_reason == "requires classify"
@@ -151,12 +159,13 @@ class TestRunDaily:
                 "generate": track("generate"),
                 "update_profile": track("update_profile"),
                 "report": track("report"),
+                "lint": track("lint"),
             },
             on_log=lambda _line: None,
         )
 
         by_name = {step.name: step for step in result.steps}
-        assert calls == ["classify", "generate", "update_profile", "report"]
+        assert calls == ["classify", "generate", "update_profile", "report", "lint"]
         assert by_name["collect_claude_code"].status == StageStatus.SKIPPED
         assert by_name["collect_claude_code"].skip_reason == "resume before classify"
         assert by_name["collect_obsidian"].status == StageStatus.SKIPPED
@@ -264,6 +273,7 @@ class TestRunDaily:
                 "collect_obsidian": _ok("mirrored=0"),
                 "classify": _fail("AI provider 미설치"),
                 "report": _ok("report skipped in test"),
+                "lint": _ok("lint skipped in test"),
             },
             on_log=lambda _line: None,
         )
@@ -390,6 +400,7 @@ class TestHumanizeSummary:
                     "fact=13 pattern=13 → Profile-2026-05-18.md"
                 ),
                 "report": _ok("report skipped in test"),
+                "lint": _ok("lint skipped in test"),
             },
             on_log=lambda _line: None,
         )
@@ -430,7 +441,7 @@ class TestQuickMode:
             stage_actions={
                 name: track(name) for name in (
                     "collect_claude_code", "collect_obsidian", "classify",
-                    "generate", "update_profile", "report",
+                    "generate", "update_profile", "report", "lint",
                 )
             },
             on_log=lambda _line: None,
@@ -500,12 +511,37 @@ class TestQuickMode:
             stage_actions={
                 name: track(name) for name in (
                     "collect_claude_code", "collect_obsidian", "classify",
-                    "generate", "update_profile", "report",
+                    "generate", "update_profile", "report", "lint",
                 )
             },
             on_log=lambda _line: None,
         )
         assert "update_profile" in calls
+
+    def test_lint_stage_uses_existing_wiki_lint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from synapse_memory.wiki.lint import LintReport
+
+        called = False
+
+        def fake_run_lint() -> LintReport:
+            nonlocal called
+            called = True
+            return LintReport(backlinks_added=2, dead_links_removed=1)
+
+        monkeypatch.setattr("synapse_memory.wiki.lint.run_lint", fake_run_lint)
+
+        result = run_daily(
+            only={"lint"},
+            on_log=lambda _line: None,
+        )
+
+        assert called is True
+        assert result.steps[-1].name == "lint"
+        assert result.steps[-1].summary == (
+            "backlinks+=2 dead_links-=1 orphans=0 review=0"
+        )
 
     def test_quick_negative_days_rejected(self) -> None:
         with pytest.raises(ValueError):

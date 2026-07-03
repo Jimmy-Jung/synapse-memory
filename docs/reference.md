@@ -463,7 +463,6 @@ synapse-memory doctor --fix-config
 | `collect_cursor` | Cursor IDE `state.vscdb` (SQLite) | ✅ | macOS 표준 경로 |
 | `collect_continue` | `~/.continue/sessions/*.json` | ✅ | Continue.dev VS Code 확장 |
 | `collect_aider` | `~/.aider.chat.history.md`, `.input.history` | ✅ | terminal AI pair |
-| `collect_git_self` | `SYNAPSE_GIT_SELF_ROOTS` 안의 본인 commit | ⛔ opt-in | 환경변수로 root 지정 시만 동작 |
 | `collect_apple_notes` | `~/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite` | ✅ | Full Disk Access 필요 시 errors |
 | `collect_day_one` | `~/Library/Group Containers/<TEAM_ID>.dayoneapp2/` | ✅ | `SYNAPSE_DAYONE_HOME` override 가능 |
 | `collect_vscode_local_history` | `~/Library/Application Support/Code/User/History/` | ✅ | VS Code 자동 snapshot |
@@ -474,25 +473,6 @@ synapse-memory doctor --fix-config
 | `collect_screen_time` | `~/Library/Application Support/Knowledge/knowledgeC.db` | ✅ | 앱 사용 시간 / CoreDuet 통합 DB |
 | `collect_apple_health` | `~/Downloads/export*.zip` (또는 `SYNAPSE_HEALTH_DROP`) | ✅ | 수동 export 필요 — drop-in 디렉토리 |
 | `collect_obsidian` | Obsidian vault `*.md` | ✅ | iCloud Obsidian 기본 |
-
-### `collect_git_self` 켜기
-
-본인 commit log 만 JSONL 로 mirror 합니다. (diff 본문은 미저장 — 후속 단계에서
-필요 시 lazy fetch.)
-
-```bash
-# 1. root 디렉토리 지정 (콜론 구분, 직계 자식까지만 탐색)
-export SYNAPSE_GIT_SELF_ROOTS="$HOME/Documents/GitHub:$HOME/work"
-
-# 2. (옵션) 본인 이메일 명시 — 미지정 시 repo 의 git config user.email
-export SYNAPSE_GIT_SELF_EMAIL="you@example.com"
-
-# 3. 다음 daily 실행부터 자동으로 mirror
-/sm:daily
-```
-
-각 repo 마다 마지막 처리한 commit SHA 가 `.offsets/<repo>.sha` 에 저장돼 다음
-호출 때 그 이후만 mirror — incremental 입니다.
 
 ### `collect_gmail_sent` 켜기
 

@@ -9,10 +9,11 @@ argument-hint: [--quick] [--watch-status] [--profile-facts-only] [--resume-from 
 
 파이프라인 흐름 (v0.15+):
 
-1. **collect_* (17종 컬렉터)**: claude_code, codex, shell_history, cursor, continue, aider, git_self (opt-in), apple_notes, day_one, vscode_local_history, imessage (Full Disk Access), gmail_sent (opt-in), calendar, browser_history, screen_time, apple_health (drop-in), obsidian
-2. **classify** (신규 cluster 분류) → **generate** (Card 생성) → **index** (RAG)
+1. **collect_* (16종 컬렉터)**: claude_code, codex, shell_history, cursor, continue, aider, apple_notes, day_one, vscode_local_history, imessage (Full Disk Access), gmail_sent (opt-in), calendar, browser_history, screen_time, apple_health (drop-in), obsidian
+2. **classify** (신규 cluster 분류) → **generate** (Card 생성)
 3. **update_profile** (Profile 후보 추출, full 모드만)
 4. **report** (DailyReport 작성)
+5. **lint** (wiki 구조 lint, review queue 갱신)
 
 각 stage의 성공/실패/건너뜀, 소요 시간, skip reason, DailyReport 경로를 요약하고, 실패한 step이 있으면 다음 재개 명령을 제안하세요. 컬렉터별로 source 미존재 / 권한 부재면 자동 skip (errors 0 또는 짧은 안내 1줄) 되므로 실패가 아닙니다.
 
@@ -36,7 +37,7 @@ SYNAPSE_FROM_AGENT=1 synapse-memory daily --quick
 - 최근 7일 modified 노트만 mirror (mtime cutoff)
 - classify 최대 10 cluster (AI 호출 cap)
 - `update_profile` auto-skip (heavy AI)
-- `--watch-status`를 붙이면 실행 중 `[daily-status] stage (n/22)` 진행률을 같이 출력
+- `--watch-status`를 붙이면 실행 중 `[daily-status] stage (n/21)` 진행률을 같이 출력
 - 사용자가 "빠르게", "최근 변경분만", "`--quick`"을 명시한 경우에만 사용
 
 ## 재개 / 부분 실행 예
