@@ -2,6 +2,28 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [2.0.0] — 2026-07-06
+
+구조 리디자인 (big-bang). 계획: `plans/synapse-structural-redesign.md`, 설계: `specs/021-unified-model/design.md`.
+
+### Changed
+
+- **단일 엔티티 모델**: v1 Cards(Project/Company/Insight) + v2 WikiPage → 단일 타입 `Entity` + `schema.yaml`
+  (types: project/company/concept/insight/log/profile; typed relations; created/observed_at/supersedes 시간성).
+- **단일 인제스트 파이프라인**: v1 cluster→classify→generate 제거, per-doc LLM 통합(apply_ops)으로 수렴.
+  daily = collect → ingest → lint.
+- **공유 계층 SSOT**: vault-resolution(config), retrieval 패키지, llm 어댑터, page model/store 분리.
+- `cli.py`(4030L) → `cli/` 패키지(command-noun별 모듈).
+
+### Removed
+
+- Obsidian-UI 표면(moc/·index_md·SCHEMA writer·Dataview doctor·node 태그·spec 015).
+- 죽은 코드: `rag/`·`installer/`·`llm/credentials`·`feedback/apply`, 미사용 collector 5개(cursor/continue/aider/day_one/gmail).
+
+### Notes
+
+- 개발단계 big-bang: 하위호환·마이그레이션 없음. 기존 vault 페이지는 L0 raw 재인제스트로 재생성(`docs/reingest-runbook.md`).
+
 ## [1.20.0] — 2026-07-03
 
 ### Added
