@@ -1,27 +1,31 @@
-"""Provider-agnostic AI API facade.
-
-High-level endpoints depend on this module, not on a concrete Claude/Codex
-runtime. New providers should add an adapter module and one registry entry here.
-"""
+"""Provider-agnostic AI API facade."""
 
 from __future__ import annotations
 
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, NoReturn, Protocol, TypeAlias, cast
+from typing import Any, Literal, NoReturn, TypeAlias, cast
 
 from synapse_memory.llm import claude, codex
-from synapse_memory.llm.claude import ClaudeEnvironment
-from synapse_memory.llm.codex import CodexEnvironment
+from synapse_memory.llm._runtime import (
+    CompleteOptions,
+    ConcreteProvider,
+    ProviderEnvironment,
+    ProviderModule,
+    make_options,
+    options_kwargs,
+    with_env,
+)
 from synapse_memory.retrieval.provider import _provider
 
 AIProvider: TypeAlias = Literal["auto", "claude", "codex"]
-ConcreteAIProvider: TypeAlias = Literal["claude", "codex"]
-AIProviderEnv: TypeAlias = ClaudeEnvironment | CodexEnvironment
+ConcreteAIProvider: TypeAlias = ConcreteProvider
+AIProviderEnv: TypeAlias = ProviderEnvironment
 
 AI_PROVIDER_ENV_VAR = "SYNAPSE_AI_PROVIDER"
 DEFAULT_PROVIDER: ConcreteAIProvider = "codex"
+DEFAULT_TIMEOUT_SEC = 120
 
 
 class AIError(RuntimeError):
@@ -32,201 +36,34 @@ class AIUnavailableError(AIError):
     """Selected AI provider is unavailable."""
 
 
-class CompleteCallable(Protocol):
-    def __call__(
-        self,
-        prompt: str,
-        *,
-        system: str | None = None,
-        model: str | None = None,
-        json_schema: dict[str, Any] | None = None,
-        max_budget_usd: float | None = None,
-        timeout: int = 120,
-        env: Any = None,
-    ) -> str: ...
-
-
-class StructuredCallable(Protocol):
-    def __call__(
-        self,
-        prompt: str,
-        *,
-        system: str | None = None,
-        model: str | None = None,
-        json_schema: dict[str, Any] | None = None,
-        max_budget_usd: float | None = None,
-        timeout: int = 120,
-        env: Any = None,
-    ) -> Any: ...
-
-
-@dataclass(frozen=True)
-class AIProviderAdapter:
-    default_model: str
-    detect_environment: Callable[[str], object]
-    complete: CompleteCallable
-    complete_structured: StructuredCallable
-    model_of: Callable[[object], str]
-    path_of: Callable[[object], str | None]
-    version_of: Callable[[object], str | None]
-    ready_of: Callable[[object], bool]
-    reasons_unavailable_of: Callable[[object], list[str]]
-    unavailable_errors: tuple[type[Exception], ...]
-    provider_errors: tuple[type[Exception], ...]
-
-
 @dataclass(frozen=True)
 class AIEnvironment:
     provider: ConcreteAIProvider
-    provider_env: object
+    provider_env: ProviderEnvironment
 
     @property
     def model(self) -> str:
-        return PROVIDERS[self.provider].model_of(self.provider_env)
+        return self.provider_env.model
 
     @property
     def path(self) -> str | None:
-        return PROVIDERS[self.provider].path_of(self.provider_env)
+        return self.provider_env.path
 
     @property
     def version(self) -> str | None:
-        return PROVIDERS[self.provider].version_of(self.provider_env)
+        return self.provider_env.version
 
     @property
     def ready(self) -> bool:
-        return PROVIDERS[self.provider].ready_of(self.provider_env)
+        return self.provider_env.ready
 
     def reasons_unavailable(self) -> list[str]:
-        return PROVIDERS[self.provider].reasons_unavailable_of(self.provider_env)
+        return self.provider_env.reasons_unavailable()
 
 
-def _complete_claude(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = 120,
-    env: Any = None,
-) -> str:
-    return claude.complete(
-        prompt,
-        system=system,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
-    )
-
-
-def _complete_structured_claude(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = 120,
-    env: Any = None,
-) -> Any:
-    return claude.complete_structured(
-        prompt,
-        system=system,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
-    )
-
-
-def _complete_codex(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = 120,
-    env: Any = None,
-) -> str:
-    return codex.complete(
-        prompt,
-        system=system,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
-    )
-
-
-def _complete_structured_codex(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = 120,
-    env: Any = None,
-) -> Any:
-    return codex.complete_structured(
-        prompt,
-        system=system,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
-    )
-
-
-def _as_claude_environment(env: object) -> ClaudeEnvironment:
-    if isinstance(env, ClaudeEnvironment):
-        return env
-    raise AIUnavailableError("Claude provider requested with non-Claude environment")
-
-
-def _as_codex_environment(env: object) -> CodexEnvironment:
-    if isinstance(env, CodexEnvironment):
-        return env
-    raise AIUnavailableError("Codex provider requested with non-Codex environment")
-
-
-PROVIDERS: dict[ConcreteAIProvider, AIProviderAdapter] = {
-    "claude": AIProviderAdapter(
-        default_model=claude.DEFAULT_MODEL,
-        detect_environment=claude.detect_claude_environment,
-        complete=_complete_claude,
-        complete_structured=_complete_structured_claude,
-        model_of=lambda env: _as_claude_environment(env).model,
-        path_of=lambda env: _as_claude_environment(env).claude_path,
-        version_of=lambda env: _as_claude_environment(env).claude_version,
-        ready_of=lambda env: _as_claude_environment(env).ready,
-        reasons_unavailable_of=lambda env: _as_claude_environment(
-            env
-        ).reasons_unavailable(),
-        unavailable_errors=(claude.ClaudeUnavailableError,),
-        provider_errors=(claude.ClaudeError,),
-    ),
-    "codex": AIProviderAdapter(
-        default_model=codex.DEFAULT_MODEL,
-        detect_environment=codex.detect_codex_environment,
-        complete=_complete_codex,
-        complete_structured=_complete_structured_codex,
-        model_of=lambda env: _as_codex_environment(env).model,
-        path_of=lambda env: _as_codex_environment(env).codex_path,
-        version_of=lambda env: _as_codex_environment(env).codex_version,
-        ready_of=lambda env: _as_codex_environment(env).ready,
-        reasons_unavailable_of=lambda env: _as_codex_environment(
-            env
-        ).reasons_unavailable(),
-        unavailable_errors=(codex.CodexUnavailableError,),
-        provider_errors=(codex.CodexError,),
-    ),
+PROVIDER_MODULES: dict[ConcreteAIProvider, ProviderModule] = {
+    "claude": cast(ProviderModule, claude),
+    "codex": cast(ProviderModule, codex),
 }
 
 
@@ -236,65 +73,58 @@ def detect_ai_environment(
     model: str | None = None,
 ) -> AIEnvironment:
     resolved = _resolve_provider(provider)
-    adapter = PROVIDERS[resolved]
+    module = PROVIDER_MODULES[resolved]
     return AIEnvironment(
         provider=resolved,
-        provider_env=adapter.detect_environment(model or adapter.default_model),
+        provider_env=module.detect_environment(model or module.DEFAULT_MODEL),
     )
 
 
-def complete(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = 120,
-    env: AIEnvironment | AIProviderEnv | None = None,
-    provider: AIProvider | None = None,
-) -> str:
-    resolved = _coerce_env(env, provider=provider, model=model)
-    adapter = PROVIDERS[resolved.provider]
+def _complete_text(prompt: str, kwargs: dict[str, Any]) -> str:
+    module, options = _resolve_call(kwargs)
     try:
-        return adapter.complete(
-            prompt,
-            system=system,
-            model=model,
-            json_schema=json_schema,
-            max_budget_usd=max_budget_usd,
-            timeout=timeout,
-            env=resolved.provider_env,
-        )
+        return module.complete(prompt, **options_kwargs(options))
     except Exception as exc:
-        _raise_provider_error(exc, adapter)
+        _raise_provider_error(exc, module)
 
 
-def complete_structured(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = 120,
-    env: AIEnvironment | AIProviderEnv | None = None,
-    provider: AIProvider | None = None,
-) -> Any:
-    resolved = _coerce_env(env, provider=provider, model=model)
-    adapter = PROVIDERS[resolved.provider]
+def _complete_structured(prompt: str, kwargs: dict[str, Any]) -> Any:
+    module, options = _resolve_call(kwargs)
     try:
-        return adapter.complete_structured(
-            prompt,
-            system=system,
-            model=model,
-            json_schema=json_schema,
-            max_budget_usd=max_budget_usd,
-            timeout=timeout,
-            env=resolved.provider_env,
-        )
+        return module.complete_structured(prompt, **options_kwargs(options))
     except Exception as exc:
-        _raise_provider_error(exc, adapter)
+        _raise_provider_error(exc, module)
+
+
+AICall = Callable[[str, dict[str, Any]], Any]
+
+
+def _make_ai_call(runner: AICall, *, name: str) -> Callable[..., Any]:
+    def call(prompt: str, **kwargs: Any) -> Any:
+        return runner(prompt, kwargs)
+
+    call.__name__ = name
+    return call
+
+
+complete = cast(Callable[..., str], _make_ai_call(_complete_text, name="complete"))
+complete_structured = _make_ai_call(
+    _complete_structured,
+    name="complete_structured",
+)
+
+
+def _resolve_call(kwargs: dict[str, Any]) -> tuple[ProviderModule, CompleteOptions]:
+    provider = _pop_provider(kwargs)
+    options = make_options(default_timeout=DEFAULT_TIMEOUT_SEC, kwargs=kwargs)
+    resolved = _coerce_env(options.env, provider=provider, model=options.model)
+    return PROVIDER_MODULES[resolved.provider], with_env(options, resolved.provider_env)
+
+
+def _pop_provider(kwargs: dict[str, Any]) -> AIProvider | None:
+    if "provider" not in kwargs:
+        return None
+    return cast(AIProvider | None, kwargs.pop("provider"))
 
 
 def _coerce_env(
@@ -305,10 +135,13 @@ def _coerce_env(
 ) -> AIEnvironment:
     if isinstance(env, AIEnvironment):
         return env
-    if isinstance(env, ClaudeEnvironment):
-        return AIEnvironment(provider="claude", provider_env=env)
-    if isinstance(env, CodexEnvironment):
-        return AIEnvironment(provider="codex", provider_env=env)
+    if env is not None:
+        env_provider = getattr(env, "provider", None)
+        if env_provider in PROVIDER_MODULES:
+            return AIEnvironment(
+                provider=cast(ConcreteAIProvider, env_provider),
+                provider_env=cast(ProviderEnvironment, env),
+            )
     return detect_ai_environment(provider, model=model)
 
 
@@ -353,9 +186,9 @@ def _is_claude_runtime() -> bool:
     )
 
 
-def _raise_provider_error(exc: Exception, adapter: AIProviderAdapter) -> NoReturn:
-    if isinstance(exc, adapter.unavailable_errors):
+def _raise_provider_error(exc: Exception, module: ProviderModule) -> NoReturn:
+    if isinstance(exc, module.ProviderUnavailableError):
         raise AIUnavailableError(str(exc)) from exc
-    if isinstance(exc, adapter.provider_errors):
+    if isinstance(exc, module.ProviderError):
         raise AIError(str(exc)) from exc
     raise exc

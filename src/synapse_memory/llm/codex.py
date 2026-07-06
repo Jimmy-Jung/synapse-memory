@@ -5,17 +5,24 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import sys
 import tempfile
-import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
-from synapse_memory.cost.events import append_cost_event, build_cost_event
-from synapse_memory.cost.pricing import price_usage
-from synapse_memory.llm._json import parse_json_with_fallback as _parse_json_base
-from synapse_memory.llm.tokens import estimate_tokens
+from synapse_memory.cost.events import CostStatus, append_cost_event
+from synapse_memory.llm._runtime import (
+    DEFAULT_STRUCTURED_SYSTEM,
+    CompleteOptions,
+    compose_prompt,
+    detect_cli_environment,
+    make_structured_call,
+    make_text_call,
+    parse_structured_text,
+    record_llm_cost,
+    run_cli_process,
+    with_system,
+)
 
 CODEX_BIN = "codex"
 DEFAULT_MODEL = "gpt-5.5"
@@ -37,6 +44,18 @@ class CodexEnvironment:
     model: str = DEFAULT_MODEL
 
     @property
+    def provider(self) -> Literal["codex"]:
+        return "codex"
+
+    @property
+    def path(self) -> str | None:
+        return self.codex_path
+
+    @property
+    def version(self) -> str | None:
+        return self.codex_version
+
+    @property
     def ready(self) -> bool:
         return self.codex_path is not None
 
@@ -47,21 +66,20 @@ class CodexEnvironment:
 
 
 def detect_codex_environment(model: str = DEFAULT_MODEL) -> CodexEnvironment:
-    path = shutil.which(CODEX_BIN)
-    version = None
-    if path:
-        try:
-            r = subprocess.run(
-                [path, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            if r.returncode == 0:
-                version = r.stdout.strip() or r.stderr.strip() or None
-        except (subprocess.TimeoutExpired, OSError):
-            pass
+    return detect_cli_environment(
+        bin_name=CODEX_BIN,
+        model=model,
+        make_env=_make_codex_environment,
+        which=shutil.which,
+        run=subprocess.run,
+    )
+
+
+def _make_codex_environment(
+    path: str | None,
+    version: str | None,
+    model: str,
+) -> CodexEnvironment:
     return CodexEnvironment(codex_path=path, codex_version=version, model=model)
 
 
@@ -70,81 +88,39 @@ def _ensure_ready(env: CodexEnvironment) -> None:
         raise CodexUnavailableError(" / ".join(env.reasons_unavailable()))
 
 
-def complete(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = DEFAULT_TIMEOUT_SEC,
-    env: CodexEnvironment | None = None,
-) -> str:
+def _complete_text(prompt: str, options: CompleteOptions) -> str:
     """Codex CLI non-interactive call → final answer text."""
-    _ = max_budget_usd  # Codex CLI has no compatible per-call budget flag here.
-    env = env or detect_codex_environment(model or DEFAULT_MODEL)
+    _ = options.max_budget_usd  # Codex CLI has no compatible per-call budget flag here.
+    env = cast(CodexEnvironment | None, options.env)
+    env = env or detect_codex_environment(options.model or DEFAULT_MODEL)
     _ensure_ready(env)
     assert env.codex_path is not None
 
-    started = time.monotonic()
-    full_prompt = _compose_prompt(prompt=prompt, system=system)
+    full_prompt = compose_prompt(prompt=prompt, system=options.system)
     with tempfile.TemporaryDirectory(prefix="synapse-codex-") as tmp:
         out_path = Path(tmp) / "last-message.txt"
-        schema_path = _write_schema(tmp, json_schema)
+        schema_path = _write_schema(tmp, options.json_schema)
         cmd = _build_cmd(
             env,
-            model=model,
+            model=options.model,
             output_path=out_path,
             schema_path=schema_path,
         )
-        try:
-            result = subprocess.run(
-                cmd,
-                input=full_prompt,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            elapsed = time.monotonic() - started
-            _record_codex_cost(
-                model=model or env.model,
-                prompt=full_prompt,
-                result_text="",
-                status="timeout",
-                elapsed_s=elapsed,
-                error_kind="timeout",
-            )
-            raise CodexError(f"codex 호출 타임아웃 ({timeout}s)") from exc
-        except OSError as exc:
-            elapsed = time.monotonic() - started
-            _record_codex_cost(
-                model=model or env.model,
-                prompt=full_prompt,
-                result_text="",
-                status="error",
-                elapsed_s=elapsed,
-                error_kind="os_error",
-            )
-            raise CodexError(f"codex 실행 실패: {exc}") from exc
-
-        elapsed = time.monotonic() - started
-        if result.returncode != 0:
-            _record_codex_cost(
-                model=model or env.model,
-                prompt=full_prompt,
-                result_text="",
-                status="error",
-                elapsed_s=elapsed,
-                error_kind="nonzero_exit",
-            )
-            msg = result.stderr.strip() or result.stdout.strip()[:500] or "(no output)"
-            raise CodexError(f"codex 비정상 종료 exit={result.returncode}: {msg}")
+        result, elapsed = run_cli_process(
+            command_name="codex",
+            cmd=cmd,
+            input_text=full_prompt,
+            timeout=options.timeout,
+            run=subprocess.run,
+            error_cls=CodexError,
+            prompt_for_cost=full_prompt,
+            model=options.model or env.model,
+            record=_record_cost,
+        )
 
         text = _read_last_message(out_path, result.stdout)
-        _record_codex_cost(
-            model=model or env.model,
+        _record_cost(
+            model=options.model or env.model,
             prompt=full_prompt,
             result_text=text,
             status="success",
@@ -153,24 +129,10 @@ def complete(
         return text
 
 
-def complete_structured(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = DEFAULT_TIMEOUT_SEC,
-    env: CodexEnvironment | None = None,
-) -> Any:
-    text = complete(
+def _complete_structured(prompt: str, options: CompleteOptions) -> Any:
+    text = _complete_text(
         prompt,
-        system=system or _DEFAULT_STRUCTURED_SYSTEM,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
+        with_system(options, options.system or DEFAULT_STRUCTURED_SYSTEM),
     )
     return _parse_json_with_fallback(text)
 
@@ -205,12 +167,6 @@ def _build_cmd(
         cmd.extend(["--output-schema", str(schema_path)])
     cmd.append("-")
     return cmd
-
-
-def _compose_prompt(*, prompt: str, system: str | None) -> str:
-    if not system:
-        return prompt
-    return f"# System\n{system}\n\n# User\n{prompt}"
 
 
 def _normalize_schema_for_codex(node: Any) -> Any:
@@ -249,46 +205,36 @@ def _read_last_message(path: Path, stdout: str) -> str:
     return stdout.strip()
 
 
-def _record_codex_cost(
+def _record_cost(
     *,
     model: str,
     prompt: str,
     result_text: str,
-    status: str,
+    status: CostStatus,
     elapsed_s: float,
     error_kind: str | None = None,
 ) -> None:
-    input_tokens = estimate_tokens(prompt)
-    output_tokens = estimate_tokens(result_text)
-    priced = price_usage(
+    record_llm_cost(
         provider="codex",
         model=model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
+        prompt=prompt,
+        result_text=result_text,
+        status=status,
+        elapsed_s=elapsed_s,
+        error_kind=error_kind,
+        append=append_cost_event,
     )
-    try:
-        append_cost_event(
-            build_cost_event(
-                provider="codex",
-                model=model,
-                status=status,  # type: ignore[arg-type]
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                usd=priced.usd,
-                pricing_source=priced.pricing_source,
-                elapsed_s=elapsed_s,
-                error_kind=error_kind,
-            )
-        )
-    except Exception as exc:
-        print(f"⚠ cost event 기록 실패: {exc}", file=sys.stderr)
-
-
-_DEFAULT_STRUCTURED_SYSTEM = (
-    "You output ONLY a single valid JSON value. "
-    "No prose, no markdown code fences, no explanation."
-)
 
 
 def _parse_json_with_fallback(content: str) -> Any:
-    return _parse_json_base(content, error_cls=CodexError, provider="Codex")
+    return parse_structured_text(content, error_cls=CodexError, provider="Codex")
+
+
+complete = make_text_call(_complete_text, default_timeout=DEFAULT_TIMEOUT_SEC)
+complete_structured = make_structured_call(
+    _complete_structured,
+    default_timeout=DEFAULT_TIMEOUT_SEC,
+)
+ProviderError = CodexError
+ProviderUnavailableError = CodexUnavailableError
+detect_environment = detect_codex_environment
