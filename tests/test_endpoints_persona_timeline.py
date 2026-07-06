@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from synapse_memory.endpoints.persona import (
+from synapse_memory.recall.timeline import (
     _format_timeline_output,
     _group_by_quarter,
     _resolve_sort_ts,

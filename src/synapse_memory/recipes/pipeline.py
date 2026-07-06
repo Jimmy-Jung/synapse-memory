@@ -23,9 +23,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from synapse_memory.config import get_config, get_vault_path
-from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
 from synapse_memory.model import Entity
+from synapse_memory.postprocess import strip_meta_prefix
 from synapse_memory.recipes.domain import resolve_domain
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
 from synapse_memory.recipes.locale import resolve_locale
@@ -288,9 +288,13 @@ def _resolve_rag_mode(
     return override or recipe.rag_mode
 
 
-def _kinds_for_recipe(recipe: GenerationRecipe) -> tuple[EntityKind, ...]:
+def _kinds_for_recipe(
+    recipe: GenerationRecipe,
+    *,
+    rag_filter_override: dict[str, str] | None = None,
+) -> tuple[EntityKind, ...]:
     """recipe.rag_filter.source_kind → Entity type 제한. 미지정이면 전체."""
-    rag_filter = recipe.rag_filter or {}
+    rag_filter = rag_filter_override if rag_filter_override is not None else (recipe.rag_filter or {})
     source_kind = rag_filter.get("source_kind")
     if source_kind and source_kind in _SOURCE_KIND_TO_ENTITY_KIND:
         return (_SOURCE_KIND_TO_ENTITY_KIND[source_kind],)
@@ -458,6 +462,7 @@ def _retrieve_matches(
     vault: Path,
     store: Any,
     top_k_override: int | None,
+    rag_filter_override: dict[str, str] | None,
 ) -> list[tuple[Any, float]]:
     """provider 선별로 관련 카드 매칭 (로컬 임베딩 제거, 020).
 
@@ -470,7 +475,8 @@ def _retrieve_matches(
     """
     rag_top_k = top_k_override or recipe.rag_top_k
     rag_query = _build_rag_query(recipe, inputs)
-    rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
+    base_filter = rag_filter_override if rag_filter_override is not None else recipe.rag_filter
+    rag_filter = dict(base_filter) if base_filter is not None else None
 
     if store is not None:
         try:
@@ -478,7 +484,7 @@ def _retrieve_matches(
         except TypeError:
             return list(store.query())
 
-    kinds = _kinds_for_recipe(recipe)
+    kinds = _kinds_for_recipe(recipe, rag_filter_override=rag_filter_override)
 
     index = build_entity_index(vault_path=vault, kinds=kinds)
     if not index.entries:
@@ -526,6 +532,7 @@ def generate(
     require_matched: bool = False,
     return_empty_on_no_matches: bool = False,
     rag_mode_override: RecipeRagMode | None = None,
+    rag_filter_override: dict[str, str] | None = None,
 ) -> GenerationResult:
     """Recipe 1 회 실행 — orchestrator entry point.
 
@@ -567,6 +574,7 @@ def generate(
         vault=vault,
         store=store,
         top_k_override=top_k_override,
+        rag_filter_override=rag_filter_override,
     )
 
     if require_matched and not matched:
@@ -673,14 +681,12 @@ def generate(
         )
     )
 
-    last_ref: LastAnswerReference | None = None
+    last_ref = _build_last_answer(recipe=recipe, inputs=inputs, matched=matched)
     if save_last:
-        ref = _build_last_answer(recipe=recipe, inputs=inputs, matched=matched)
         with contextlib.suppress(OSError, ValueError):
-            save_last_answer(ref)
-        last_ref = ref
+            save_last_answer(last_ref)
 
-    source_ids = [c.target_ref for c in (last_ref.citations if last_ref else ())]
+    source_ids = [c.target_ref for c in last_ref.citations]
 
     return GenerationResult(
         recipe_name=recipe.name,

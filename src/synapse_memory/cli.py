@@ -3142,6 +3142,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_watch_status.set_defaults(func=cmd_watch_status)
 
+    p_recall = sub.add_parser(
+        "recall",
+        help="주제에 대한 과거 사고 회상",
+        description="persona what-did-i-think의 top-level alias입니다.",
+    )
+    p_recall.add_argument("topic", help="회상할 주제")
+    p_recall.add_argument("--top-k", type=int, default=None)
+    p_recall.add_argument("--model", default=None)
+    p_recall.add_argument(
+        "--timeline",
+        action="store_true",
+        help="시간순(period_end desc) + 분기 그룹 출력",
+    )
+    p_recall.add_argument(
+        "--by",
+        choices=("time", "distance"),
+        default=None,
+        help="정렬 모드: time (= --timeline) 또는 distance (기본)",
+    )
+    p_recall.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="--timeline 모드 출력 카드 최대 수 (1~100, 기본 20)",
+    )
+    p_recall.add_argument(
+        "--hybrid",
+        action="store_true",
+        help="호환 플래그: provider-only에서는 ranking 차이 없음",
+    )
+    p_recall.set_defaults(func=cmd_me_what_did_i_think)
+
     p_ask = sub.add_parser(
         "ask",
         help="자연어 질의 → provider 선별 → AI 답변",
