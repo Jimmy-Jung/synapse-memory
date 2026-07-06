@@ -336,8 +336,8 @@ def test_kendall_tau_golden(today: _datetime.date) -> None:
 # ---------------------------------------------------------------------------
 # Integration — what_did_i_think() (020 provider-only)
 #
-# 벡터 store 제거. time-mode 는 CardIndex.meta 에서 타임라인 메타를 읽으므로
-# ``build_card_index`` 를 controlled CardIndex 로 patch 한다. distance-mode 는
+# 벡터 store 제거. time-mode 는 EntityIndex.meta 에서 타임라인 메타를 읽으므로
+# ``build_entity_index`` 를 controlled EntityIndex 로 patch 한다. distance-mode 는
 # provider 선별 + recipes pipeline 합성이므로 실제 ProjectCard 를 vault 에 심고
 # ``select_related``/``ai_api_complete`` 를 patch 한다.
 # ---------------------------------------------------------------------------
@@ -345,23 +345,20 @@ def test_kendall_tau_golden(today: _datetime.date) -> None:
 from unittest.mock import patch  # noqa: E402
 
 import synapse_memory.endpoints.persona as me_mod  # noqa: E402
-from synapse_memory.cards.card_index import (  # noqa: E402
-    CardEntry,
-    CardIndex,
-)
 from synapse_memory.cards.project import ProjectCard, save_project_card  # noqa: E402
 from synapse_memory.endpoints.persona import what_did_i_think  # noqa: E402
+from synapse_memory.recipes.pipeline import EntityEntry, EntityIndex  # noqa: E402
 
 
-def _entry(card_id: str, *, meta: dict[str, str] | None = None, summary: str = "") -> CardEntry:
+def _entry(card_id: str, *, meta: dict[str, str] | None = None, summary: str = "") -> EntityEntry:
     base_meta = {
         "source_kind": "card_project",
         "display_name": card_id,
     }
     if meta:
         base_meta.update(meta)
-    return CardEntry(
-        card_id=card_id,
+    return EntityEntry(
+        slug=card_id,
         kind="project",
         title=card_id,
         summary=summary or f"# {card_id}",
@@ -369,8 +366,8 @@ def _entry(card_id: str, *, meta: dict[str, str] | None = None, summary: str = "
     )
 
 
-def _index(*entries: CardEntry) -> CardIndex:
-    return CardIndex(entries=tuple(entries))
+def _index(*entries: EntityEntry) -> EntityIndex:
+    return EntityIndex(entries=tuple(entries))
 
 
 def _seed_project(vault: Path, pid: str, *, doc: str = "") -> None:
@@ -387,7 +384,7 @@ def _seed_project(vault: Path, pid: str, *, doc: str = "") -> None:
 
 # T025 — FR-011: 결과 0건 메시지 (빈 인덱스)
 def test_empty_result_message(today: _datetime.date) -> None:
-    with patch.object(me_mod, "build_card_index", return_value=_index()):
+    with patch.object(me_mod, "build_entity_index", return_value=_index()):
         result = what_did_i_think("nothing", by="time", today=today)
     assert result.source_ids == []
     assert "관련 카드 없음" in result.answer
@@ -401,7 +398,7 @@ def test_all_meta_null_fallback(today: _datetime.date) -> None:
         _entry("c2", meta={"period_end": "", "created": "", "last_reviewed": "", "status": ""}),
         _entry("c3", meta={"period_end": "", "created": "", "last_reviewed": "", "status": ""}),
     )
-    with patch.object(me_mod, "build_card_index", return_value=index):
+    with patch.object(me_mod, "build_entity_index", return_value=index):
         result = what_did_i_think("x", by="time", today=today)
     out = result.answer
     assert "## 시간 정보 없음 — distance 순 폴백" in out
@@ -415,9 +412,9 @@ def test_by_time_alias(today: _datetime.date) -> None:
         _entry("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}),
         _entry("b", meta={"period_end": "2024-11-20", "created": "2024-04-01", "status": "archived"}),
     )
-    with patch.object(me_mod, "build_card_index", return_value=_index(*entries)):
+    with patch.object(me_mod, "build_entity_index", return_value=_index(*entries)):
         r1 = what_did_i_think("x", by="time", today=today)
-    with patch.object(me_mod, "build_card_index", return_value=_index(*entries)):
+    with patch.object(me_mod, "build_entity_index", return_value=_index(*entries)):
         r2 = what_did_i_think("x", by="time", today=today)
     assert r1.answer == r2.answer
 
@@ -426,7 +423,6 @@ def test_by_time_alias(today: _datetime.date) -> None:
 def test_by_distance_explicit(today: _datetime.date, tmp_path: Path) -> None:
     _seed_project(tmp_path, "a", doc="body a")
     with (
-        patch.object(me_mod, "select_related", return_value=["a"]),
         patch("synapse_memory.recipes.pipeline.select_related", return_value=["a"]),
         patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
@@ -463,7 +459,7 @@ def test_limit_default_and_override(today: _datetime.date) -> None:
         )
         for i in range(5)
     )
-    with patch.object(me_mod, "build_card_index", return_value=_index(*entries)):
+    with patch.object(me_mod, "build_entity_index", return_value=_index(*entries)):
         result = what_did_i_think("x", by="time", limit=2, today=today)
     assert result.answer.count("**c") == 2
 
@@ -484,7 +480,6 @@ def test_distance_regression_default(today: _datetime.date, tmp_path: Path) -> N
     _seed_project(tmp_path, "a")
     _seed_project(tmp_path, "b")
     with (
-        patch.object(me_mod, "select_related", return_value=["a", "b"]),
         patch("synapse_memory.recipes.pipeline.select_related", return_value=["a", "b"]),
         patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
@@ -503,7 +498,7 @@ def test_no_raw_in_prompt(today: _datetime.date) -> None:
         _entry("a", meta={"period_end": "2024-08-10", "created": "2024-01-01", "status": "archived"}),
     )
     with (
-        patch.object(me_mod, "build_card_index", return_value=index),
+        patch.object(me_mod, "build_entity_index", return_value=index),
         patch("synapse_memory.recipes.pipeline.ai_api_complete") as mock_ai,
     ):
         what_did_i_think("x", by="time", today=today)

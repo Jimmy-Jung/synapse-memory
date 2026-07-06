@@ -17,17 +17,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from synapse_memory.cards.card_index import build_card_index
-from synapse_memory.cards.card_text import company_card_to_text
-from synapse_memory.cards.company import CompanyCard, load_company_card
 from synapse_memory.config import get_config, get_vault_path
 from synapse_memory.llm.ai_api import AIEnvironment
-from synapse_memory.retrieval.index import select_related
+from synapse_memory.model import Entity
+from synapse_memory.recipes.pipeline import build_entity_index, entity_to_text
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     new_answer_reference,
     save_last_answer,
 )
+from synapse_memory.store import load_entity
 
 DEFAULT_PROJECTS_FOR_RESUME = 6
 DEFAULT_RESUME_MODEL = "sonnet"
@@ -46,8 +45,8 @@ class ResumeDraft:
     raw_text: str = ""
 
 
-def _company_search_query(company: CompanyCard) -> str:
-    """CompanyCard에서 매칭 query 문자열 추출."""
+def _company_search_query(company: Entity) -> str:
+    """Company entity에서 매칭 query 문자열 추출."""
     parts: list[str] = [company.display_name]
     for p in company.positions:
         parts.append(p.title)
@@ -61,16 +60,13 @@ def _company_search_query(company: CompanyCard) -> str:
     return " ".join(parts)
 
 
-def _build_resume_prompt(
-    company: CompanyCard,
-    matched: list[tuple[object, float]],
-) -> str:
-    """CompanyCard + 매칭 ProjectCard들로 AI provider prompt 빌드.
+def _build_resume_prompt(company: Entity, matched: list[tuple[object, float]]) -> str:
+    """Company entity + 매칭 Project entity들로 AI provider prompt 빌드.
 
     ``matched`` 요소는 ``.metadata``(card_id)·``.document``·``.id``를 노출하는 record
     (provider 선별 _CardMatch 또는 호환 객체). 거리는 provider 선별이라 의미 없음.
     """
-    company_block = company_card_to_text(company)
+    company_block = entity_to_text(company)
     project_blocks: list[str] = []
     for rec, _score in matched:
         meta = getattr(rec, "metadata", {}) or {}
@@ -80,7 +76,7 @@ def _build_resume_prompt(
 
     return (
         f"# 지원 회사\n{company_block}\n\n"
-        f"# 사용자 ProjectCard ({len(matched)}개)\n"
+        f"# 사용자 Project entity ({len(matched)}개)\n"
         + "\n\n".join(project_blocks)
         + "\n\n# 지시\n위 자료로 회사 맞춤 한국어 이력서를 작성하세요. "
         f"오늘 날짜: {datetime.date.today().isoformat()}."
@@ -100,19 +96,19 @@ def draft_resume(
     """회사 맞춤 이력서 자동 생성 → vault에 저장 (007-persona-recipes wrapper).
 
     내부적으로 ``recipes.pipeline.generate("resume", ...)`` 를 호출하여
-    Profile + locale (CompanyCard.resume_language → Profile.preferred_lang →
+    Profile + locale (Company.resume_language → Profile.preferred_lang →
     default) + domain (Profile.domain → tags → generic) 을 인식한다.
 
     외부 시그니처와 ``ResumeDraft`` 반환은 SC-005 회귀 가드로 보존.
 
     Raises:
-        FileNotFoundError: CompanyCard 없음.
+        FileNotFoundError: Company entity 없음.
         AIError: 호출 실패.
-        ValueError: 매칭 ProjectCard 0건.
+        ValueError: 매칭 Project entity 0건.
     """
     from synapse_memory.recipes import generate as recipes_generate
 
-    company = load_company_card(company_id, vault_path=vault_path)
+    company = load_entity("company", company_id, vault_path=vault_path)
 
     try:
         result = recipes_generate(
@@ -125,19 +121,19 @@ def draft_resume(
             company=company,
             disable_save=True,  # SC-005: wrapper 가 기존 filename rule 로 직접 저장
             top_k_override=top_k_projects,
-            require_matched=True,  # ProjectCard 0 건 → ValueError
+            require_matched=True,  # Project entity 0 건 → ValueError
         )
     except ValueError as exc:
         # 기존 message 호환 (SC-005)
         if "got 0" in str(exc):
             raise ValueError(
-                "매칭 ProjectCard 0건 — vault에 ProjectCard를 먼저 생성하세요"
+                "매칭 Project entity 0건 — vault에 Project entity를 먼저 생성하세요"
             ) from exc
         raise
 
     if not result.source_ids:
         raise ValueError(
-            "매칭 ProjectCard 0건 — vault에 ProjectCard를 먼저 생성하세요"
+            "매칭 Project entity 0건 — vault에 Project entity를 먼저 생성하세요"
         )
 
     # 기존 filename rule 유지 (SC-005): `Resume - {display_name} ({YYYY-MM}).md`
@@ -194,7 +190,7 @@ def what_did_i_think(
     by:
         ``"distance"`` (기본) — provider 선별 카드 + Claude 정리 답변.
         ``"time"`` — period_end desc 시간순 정렬 + 분기 그룹 (외부 LLM 미호출,
-        FR-A1 / specs/002-timeline-recall). CardIndex.meta 에서 타임라인 메타를 읽는다.
+        FR-A1 / specs/002-timeline-recall). EntityIndex.meta 에서 타임라인 메타를 읽는다.
     limit:
         ``by="time"`` 모드에서 출력 카드 최대 수 (기본 20).
     today:
@@ -207,7 +203,7 @@ def what_did_i_think(
     if hybrid and by == "time":
         raise ValueError("--timeline and --hybrid conflict — pick one.")
 
-    index = build_card_index(vault_path=vault_path)
+    index = build_entity_index(vault_path=vault_path)
 
     if by == "time":
         today_resolved = today or datetime.date.today()
@@ -220,7 +216,7 @@ def what_did_i_think(
         # 타임라인은 전체 카드를 시간 메타로 정렬 (provider 선별 불필요).
         cards = [
             _resolve_sort_ts(
-                dict(entry.meta, card_id=entry.card_id),
+                dict(entry.meta, card_id=entry.slug),
                 today_resolved,
                 distance=None,
                 document=entry.summary,
@@ -239,15 +235,7 @@ def what_did_i_think(
         )
         return WhatDidIThinkResult(topic=topic, answer=markdown, source_ids=source_ids)
 
-    # distance-mode → provider 선별 (0건이면 "자료 없음") → recipes.generate("recall")
-    selected = select_related(topic, index, max_pages=top_k) if index.entries else []
-    if not selected:
-        return WhatDidIThinkResult(
-            topic=topic,
-            answer="자료 없음 — vault에 관련 Card를 먼저 생성하세요 (`synapse-memory daily`)",
-            source_ids=[],
-        )
-
+    # distance-mode → recipes.generate("recall") 가 provider 선별과 0건 신호를 소유.
     from synapse_memory.recipes import generate as recipes_generate
 
     result = recipes_generate(
@@ -258,7 +246,14 @@ def what_did_i_think(
         model_override=model,
         top_k_override=top_k,
         disable_save=True,
+        return_empty_on_no_matches=True,
     )
+    if not result.source_ids:
+        return WhatDidIThinkResult(
+            topic=topic,
+            answer="자료 없음 — vault에 관련 Entity를 먼저 생성하세요 (`synapse-memory daily`)",
+            source_ids=[],
+        )
     return WhatDidIThinkResult(
         topic=topic,
         answer=result.answer_markdown,
@@ -317,30 +312,13 @@ def decide(
     외부 시그니처와 ``DecideResult`` 반환은 SC-005 회귀 가드로 보존.
 
     out-of-domain 가드 (020, distance 임계 0.6 폐기):
-    - provider 가 0건 선별 → "자료 불충분" 거부 응답. Profile/Card 인용을 위장한
-      generic 추천을 막는 신뢰 가드 (CardIndex + ``select_related``).
+    - provider 가 0건 선별 → "자료 불충분" 거부 응답. Profile/Entity 인용을 위장한
+      generic 추천을 막는 신뢰 가드.
     """
     if not situation.strip():
         raise ValueError("situation은 빈 문자열일 수 없음")
 
-    index = build_card_index(vault_path=vault_path)
-    selected = select_related(situation, index, max_pages=top_k) if index.entries else []
-
-    # Guard: provider 가 관련 카드를 0건 선별 → 신뢰 불가, 거부.
-    if not selected:
-        return DecideResult(
-            situation=situation,
-            answer=(
-                "관련 과거 자료 불충분 — vault에 비슷한 결정 노트/Card를 먼저 기록하거나, "
-                "`synapse-memory persona update-profile` 로 결정 패턴을 추출하세요. "
-                "현재 vault 자료로는 신뢰 가능한 답변 불가 — "
-                "Profile/Card 인용을 위장한 generic 추천을 막기 위해 거부합니다."
-            ),
-            profile_used=False,
-            source_ids=[],
-        )
-
-    # Guard 통과 → recipes pipeline 호출 (pipeline 이 다시 provider 선별 + 합성)
+    # recipes pipeline 이 provider 선별 + 0건 guard + 합성을 단일 경로로 처리.
     from synapse_memory.recipes import generate as recipes_generate
 
     result = recipes_generate(
@@ -351,7 +329,20 @@ def decide(
         model_override=model,
         top_k_override=top_k,
         disable_save=True,
+        return_empty_on_no_matches=True,
     )
+    if not result.source_ids:
+        return DecideResult(
+            situation=situation,
+            answer=(
+                "관련 과거 자료 불충분 — vault에 비슷한 결정 노트/Entity를 먼저 기록하거나, "
+                "`synapse-memory persona update-profile` 로 결정 패턴을 추출하세요. "
+                "현재 vault 자료로는 신뢰 가능한 답변 불가 — "
+                "Profile/Entity 인용을 위장한 generic 추천을 막기 위해 거부합니다."
+            ),
+            profile_used=False,
+            source_ids=[],
+        )
     return DecideResult(
         situation=situation,
         answer=result.answer_markdown,

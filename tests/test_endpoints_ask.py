@@ -1,6 +1,6 @@
 """ask endpoint 테스트 — provider 선별 + Claude 합성 mock (020 provider-only).
 
-벡터/임베딩 의존 제거. ``build_card_index``/``select_related``/``_load_card_text``/
+벡터/임베딩 의존 제거. ``build_entity_index``/``select_related``/``_load_entity_text``/
 ``ai_api.complete`` 를 monkeypatch 해 hermetic 하게 검증한다. 정확한 cosine 순위
 단언은 폐기 — "provider 선별 호출됨 + 합성 반환" 수준으로 본다.
 
@@ -16,9 +16,9 @@ from unittest.mock import patch
 import pytest
 
 import synapse_memory.endpoints.ask as ask_mod
-from synapse_memory.cards.card_index import CardEntry, CardIndex
 from synapse_memory.endpoints.ask import ask
 from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.recipes.pipeline import EntityEntry, EntityIndex
 from synapse_memory.storage.l0 import L0_ENV_VAR
 from synapse_memory.storage.last_response import load_last_answer
 
@@ -31,9 +31,9 @@ def _ai_env() -> ClaudeEnvironment:
     )
 
 
-def _entry(card_id: str, kind: str, title: str) -> CardEntry:
-    return CardEntry(
-        card_id=card_id,
+def _entry(card_id: str, kind: str, title: str) -> EntityEntry:
+    return EntityEntry(
+        slug=card_id,
         kind=kind,  # type: ignore[arg-type]
         title=title,
         summary=f"{title} 요약",
@@ -44,8 +44,8 @@ def _entry(card_id: str, kind: str, title: str) -> CardEntry:
     )
 
 
-def _index(*entries: CardEntry) -> CardIndex:
-    return CardIndex(entries=tuple(entries))
+def _index(*entries: EntityEntry) -> EntityIndex:
+    return EntityIndex(entries=tuple(entries))
 
 
 class TestAsk:
@@ -55,14 +55,14 @@ class TestAsk:
 
     def test_no_selection_returns_helpful_message(self) -> None:
         with patch.object(
-            ask_mod, "build_card_index", return_value=_index(_entry("x", "project", "X"))
+            ask_mod, "build_entity_index", return_value=_index(_entry("x", "project", "X"))
         ), patch.object(ask_mod, "select_related", return_value=[]):
             result = ask("질문", ai_env=_ai_env())
-        assert "Card" in result.answer
+        assert "Entity" in result.answer
         assert result.sources == []
 
     def test_empty_index_returns_helpful_message(self) -> None:
-        with patch.object(ask_mod, "build_card_index", return_value=_index()):
+        with patch.object(ask_mod, "build_entity_index", return_value=_index()):
             result = ask("질문", ai_env=_ai_env())
         assert result.sources == []
 
@@ -72,11 +72,11 @@ class TestAsk:
             _entry("danggeun", "company", "당근"),
         )
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=["dansim", "danggeun"]
         ), patch.object(
-            ask_mod, "_load_card_text", side_effect=lambda cid, *a, **k: f"# {cid}"
+            ask_mod, "_load_entity_text", side_effect=lambda cid, *a, **k: f"# {cid}"
         ), patch.object(
             ask_mod.ai_api,
             "complete",
@@ -95,11 +95,11 @@ class TestAsk:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
         index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=["dansim"]
         ), patch.object(
-            ask_mod, "_load_card_text", return_value="# 단심"
+            ask_mod, "_load_entity_text", return_value="# 단심"
         ), patch.object(
             ask_mod.ai_api, "complete", return_value="단심앱입니다 [dansim]."
         ):
@@ -116,11 +116,11 @@ class TestAsk:
         monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(tmp_path / "vault"))
         index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=["dansim"]
         ), patch.object(
-            ask_mod, "_load_card_text", return_value="# 단심"
+            ask_mod, "_load_entity_text", return_value="# 단심"
         ), patch.object(
             ask_mod.ai_api,
             "complete",
@@ -140,11 +140,11 @@ class TestAsk:
         monkeypatch.setenv("SYNAPSE_OBSIDIAN_VAULT", str(tmp_path / "vault"))
         index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=["dansim"]
         ), patch.object(
-            ask_mod, "_load_card_text", return_value="# 단심"
+            ask_mod, "_load_entity_text", return_value="# 단심"
         ), patch.object(
             ask_mod.ai_api, "complete", return_value="답변 본문 [dansim]."
         ):
@@ -158,11 +158,11 @@ class TestAsk:
     def test_strips_claude_meta_prefix(self) -> None:
         index = _index(_entry("dansim", "project", "단심"))
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=["dansim"]
         ), patch.object(
-            ask_mod, "_load_card_text", return_value="# 단심"
+            ask_mod, "_load_entity_text", return_value="# 단심"
         ), patch.object(
             ask_mod.ai_api,
             "complete",
@@ -175,18 +175,18 @@ class TestAsk:
     def test_where_filter_restricts_kinds(self) -> None:
         captured: dict[str, object] = {}
 
-        def _fake_build(**kwargs: object) -> CardIndex:
+        def _fake_build(**kwargs: object) -> EntityIndex:
             captured.update(kwargs)
             return _index()
 
-        with patch.object(ask_mod, "build_card_index", side_effect=_fake_build):
+        with patch.object(ask_mod, "build_entity_index", side_effect=_fake_build):
             ask("q", ai_env=_ai_env(), where={"source_kind": "card_project"})
         assert captured["kinds"] == ("project",)
 
     def test_top_k_passed_to_select(self) -> None:
         index = _index(_entry("x", "project", "X"))
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=[]
         ) as mock_select:
@@ -196,11 +196,11 @@ class TestAsk:
     def test_claude_receives_context(self) -> None:
         index = _index(_entry("x", "project", "X"))
         with patch.object(
-            ask_mod, "build_card_index", return_value=index
+            ask_mod, "build_entity_index", return_value=index
         ), patch.object(
             ask_mod, "select_related", return_value=["x"]
         ), patch.object(
-            ask_mod, "_load_card_text", return_value="# X 내용 풍부"
+            ask_mod, "_load_entity_text", return_value="# X 내용 풍부"
         ), patch.object(
             ask_mod.ai_api, "complete", return_value="답변"
         ) as mock_complete:

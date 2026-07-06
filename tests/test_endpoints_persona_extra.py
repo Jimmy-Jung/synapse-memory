@@ -1,7 +1,7 @@
 """persona what-did-i-think / decide 테스트 (020 provider-only).
 
-벡터/임베딩/hybrid 의존 제거. 실제 ProjectCard 를 vault 에 심고, persona 의
-``select_related`` (provider 선별) + pipeline 의 ``select_related``/``ai_api_complete`` 를
+벡터/임베딩/hybrid 의존 제거. 실제 ProjectCard 를 vault 에 심고, pipeline 의
+``select_related``/``ai_api_complete`` 를
 monkeypatch 한다. decide out-of-domain 가드는 distance 임계 → "provider 0건 선별 = 거부"
 로 변경됨.
 
@@ -16,7 +16,6 @@ from unittest.mock import patch
 
 import pytest
 
-import synapse_memory.endpoints.persona as me_mod
 from synapse_memory.cards.project import ProjectCard, save_project_card
 from synapse_memory.endpoints.persona import (
     WhatDidIThinkResult,
@@ -49,9 +48,7 @@ def _seed(vault: Path, *project_ids: str) -> None:
 class TestWhatDidIThink:
     def test_returns_answer_with_sources(self, tmp_path: Path) -> None:
         _seed(tmp_path, "dansim", "이력서-2026")
-        with patch.object(
-            me_mod, "select_related", return_value=["dansim", "이력서-2026"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related",
             return_value=["dansim", "이력서-2026"],
         ), patch(
@@ -66,14 +63,22 @@ class TestWhatDidIThink:
         assert "TCA" in result.answer
         assert set(result.source_ids) == {"dansim", "이력서-2026"}
 
+    def test_select_related_called_once(self, tmp_path: Path) -> None:
+        _seed(tmp_path, "x")
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ) as mock_select, patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete", return_value="답변 [x]."
+        ):
+            what_did_i_think("TCA", ai_env=_ai_env(), vault_path=tmp_path)
+        assert mock_select.call_count == 1
+
     def test_records_last_answer_reference(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
         _seed(tmp_path, "dansim")
-        with patch.object(
-            me_mod, "select_related", return_value=["dansim"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["dansim"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
@@ -88,9 +93,7 @@ class TestWhatDidIThink:
 
     def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
         _seed(tmp_path, "x")
-        with patch.object(
-            me_mod, "select_related", return_value=["x"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
@@ -105,7 +108,7 @@ class TestWhatDidIThink:
 
     def test_no_selection_returns_help(self, tmp_path: Path) -> None:
         _seed(tmp_path, "x")
-        with patch.object(me_mod, "select_related", return_value=[]):
+        with patch("synapse_memory.recipes.pipeline.select_related", return_value=[]):
             result = what_did_i_think("x", ai_env=_ai_env(), vault_path=tmp_path)
         assert "자료 없음" in result.answer
 
@@ -122,9 +125,7 @@ class TestWhatDidIThink:
 class TestDecide:
     def test_without_profile(self, tmp_path: Path) -> None:
         _seed(tmp_path, "x")
-        with patch.object(
-            me_mod, "select_related", return_value=["x"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
@@ -134,14 +135,22 @@ class TestDecide:
         assert "추천" in result.answer
         assert result.source_ids == ["x"]
 
+    def test_select_related_called_once(self, tmp_path: Path) -> None:
+        _seed(tmp_path, "x")
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
+        ) as mock_select, patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
+        ):
+            decide("어떤 회사 지원?", ai_env=_ai_env(), vault_path=tmp_path)
+        assert mock_select.call_count == 1
+
     def test_decide_records_last_answer_reference(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
         _seed(tmp_path, "x")
-        with patch.object(
-            me_mod, "select_related", return_value=["x"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"
@@ -155,9 +164,7 @@ class TestDecide:
 
     def test_strips_claude_meta_prefix(self, tmp_path: Path) -> None:
         _seed(tmp_path, "x")
-        with patch.object(
-            me_mod, "select_related", return_value=["x"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete",
@@ -180,9 +187,7 @@ class TestDecide:
             captured_prompt.append(prompt)
             return "추천"
 
-        with patch.object(
-            me_mod, "select_related", return_value=["x"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete", side_effect=fake_complete
@@ -200,7 +205,7 @@ class TestDecide:
     def test_guard_rejects_when_provider_selects_nothing(self, tmp_path: Path) -> None:
         """provider 0건 선별 → LLM 호출 안 함, 명시적 거부 응답."""
         _seed(tmp_path, "x")
-        with patch.object(me_mod, "select_related", return_value=[]), patch(
+        with patch("synapse_memory.recipes.pipeline.select_related", return_value=[]), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete"
         ) as mock_complete:
             result = decide("이직할까?", ai_env=_ai_env(), vault_path=tmp_path)
@@ -222,9 +227,7 @@ class TestDecide:
     def test_guard_passes_when_provider_selects(self, tmp_path: Path) -> None:
         """provider 가 1건 이상 선별 → 통과, LLM 호출됨."""
         _seed(tmp_path, "x")
-        with patch.object(
-            me_mod, "select_related", return_value=["x"]
-        ), patch(
+        with patch(
             "synapse_memory.recipes.pipeline.select_related", return_value=["x"]
         ), patch(
             "synapse_memory.recipes.pipeline.ai_api_complete", return_value="추천: A"

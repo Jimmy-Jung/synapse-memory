@@ -2,14 +2,14 @@
 
 흐름::
 
-    query → build_card_index → select_related(provider) → 선택 카드 full text →
+    query → build_entity_index → select_related(provider) → 선택 entity full text →
     AI provider (system: ASK_SYSTEM) → 자연어 답변 + 출처 인용
 
 원칙
 ----
 - **자료에 없는 정보는 추측 안 함** (system prompt + post-check)
-- 각 주장에 출처 인용 ``[card_id]``
-- 사용자 vault Card만 근거 — 외부 지식 사용 금지
+- 각 주장에 출처 인용 ``[source_id]``
+- 사용자 vault Entity만 근거 — 외부 지식 사용 금지
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -22,7 +22,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from synapse_memory.cards.card_index import CardKind, build_card_index
 from synapse_memory.cards.insight import (
     InsightCard,
     new_insight_id,
@@ -31,12 +30,14 @@ from synapse_memory.cards.insight import (
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
+from synapse_memory.recipes.pipeline import EntityKind, build_entity_index, entity_to_text
 from synapse_memory.retrieval.index import select_related
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     new_answer_reference,
     save_last_answer,
 )
+from synapse_memory.store import load_entity
 
 ASK_SYSTEM = """당신은 사용자의 개인 세컨드 브레인입니다.
 
@@ -71,50 +72,37 @@ class AskResult:
     saved_path: Path | None = None
 
 
-# where=kind 필터 → CardIndex kind 매핑
-_SOURCE_KIND_TO_CARD_KIND: dict[str, CardKind] = {
+# where=kind 필터 → Entity type 매핑
+_SOURCE_KIND_TO_ENTITY_KIND: dict[str, EntityKind] = {
     "card_project": "project",
     "card_company": "company",
     "card_insight": "insight",
 }
 
 
-def _kinds_from_where(where: dict[str, object] | None) -> tuple[CardKind, ...]:
-    """``where={"source_kind": "card_project"}`` → CardIndex kinds. 미지정이면 전체."""
+def _kinds_from_where(where: dict[str, object] | None) -> tuple[EntityKind, ...]:
+    """``where={"source_kind": "card_project"}`` → Entity types. 미지정이면 전체."""
     if where:
         source_kind = where.get("source_kind")
-        if isinstance(source_kind, str) and source_kind in _SOURCE_KIND_TO_CARD_KIND:
-            return (_SOURCE_KIND_TO_CARD_KIND[source_kind],)
+        if isinstance(source_kind, str) and source_kind in _SOURCE_KIND_TO_ENTITY_KIND:
+            return (_SOURCE_KIND_TO_ENTITY_KIND[source_kind],)
     return ("project", "company", "insight")
 
 
-def _load_card_text(
+def _load_entity_text(
     card_id: str,
-    kind: CardKind,
+    kind: EntityKind,
     vault_path: Path | None,
     *,
     created: str = "",
 ) -> str:
-    """선별된 card_id의 full text 로드. 실패 시 빈 문자열."""
-    from synapse_memory.cards.card_text import (
-        company_card_to_text,
-        insight_card_to_text,
-        project_card_to_text,
-    )
-    from synapse_memory.cards.company import load_company_card
-    from synapse_memory.cards.insight import load_insight_card
-    from synapse_memory.cards.project import load_project_card
-
+    """선별된 Entity의 full text 로드. 실패 시 빈 문자열."""
+    when = None
+    if created:
+        with contextlib.suppress(ValueError):
+            when = datetime.fromisoformat(created[:10]).date()
     try:
-        if kind == "project":
-            return project_card_to_text(load_project_card(card_id, vault_path=vault_path))
-        if kind == "company":
-            return company_card_to_text(load_company_card(card_id, vault_path=vault_path))
-        if not created:
-            return ""
-        return insight_card_to_text(
-            load_insight_card(card_id, created, vault_path=vault_path)
-        )
+        return entity_to_text(load_entity(kind, card_id, vault_path=vault_path, when=when))
     except (FileNotFoundError, ValueError, OSError):
         return ""
 
@@ -150,13 +138,13 @@ def ask(
         raise ValueError("query는 빈 문자열일 수 없음")
 
     kinds = _kinds_from_where(where)
-    index = build_card_index(vault_path=vault_path, kinds=kinds)
+    index = build_entity_index(vault_path=vault_path, kinds=kinds)
     selected = select_related(query, index, max_pages=top_k) if index.entries else []
 
     if not selected:
         return AskResult(
             query=query,
-            answer="자료 없음 — vault에 관련 Card를 먼저 생성하세요 (`synapse-memory daily`).",
+            answer="자료 없음 — vault에 관련 Entity를 먼저 생성하세요 (`synapse-memory daily`).",
             sources=[],
         )
 
@@ -167,7 +155,7 @@ def ask(
         entry = by_id.get(card_id)
         if entry is None:
             continue
-        text = _load_card_text(
+        text = _load_entity_text(
             card_id,
             entry.kind,
             vault_path,

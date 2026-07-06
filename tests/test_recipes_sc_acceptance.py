@@ -181,13 +181,13 @@ def test_sc_008_timeline_does_not_call_recipe_pipeline() -> None:
     상세 byte-identical 검증은 test_endpoints_persona_timeline.py 가 담당.
     """
     import synapse_memory.endpoints.persona as me_mod
-    from synapse_memory.cards.card_index import CardIndex
     from synapse_memory.endpoints.persona import what_did_i_think
+    from synapse_memory.recipes.pipeline import EntityIndex
 
     with mock.patch(
         "synapse_memory.recipes.pipeline.ai_api_complete"
     ) as mock_pipe, mock.patch.object(
-        me_mod, "build_card_index", return_value=CardIndex(entries=())
+        me_mod, "build_entity_index", return_value=EntityIndex(entries=())
     ):
         what_did_i_think("x", by="time")
     assert mock_pipe.call_count == 0
