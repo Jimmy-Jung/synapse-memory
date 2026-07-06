@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from synapse_memory.cli.common import OK, api
 
@@ -18,9 +19,11 @@ def cmd_wiki_ask(args: argparse.Namespace) -> int:
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
-    result = api().run_lint()
-    print(f"lint: -{result.dead_links_removed} dead links")
-    return 0
+    vault = getattr(args, "vault", None)
+    kwargs = {"vault_path": Path(vault)} if vault else {}
+    result = api().run_lint(**kwargs)
+    print(result.render_plain())
+    return 1 if result.has_violations else 0
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -32,6 +35,7 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     ask.add_argument("--save", action="store_true", help="답변을 insight 페이지로 환원")
     ask.set_defaults(func=cmd_wiki_ask)
 
-    lint = subparsers.add_parser("lint", help="구조 자동수정(역링크/죽은링크)")
+    lint = subparsers.add_parser("lint", help="schema.yaml 검증 + 죽은 링크 자동수정")
     lint.add_argument("--now", action="store_true", help="즉시 1회 실행")
+    lint.add_argument("--vault", help="검증할 vault 경로")
     lint.set_defaults(func=cmd_lint)

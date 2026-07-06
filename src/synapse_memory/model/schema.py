@@ -71,6 +71,28 @@ def uses_year_month_folder(entity_type: str) -> bool:
     return bool(types[entity_type].get("year_month"))
 
 
+def render_schema_guidance() -> str:
+    """Render agent-facing schema rules from schema.yaml."""
+    schema = load_schema()
+    lines = [
+        "schema.yaml 기준 검증 규칙:",
+        "- 모든 페이지 frontmatter에는 type, slug, title, status가 필요합니다.",
+        "- slug는 파일명(.md 제외)과 같아야 합니다.",
+        "- type별 폴더와 status enum은 아래 선언을 따릅니다.",
+    ]
+    for entity_type, spec in schema["types"].items():
+        statuses = ", ".join(spec.get("statuses") or ())
+        folder = spec.get("folder")
+        year_month = " (YYYY/MM 하위 폴더)" if spec.get("year_month") else ""
+        lines.append(f"  - {entity_type}: {folder}{year_month}; status={statuses}")
+    lines.append("- typed relation은 domain/range를 지켜야 합니다.")
+    for relation, spec in schema["relations"].items():
+        domain = ", ".join(spec.get("domain") or ())
+        range_ = ", ".join(spec.get("range") or ())
+        lines.append(f"  - {relation}: domain={domain}; range={range_}")
+    return "\n".join(lines)
+
+
 def _validate_schema(schema: dict[str, Any]) -> None:
     types = schema.get("types")
     relations = schema.get("relations")

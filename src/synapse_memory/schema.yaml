@@ -150,7 +150,7 @@ types:
 relations:
   uses:
     domain: [project, company, concept, insight, log, profile]
-    range: [project, company, concept, insight, log, profile]
+    range: [concept]
     cardinality: many
   part_of:
     domain: [project, company, concept, insight, log, profile]
