@@ -1,6 +1,13 @@
 """v2 LLM-maintained wiki 페이지 계층."""
 from __future__ import annotations
 
+from synapse_memory.store import (
+    list_pages,
+    load_page,
+    page_dir,
+    page_path,
+    save_page,
+)
 from synapse_memory.wiki.backfill import BackfillResult, run_backfill
 from synapse_memory.wiki.daemon import CycleOutcome, run_watch_cycle
 from synapse_memory.wiki.ingest import IngestResult, ingest_source
@@ -11,10 +18,10 @@ from synapse_memory.wiki.launchd import (
     plist_path,
     uninstall_watch,
 )
+from synapse_memory.wiki.links import extract_wikilinks, with_related
 from synapse_memory.wiki.lint import (
     LintReport,
     apply_structural_fixes,
-    find_broken_backlinks,
     find_dead_links,
     run_lint,
 )
@@ -22,16 +29,9 @@ from synapse_memory.wiki.lock import FileLock, LockHeldError, default_lock_path
 from synapse_memory.wiki.page import (
     VALID_TYPES,
     WikiPage,
-    extract_wikilinks,
-    list_pages,
-    load_page,
-    page_dir,
-    page_path,
     parse_page,
-    save_page,
     serialize_page,
     slugify,
-    with_related,
 )
 from synapse_memory.wiki.query import WikiAnswer, ask_wiki
 
@@ -51,7 +51,6 @@ __all__ = [
     "build_plist",
     "default_lock_path",
     "extract_wikilinks",
-    "find_broken_backlinks",
     "find_dead_links",
     "ingest_source",
     "install_watch",

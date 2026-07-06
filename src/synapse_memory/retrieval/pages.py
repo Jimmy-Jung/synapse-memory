@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from synapse_memory.wiki.page import VALID_TYPES, WikiPage, list_pages
+from synapse_memory.store import list_pages
+from synapse_memory.wiki.page import VALID_TYPES, WikiPage
 
 
 def _all_pages(vault_path: Path | None = None) -> list[WikiPage]:
@@ -16,4 +17,3 @@ def _all_pages(vault_path: Path | None = None) -> list[WikiPage]:
     for page_type in VALID_TYPES:
         pages.extend(list_pages(page_type, vault_path=vault_path))
     return pages
-

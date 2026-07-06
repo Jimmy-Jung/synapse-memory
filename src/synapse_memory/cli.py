@@ -879,10 +879,7 @@ def cmd_wiki_ask(args: argparse.Namespace) -> int:
 def cmd_lint(args: argparse.Namespace) -> int:
     """구조 자동 수정."""
     r = run_lint()
-    print(
-        f"lint: +{r.backlinks_added} backlinks, "
-        f"-{r.dead_links_removed} dead links"
-    )
+    print(f"lint: -{r.dead_links_removed} dead links")
     return 0
 
 

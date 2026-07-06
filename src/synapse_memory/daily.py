@@ -703,10 +703,7 @@ def _lint_action() -> str:
     from synapse_memory.wiki.lint import run_lint
 
     report = run_lint()
-    return (
-        f"backlinks+={report.backlinks_added} "
-        f"dead_links-={report.dead_links_removed}"
-    )
+    return f"dead_links-={report.dead_links_removed}"
 
 
 def write_daily_report(

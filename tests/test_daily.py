@@ -534,7 +534,7 @@ class TestQuickMode:
         def fake_run_lint() -> LintReport:
             nonlocal called
             called = True
-            return LintReport(backlinks_added=2, dead_links_removed=1)
+            return LintReport(dead_links_removed=1)
 
         monkeypatch.setattr("synapse_memory.wiki.lint.run_lint", fake_run_lint)
 
@@ -545,7 +545,7 @@ class TestQuickMode:
 
         assert called is True
         assert result.steps[-1].name == "lint"
-        assert result.steps[-1].summary == "backlinks+=2 dead_links-=1"
+        assert result.steps[-1].summary == "dead_links-=1"
 
     def test_quick_negative_days_rejected(self) -> None:
         with pytest.raises(ValueError):
