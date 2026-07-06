@@ -280,7 +280,7 @@ def _record_claude_cost(
         input_tokens = estimate_tokens(prompt)
     if output_tokens == 0 and result_text:
         output_tokens = estimate_tokens(result_text)
-    provider_usd = _provider_usd(envelope)
+    provider_usd = _usd_from_envelope(envelope)
     priced = price_usage(
         provider="claude",
         model=model,
@@ -349,7 +349,7 @@ def _first_int(*sources: dict[str, Any], keys: tuple[str, ...]) -> int:
     return 0
 
 
-def _provider_usd(envelope: dict[str, Any]) -> float | None:
+def _usd_from_envelope(envelope: dict[str, Any]) -> float | None:
     for key in ("total_cost_usd", "cost_usd", "usd"):
         value = envelope.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):

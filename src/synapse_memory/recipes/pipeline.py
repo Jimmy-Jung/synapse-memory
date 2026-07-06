@@ -41,13 +41,13 @@ from synapse_memory.recipes.recipe import (
     RecipeRagMode,
 )
 from synapse_memory.recipes.registry import RecipeRegistry
+from synapse_memory.retrieval.index import select_related
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     LastAnswerReference,
     new_answer_reference,
     save_last_answer,
 )
-from synapse_memory.wiki.llm_retrieval import select_related
 
 _PROFILE_FILES = ("Profile.md", "DecisionPatterns.md")
 _BUILTIN_DIR_DEFAULT = Path(__file__).resolve().parent / "builtin"

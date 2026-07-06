@@ -3,7 +3,7 @@
 
 로컬 임베딩/벡터스토어를 provider LLM-as-retriever로 대체하기 위한 토대.
 Project/Company/Insight 카드를 열거해 id/title/summary + 타임라인 메타를 담는다.
-``wiki.llm_retrieval.select_related``와 호환되도록 ``entries``/``render()``/``slugs``를
+``retrieval.index.select_related``와 호환되도록 ``entries``/``render()``/``slugs``를
 노출 — 같은 provider 선별 헬퍼를 카드에도 재사용한다.
 
 저자: Synapse Memory Maintainers
@@ -40,7 +40,7 @@ class CardIndex:
     """프롬프트에 통째로 들어가는 카드 인덱스. select_related 호환.
 
     ``slugs``/``entries``/``render()``를 노출하므로
-    ``wiki.llm_retrieval.select_related(query, card_index, ...)``를 그대로 쓸 수 있다.
+    ``retrieval.index.select_related(query, card_index, ...)``를 그대로 쓸 수 있다.
     """
 
     entries: tuple[CardEntry, ...]

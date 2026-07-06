@@ -25,6 +25,9 @@ from datetime import date
 from pathlib import Path
 
 from synapse_memory.llm import ai_api
+from synapse_memory.retrieval.page_index import build_page_index
+from synapse_memory.retrieval.pages import _all_pages
+from synapse_memory.retrieval.semantic import retrieve_items
 from synapse_memory.wiki.page import (
     WikiPage,
     extract_wikilinks,
@@ -68,17 +71,14 @@ def _retrieve_wiki(
     로컬 임베딩/벡터스토어 제거 — PageIndex를 provider에 넘겨 관련 slug를
     고른 뒤 해당 페이지를 반환한다. 빈 vault/오류 시 ``[]`` (graceful).
     """
-    from synapse_memory.wiki.llm_retrieval import select_related
-    from synapse_memory.wiki.page_index import build_page_index
-    from synapse_memory.wiki.retrieval import _all_pages
-
     all_pages = _all_pages(vault_path)
-    if not all_pages:
-        return []
-    index = build_page_index(all_pages)
-    by_slug = {p.slug: p for p in all_pages}
-    slugs = select_related(query, index, max_pages=top_k)
-    return [by_slug[s] for s in slugs if s in by_slug]
+    return retrieve_items(
+        query,
+        all_pages,
+        build_index=build_page_index,
+        item_id=lambda page: page.slug,
+        top_k=top_k,
+    )
 
 
 def _build_context(pages: list[WikiPage]) -> str:

@@ -14,12 +14,11 @@ import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
+from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.wiki.log import append_log
 from synapse_memory.wiki.page import (
-    VALID_TYPES,
     WikiPage,
     extract_wikilinks,
-    list_pages,
     save_page,
     with_related,
 )
@@ -90,14 +89,6 @@ class LintReport:
 
     backlinks_added: int = 0
     dead_links_removed: int = 0
-
-
-def _all_pages(*, vault_path: Path | None = None) -> list[WikiPage]:
-    """전 타입 페이지 수집 (slug 알파벳순 — list_pages 보장)."""
-    pages: list[WikiPage] = []
-    for page_type in VALID_TYPES:
-        pages.extend(list_pages(page_type, vault_path=vault_path))
-    return pages
 
 
 def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:

@@ -12,8 +12,9 @@ from dataclasses import dataclass, field, replace
 from itertools import islice
 from pathlib import Path
 
-from synapse_memory.config import get_config
 from synapse_memory.llm import ai_api
+from synapse_memory.retrieval.pages import _all_pages
+from synapse_memory.retrieval.provider import _provider
 from synapse_memory.wiki.apply import apply_ops
 from synapse_memory.wiki.integration import (
     INTEGRATION_SCHEMA,
@@ -24,7 +25,7 @@ from synapse_memory.wiki.integration import (
 )
 from synapse_memory.wiki.log import append_log, summarize_provider_error
 from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw, source_date_from_ref
-from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
+from synapse_memory.wiki.retrieval import find_related_pages
 from synapse_memory.wiki.watermark import (
     load_offsets,
     load_watermark,
@@ -166,16 +167,6 @@ def _advance_watermark(current: str | None, candidate: str) -> str:
     return current
 
 
-def _configured_provider() -> ai_api.AIProvider | None:
-    """config.ai_provider가 auto가 아니면 ingest provider로 명시한다."""
-    provider = get_config().ai_provider
-    if provider == "claude":
-        return "claude"
-    if provider == "codex":
-        return "codex"
-    return None
-
-
 def ingest_source(
     source: str,
     *,
@@ -262,7 +253,7 @@ def ingest_source(
                 payload = ai_api.complete_structured(
                     prompt, system=INTEGRATION_SYSTEM, model=model,
                     json_schema=INTEGRATION_SCHEMA, env=ai_env,
-                    provider=_configured_provider() if ai_env is None else None,
+                    provider=_provider() if ai_env is None else None,
                     timeout=INTEGRATION_TIMEOUT_SECONDS,
                 )
                 ops = _stamp_sources(parse_ops(payload), chunk.ref)

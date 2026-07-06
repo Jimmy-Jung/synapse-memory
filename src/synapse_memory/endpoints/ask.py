@@ -31,12 +31,12 @@ from synapse_memory.cards.insight import (
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment
+from synapse_memory.retrieval.index import select_related
 from synapse_memory.storage.last_response import (
     AnswerCitation,
     new_answer_reference,
     save_last_answer,
 )
-from synapse_memory.wiki.llm_retrieval import select_related
 
 ASK_SYSTEM = """당신은 사용자의 개인 세컨드 브레인입니다.
 
