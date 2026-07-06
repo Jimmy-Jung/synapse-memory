@@ -405,24 +405,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"⚠ wiki 유지 데몬 진단 실패: {exc}")
 
-    # Dataview 플러그인 점검 — MOC 동적 인덱스 의존성
-    try:
-        from synapse_memory.config import load_config
-        from synapse_memory.doctor import diagnose_dataview_plugin
-
-        dv_cfg = load_config()
-        if dv_cfg.vault is None:
-            raise ValueError("config.yaml vault 미설정")
-        dv_result = diagnose_dataview_plugin(dv_cfg.vault)
-        if dv_result.status == DiagnosticStatus.OK:
-            print(f"{OK} {dv_result.message}")
-        elif dv_result.status == DiagnosticStatus.WARN:
-            print(f"⚠ {dv_result.message}")
-        else:
-            print(f"{FAIL} {dv_result.message}")
-    except Exception as exc:
-        print(f"⚠ Dataview 플러그인 진단 실패: {exc}")
-
     # Claude Code/Codex SessionStart hook 설치 상태
     try:
         from synapse_memory.hooks.install import diagnose_session_hook
@@ -857,11 +839,11 @@ def cmd_wiki_ask(args: argparse.Namespace) -> int:
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
-    """구조 자동 수정 + 검토 큐 + index.md 갱신."""
+    """구조 자동 수정."""
     r = run_lint()
     print(
         f"lint: +{r.backlinks_added} backlinks, "
-        f"-{r.dead_links_removed} dead links, {len(r.review_items)} review items"
+        f"-{r.dead_links_removed} dead links"
     )
     return 0
 
@@ -2531,29 +2513,6 @@ def _refresh_hook_sidecars() -> None:
         _render_hook_settings_cache(max_inject_bytes=max_inject_bytes)
 
 
-def cmd_moc(args: argparse.Namespace) -> int:
-    """vault 90_System/AI/MOC.md 생성·갱신 (Obsidian Graph 진입점)."""
-    from synapse_memory.collectors.obsidian import get_vault_path
-    from synapse_memory.moc import write_or_update_moc
-
-    vault = (
-        Path(args.vault).expanduser().resolve()
-        if args.vault
-        else get_vault_path()
-    )
-    if not vault.is_dir():
-        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
-        return 2
-
-    path = write_or_update_moc(vault)
-    print(f"{OK} MOC 갱신: {path}")
-    print(
-        "  Dataview 미설치 시 동적 인덱스가 동작하지 않습니다. "
-        "`synapse-memory doctor` 로 점검하세요."
-    )
-    return 0
-
-
 def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
     """vault MemoryInbox의 status=pending_review 후보 파일 목록 출력."""
     import json as _json
@@ -3217,17 +3176,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_hook_run.set_defaults(func=cmd_hook)
 
-    p_moc = sub.add_parser(
-        "moc",
-        help="vault 90_System/AI/MOC.md 생성·갱신 (Obsidian Graph 진입점)",
-    )
-    p_moc.add_argument(
-        "--vault",
-        default=None,
-        help="vault 경로 override (기본: config)",
-    )
-    p_moc.set_defaults(func=cmd_moc)
-
     p_list_pending = sub.add_parser(
         "list-pending-profiles",
         help="vault MemoryInbox의 status=pending_review 후보 파일 목록",
@@ -3446,9 +3394,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_wiki_ask.set_defaults(func=cmd_wiki_ask)
 
-    p_lint = sub.add_parser(
-        "lint", help="구조 자동수정(역링크/죽은링크) + 검토 큐 + index.md"
-    )
+    p_lint = sub.add_parser("lint", help="구조 자동수정(역링크/죽은링크)")
     p_lint.add_argument("--now", action="store_true", help="즉시 1회 실행")
     p_lint.set_defaults(func=cmd_lint)
 

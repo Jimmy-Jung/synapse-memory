@@ -25,7 +25,6 @@ from synapse_memory.wiki.integration import (
 from synapse_memory.wiki.log import append_log, summarize_provider_error
 from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw, source_date_from_ref
 from synapse_memory.wiki.retrieval import _all_pages, find_related_pages
-from synapse_memory.wiki.schema import ensure_schema
 from synapse_memory.wiki.watermark import (
     load_offsets,
     load_watermark,
@@ -213,10 +212,6 @@ def ingest_source(
     docs = islice(docs_all, limit) if limit is not None else docs_all
 
     result = IngestResult(source=source)
-    # SCHEMA.md(wiki의 CLAUDE.md) 보장 — 어떤 에이전트든 wiki 유지 규약을 읽을 수
-    # 있도록. ensure_schema는 idempotent(존재 시 보존). dry_run이면 디스크 미변경.
-    if not dry_run:
-        ensure_schema(vault_path=vault_path)
     # 020: 관련 페이지 선별용 전체 페이지를 사이클 1회 로드 — doc마다 재읽기 제거.
     all_pages = _all_pages(vault_path)
     max_mtime = since

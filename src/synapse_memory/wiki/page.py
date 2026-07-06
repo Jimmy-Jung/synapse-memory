@@ -78,8 +78,6 @@ def _frontmatter_dict(page: WikiPage) -> dict[str, Any]:
     if page.updated:
         d["updated"] = page.updated
     d["status"] = page.status
-    # tags는 Obsidian 필터용 자동 생성 필드 — WikiPage 모델엔 없고 parse 시 무시됨(write-only).
-    d["tags"] = ["node/wiki", f"node/{page.type}"]
     return d
 
 

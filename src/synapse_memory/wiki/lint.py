@@ -1,8 +1,7 @@
-"""wiki lint — 구조 자동 수정 + 사람 검토 큐 (전부 순수 Python, LLM 불필요).
+"""wiki lint — 구조 자동 수정 (전부 순수 Python, LLM 불필요).
 
 R3 원칙: "구조는 자동, 진실은 사람".
-- 구조 결함(끊긴 역링크, 죽은 링크, 고아)은 자동 수정.
-- 진위 판단이 필요한 것(낡음 의심, 병합 후보)은 index.md 검토 큐에 나열만.
+- 구조 결함(끊긴 역링크, 죽은 링크)은 자동 수정.
 
 분석기(find_*)는 list[WikiPage] 입력의 순수 함수 — 결정적, 디스크 불필요.
 
@@ -12,12 +11,9 @@ R3 원칙: "구조는 자동, 진실은 사람".
 from __future__ import annotations
 
 import dataclasses
-import difflib
-from dataclasses import dataclass, field
-from datetime import date, timedelta
+from dataclasses import dataclass
 from pathlib import Path
 
-from synapse_memory.wiki.index_md import ReviewItem, write_index
 from synapse_memory.wiki.log import append_log
 from synapse_memory.wiki.page import (
     VALID_TYPES,
@@ -83,25 +79,6 @@ def find_dead_links(pages: list[WikiPage]) -> list[tuple[str, str]]:
     return dead
 
 
-def find_orphans(pages: list[WikiPage]) -> list[str]:
-    """들어오는 링크 0 & 나가는 링크 0인 완전 고립 slug."""
-    existing = {p.slug for p in pages}
-    has_outbound: set[str] = set()
-    has_inbound: set[str] = set()
-    for page in pages:
-        targets = _targets(page)
-        if targets:
-            has_outbound.add(page.slug)
-        for target in targets:
-            if target in existing:
-                has_inbound.add(target)
-    return [
-        p.slug
-        for p in pages
-        if p.slug not in has_outbound and p.slug not in has_inbound
-    ]
-
-
 # ---------------------------------------------------------------------------
 # 구조 자동 수정
 # ---------------------------------------------------------------------------
@@ -113,8 +90,6 @@ class LintReport:
 
     backlinks_added: int = 0
     dead_links_removed: int = 0
-    orphans: list[str] = field(default_factory=list)
-    review_items: list[ReviewItem] = field(default_factory=list)
 
 
 def _all_pages(*, vault_path: Path | None = None) -> list[WikiPage]:
@@ -152,6 +127,7 @@ def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
             report.dead_links_removed += removed
 
     # ② 누락 역링크 보강 (죽은 링크 제거 후 재수집)
+    # redesign: Step 6 재검토
     pages = _all_pages(vault_path=vault_path)
     by_slug = {p.slug: p for p in pages}
     broken = find_broken_backlinks(pages)
@@ -169,61 +145,6 @@ def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
 
 
 # ---------------------------------------------------------------------------
-# 검토 큐 휴리스틱 (자동 수정 안 함 — index.md에 나열만)
-# ---------------------------------------------------------------------------
-
-
-def stale_candidates(
-    pages: list[WikiPage],
-    *,
-    today: str | None = None,
-    max_age_days: int = 180,
-) -> list[str]:
-    """낡음 의심 페이지 slug. type=="insight"는 skip.
-
-    updated 없으면 flag; 있으면 updated < today - max_age_days면 flag.
-    today 미지정 → 오늘.
-    """
-    today_date = date.fromisoformat(today) if today else date.today()
-    cutoff = today_date - timedelta(days=max_age_days)
-    flagged: list[str] = []
-    for page in pages:
-        if page.type == "insight":
-            continue
-        if not page.updated:
-            flagged.append(page.slug)
-            continue
-        try:
-            updated_date = date.fromisoformat(page.updated)
-        except ValueError:
-            flagged.append(page.slug)
-            continue
-        if updated_date < cutoff:
-            flagged.append(page.slug)
-    return flagged
-
-
-def merge_candidates(
-    pages: list[WikiPage],
-    *,
-    threshold: float = 0.9,
-) -> list[tuple[str, str]]:
-    """같은 type 페이지쌍 중 제목 유사도 >= threshold인 (slug1, slug2)."""
-    pairs: list[tuple[str, str]] = []
-    for i in range(len(pages)):
-        for j in range(i + 1, len(pages)):
-            p1, p2 = pages[i], pages[j]
-            if p1.type != p2.type:
-                continue
-            ratio = difflib.SequenceMatcher(
-                None, p1.title.lower(), p2.title.lower()
-            ).ratio()
-            if ratio >= threshold:
-                pairs.append((p1.slug, p2.slug))
-    return pairs
-
-
-# ---------------------------------------------------------------------------
 # 전체 lint 오케스트레이션
 # ---------------------------------------------------------------------------
 
@@ -233,27 +154,12 @@ def run_lint(
     vault_path: Path | None = None,
     today: str | None = None,
 ) -> LintReport:
-    """구조 자동 수정 → 검토 큐 산출 → index.md 갱신 → log 기록."""
+    """구조 자동 수정 → log 기록."""
+    _ = today
     report = apply_structural_fixes(vault_path=vault_path)
 
-    pages = _all_pages(vault_path=vault_path)
-    orphans = find_orphans(pages)
-    stale = stale_candidates(pages, today=today)
-    merges = merge_candidates(pages)
-    review_items: list[ReviewItem] = []
-    review_items.extend({"kind": "stale", "slug": s} for s in stale)
-    review_items.extend({"kind": "merge", "slug": a, "other": b} for a, b in merges)
-    report.orphans = orphans
-    report.review_items = review_items
-
-    write_index(
-        pages,
-        orphans=orphans,
-        review_items=review_items,
-        vault_path=vault_path,
-    )
     append_log(
         f"lint: +{report.backlinks_added} backlinks, "
-        f"-{report.dead_links_removed} dead, {len(review_items)} review",
+        f"-{report.dead_links_removed} dead",
     )
     return report

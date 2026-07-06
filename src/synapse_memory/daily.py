@@ -756,9 +756,7 @@ def _lint_action() -> str:
     report = run_lint()
     return (
         f"backlinks+={report.backlinks_added} "
-        f"dead_links-={report.dead_links_removed} "
-        f"orphans={len(report.orphans)} "
-        f"review={len(report.review_items)}"
+        f"dead_links-={report.dead_links_removed}"
     )
 
 
@@ -806,8 +804,6 @@ def render_daily_report(
         f"new_facts: {_extract_first_int(result.steps, 'fact=')}",
         f"est_usd: {est_usd:.4f}",
         f"resume_from: {result.resume_from or ''}",
-        "tags:",
-        "  - node/daily-report",
         "---",
         "",
         f"# Daily Report — {date}",

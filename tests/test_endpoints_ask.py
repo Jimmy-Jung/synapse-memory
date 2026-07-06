@@ -130,7 +130,6 @@ class TestAsk:
 
         assert result.saved_path is not None
         text = result.saved_path.read_text(encoding="utf-8")
-        assert "node/insight" in text
         assert "010-1234-5678" in text
         assert "related:" in text
         assert "dansim" in text

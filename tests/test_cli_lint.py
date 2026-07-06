@@ -4,13 +4,12 @@ import synapse_memory.cli as cli
 from synapse_memory.wiki.page import WikiPage, load_page, save_page
 
 
-def test_run_lint_fixes_and_writes_index(tmp_path):
+def test_run_lint_fixes_links(tmp_path):
     save_page(WikiPage(type="concept", slug="a", title="A", related=("[[b]]",)), vault_path=tmp_path)
     save_page(WikiPage(type="concept", slug="b", title="B"), vault_path=tmp_path)
     from synapse_memory.wiki.lint import run_lint
     report = run_lint(vault_path=tmp_path, today="2026-06-15")
     assert report.backlinks_added >= 1
-    assert (tmp_path / "index.md").exists()
     assert "[[a]]" in load_page("concept", "b", vault_path=tmp_path).related
 
 

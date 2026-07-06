@@ -537,9 +537,7 @@ class TestQuickMode:
 
         assert called is True
         assert result.steps[-1].name == "lint"
-        assert result.steps[-1].summary == (
-            "backlinks+=2 dead_links-=1 orphans=0 review=0"
-        )
+        assert result.steps[-1].summary == "backlinks+=2 dead_links-=1"
 
     def test_quick_negative_days_rejected(self) -> None:
         with pytest.raises(ValueError):

@@ -160,7 +160,6 @@ def _frontmatter_dict(card: InsightCard) -> dict[str, Any]:
         "created": card.created,
         "status": card.status,
         "confidence": card.confidence,
-        "tags": ["node/insight"],
     }
     if card.related:
         d["related"] = card.related

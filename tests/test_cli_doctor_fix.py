@@ -72,10 +72,6 @@ def test_cmd_doctor_reports_hook_install_status(
     monkeypatch.setattr(cli_mod, "diagnose_wiki_pages", lambda _vault: ok_diag)
     monkeypatch.setattr(cli_mod, "diagnose_wiki_maintenance", lambda: ok_diag)
     monkeypatch.setattr(
-        "synapse_memory.doctor.diagnose_dataview_plugin",
-        lambda _vault: ok_diag,
-    )
-    monkeypatch.setattr(
         cli_mod,
         "diagnose_vault_config_consistency",
         lambda _vault: ok_diag,
@@ -122,10 +118,6 @@ def test_cmd_doctor_reports_hook_not_ready_status(
     )
     monkeypatch.setattr(cli_mod, "diagnose_wiki_pages", lambda _vault: ok_diag)
     monkeypatch.setattr(cli_mod, "diagnose_wiki_maintenance", lambda: ok_diag)
-    monkeypatch.setattr(
-        "synapse_memory.doctor.diagnose_dataview_plugin",
-        lambda _vault: ok_diag,
-    )
     monkeypatch.setattr(
         cli_mod,
         "diagnose_vault_config_consistency",
