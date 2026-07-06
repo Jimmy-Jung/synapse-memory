@@ -50,15 +50,14 @@ _SELECT_SCHEMA = {
 
 
 def _relevance_model() -> str | None:
-    """models.<provider>.relevance — 싼 티어. 해석 실패 시 None(provider default)."""
+    """provider별 relevance 모델. 해석 실패 시 None(provider default)."""
     try:
         from synapse_memory.config import get_config
 
         cfg = get_config()
         if cfg.ai_provider == "auto":
             return None
-        provider_models = getattr(cfg.models, cfg.ai_provider, None)
-        return getattr(provider_models, "relevance", None) if provider_models else None
+        return cfg.models.model_for_task(cfg.ai_provider, "relevance")
     except Exception:
         return None
 
@@ -108,4 +107,3 @@ def select_related(
         if len(out) >= max_pages:
             break
     return out
-

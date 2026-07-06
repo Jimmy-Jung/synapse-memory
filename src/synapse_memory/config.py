@@ -37,23 +37,8 @@ T = TypeVar("T")
 
 
 @dataclass
-class ClaudeModelsConfig:
-    """Claude 모델 이름 — haiku / sonnet / opus 체계."""
-
-    classify: str = "haiku"
-    card_generate: str = "sonnet"
-    ask: str | None = None  # None = provider default (sonnet)
-    decide: str | None = None
-    resume: str | None = None
-    recall: str | None = None
-    update_profile: str | None = None
-    # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
-    relevance: str = "haiku"
-
-
-@dataclass
-class CodexModelsConfig:
-    """Codex 모델 이름 — gpt-5.5 등 OpenAI 체계."""
+class ModelTasksConfig:
+    """task별 기본 모델 이름."""
 
     classify: str = "gpt-5.5"
     card_generate: str = "gpt-5.5"
@@ -67,15 +52,49 @@ class CodexModelsConfig:
 
 
 @dataclass
+class ProviderModelOverrideConfig:
+    """provider별 task 모델 override. None이면 task 기본값 사용."""
+
+    classify: str | None = None
+    card_generate: str | None = None
+    ask: str | None = None
+    decide: str | None = None
+    resume: str | None = None
+    recall: str | None = None
+    update_profile: str | None = None
+    relevance: str | None = None
+
+
+@dataclass
+class ProviderModelOverridesConfig:
+    claude: ProviderModelOverrideConfig = field(
+        default_factory=lambda: ProviderModelOverrideConfig(
+            classify="haiku",
+            card_generate="sonnet",
+            relevance="haiku",
+        )
+    )
+    codex: ProviderModelOverrideConfig = field(default_factory=ProviderModelOverrideConfig)
+
+
+@dataclass
 class ModelsConfig:
-    """task별 모델 — provider 분리.
+    """task별 기본 모델 + provider override."""
 
-    ``ai_provider`` 값에 따라 ``models.claude.*`` 또는 ``models.codex.*``가 사용됨.
-    ``ai_provider: auto``일 때는 detect_ai_environment가 자체 default로 폴백.
-    """
+    tasks: ModelTasksConfig = field(default_factory=ModelTasksConfig)
+    overrides: ProviderModelOverridesConfig = field(
+        default_factory=ProviderModelOverridesConfig
+    )
 
-    claude: ClaudeModelsConfig = field(default_factory=ClaudeModelsConfig)
-    codex: CodexModelsConfig = field(default_factory=CodexModelsConfig)
+    def model_for_task(self, provider: str, task: str) -> str | None:
+        if not hasattr(self.tasks, task):
+            return None
+        base = getattr(self.tasks, task)
+        provider_overrides = getattr(self.overrides, provider, None)
+        if provider_overrides is None or not hasattr(provider_overrides, task):
+            return base
+        override = getattr(provider_overrides, task)
+        return base if override is None else override
 
 
 @dataclass
@@ -333,6 +352,20 @@ def _normalize_config_raw(raw: dict[str, Any]) -> dict[str, Any]:
     ``vault_folders``로 옮긴다.
     """
     normalized = dict(raw)
+    models_value = normalized.get("models")
+    if isinstance(models_value, dict):
+        legacy_providers = {
+            key: value
+            for key, value in models_value.items()
+            if key in {"claude", "codex"} and isinstance(value, dict)
+        }
+        if legacy_providers and "tasks" not in models_value and "overrides" not in models_value:
+            codex_defaults = legacy_providers.get("codex", {})
+            normalized["models"] = {
+                "tasks": codex_defaults,
+                "overrides": legacy_providers,
+            }
+
     vault_value = normalized.get("vault")
     if not isinstance(vault_value, dict):
         return normalized

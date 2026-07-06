@@ -1,4 +1,4 @@
-"""일일 자동 파이프라인 — 단일 wiki ingest 워크플로.
+"""일일 자동 파이프라인 — raw mirror 수집 후 wiki ingest/lint.
 
 Steps (incremental — 이미 처리된 건 자동 skip)::
 
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime
+import importlib
 import re
 import time
 from collections.abc import Callable, Mapping
@@ -47,6 +48,11 @@ DAILY_STAGES = (
     DailyStage("collect_codex", "Codex CLI 로그 mirror"),
     DailyStage("ingest", "Raw 대화 wiki 통합", ("collect_claude_code", "collect_codex")),
     DailyStage("lint", "Wiki 구조 lint", ("ingest",)),
+)
+
+COLLECT_STAGE_TARGETS: tuple[tuple[str, str], ...] = (
+    ("collect_claude_code", "synapse_memory.collectors.claude_code:collect_claude_code"),
+    ("collect_codex", "synapse_memory.collectors.codex:collect_codex"),
 )
 
 # 단계 이름 — CLI --only / --skip / --resume-from 에서 사용
@@ -231,30 +237,38 @@ def _build_stage_actions(
     ``result`` 인자는 이전 report helper 호환용으로만 받는다.
     """
     _ = result
-    return {
-        "collect_claude_code": _collect_claude_code_action,
-        "collect_codex": _collect_codex_action,
+    actions = {
+        name: _build_collect_action(target)
+        for name, target in COLLECT_STAGE_TARGETS
+    }
+    actions.update({
         "ingest": _build_ingest_action(
             model=ingest_model,
             on_log=on_log,
             status_sink=status_sink,
         ),
         "lint": _lint_action,
-    }
+    })
+    return actions
 
 
-def _collect_claude_code_action() -> str:
-    from synapse_memory.collectors.claude_code import collect_claude_code
+def _load_stage_callable(target: str) -> Callable[[], Any]:
+    module_name, _, func_name = target.partition(":")
+    if not module_name or not func_name:
+        raise ValueError(f"invalid stage target: {target}")
+    module = importlib.import_module(module_name)
+    func = getattr(module, func_name)
+    if not callable(func):
+        raise TypeError(f"stage target is not callable: {target}")
+    return func
 
-    stats = collect_claude_code()
-    return stats.summary()
 
+def _build_collect_action(target: str) -> StageAction:
+    def step() -> str:
+        stats = _load_stage_callable(target)()
+        return stats.summary()
 
-def _collect_codex_action() -> str:
-    from synapse_memory.collectors.codex import collect_codex
-
-    stats = collect_codex()
-    return stats.summary()
+    return step
 
 
 _INGEST_SOURCES = ("claude-code", "codex")
@@ -681,18 +695,6 @@ def _extract_first_int(steps: list[StepResult], marker: str) -> int:
 # 변환 실패하거나 알 수 없는 stage 면 raw 를 그대로 둔다 (회귀 시 디버깅 보전).
 
 
-def _format_bytes(num: int) -> str:
-    """바이트 수를 사람용 단위(B / KB / MB / GB)로 변환."""
-    n = float(num)
-    for unit in ("B", "KB", "MB", "GB"):
-        if n < 1024 or unit == "GB":
-            if unit == "B":
-                return f"{int(n)} B"
-            return f"{n:.1f} {unit}"
-        n /= 1024
-    return f"{num} B"
-
-
 def _parse_kv(raw: str) -> dict[str, int]:
     """`key=value` / `key+=value` 토큰을 dict 로 파싱. value 정수만."""
     import re
@@ -720,6 +722,8 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
         if "mirrored" in kv:
             parts = [f"{label} {kv['mirrored']}개 mirror"]
             if kv.get("bytes", 0) > 0:
+                from synapse_memory.formatting import _format_bytes
+
                 parts.append(f"({_format_bytes(kv['bytes'])})")
             extras: list[str] = []
             if kv.get("truncations", 0):
