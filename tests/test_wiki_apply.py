@@ -52,7 +52,7 @@ def test_apply_update_preserves_existing_sources_and_related(tmp_path: Path) -> 
             type="project",
             slug="tablet",
             title="Tablet",
-            related=("[[cursor-ide-ios-workflow]]",),
+            related=("[[ai-ide-ios-workflow]]",),
             sources=("codex:new-session",),
             body="new body",
         ),
@@ -63,7 +63,7 @@ def test_apply_update_preserves_existing_sources_and_related(tmp_path: Path) -> 
     saved = load_page("project", "tablet", vault_path=tmp_path)
     assert saved.body == "new body"
     assert saved.updated == "2026-06-20"
-    assert saved.related == ("[[ai-profile]]", "[[cursor-ide-ios-workflow]]")
+    assert saved.related == ("[[ai-profile]]", "[[ai-ide-ios-workflow]]")
     assert saved.sources == (
         "vault-md:tablet.md",
         "codex:old-session",

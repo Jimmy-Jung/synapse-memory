@@ -36,6 +36,14 @@ def _fail(message: str):
     return step
 
 
+@pytest.fixture(autouse=True)
+def _daily_status_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from synapse_memory import status as status_mod
+
+    monkeypatch.setattr(status_mod, "STATUS_FILE", tmp_path / "daily.status.json")
+    monkeypatch.setattr(status_mod, "LOCK_FILE", tmp_path / "daily.lock")
+
+
 class TestRunDaily:
     def test_dry_run_lists_steps(self, capsys: pytest.CaptureFixture) -> None:
         result = run_daily(dry_run=True)
@@ -92,9 +100,9 @@ class TestRunDaily:
 
     def test_successful_collector_errors_are_counted_as_warnings(self) -> None:
         result = run_daily(
-            only={"collect_cursor"},
+            only={"collect_obsidian"},
             stage_actions={
-                "collect_cursor": _ok("mirrored=0 unchanged=0 bytes+=0 errors=2")
+                "collect_obsidian": _ok("mirrored=0 unchanged=0 bytes+=0 errors=2")
             },
             on_log=lambda _line: None,
         )

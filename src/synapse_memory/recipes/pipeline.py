@@ -5,7 +5,7 @@ Data-model: ``specs/007-persona-recipes/data-model.md`` §3 construction order
 Research: ``specs/007-persona-recipes/research.md`` R-1 (timeout), R-5 (filename), R-6 (last_answer)
 
 Construction order:
-    inputs validate → profile → locale → RAG → domain → render system & user prompt
+    inputs validate → profile → locale → related cards → domain → render system & user prompt
     → invoke LLM (or dry-run) → save markdown → record last_answer → return result.
 
 저자: Synapse Memory Maintainers
@@ -50,7 +50,7 @@ from synapse_memory.storage.last_response import (
 )
 from synapse_memory.wiki.llm_retrieval import select_related
 
-_PROFILE_FILES = ("Profile.md", "DecisionPatterns.md", "DecisionQualityRegistry.md")
+_PROFILE_FILES = ("Profile.md", "DecisionPatterns.md")
 _BUILTIN_DIR_DEFAULT = Path(__file__).resolve().parent / "builtin"
 _FILENAME_UNSAFE_RE = re.compile(r"[\\/\x00\r\n]")
 
@@ -86,7 +86,7 @@ _SOURCE_KIND_TO_CARD_KIND: dict[str, CardKind] = {
 
 
 def _load_profile_text(vault: Path) -> str:
-    """vault Profile/DecisionPatterns/DecisionQualityRegistry 전체 로드.
+    """vault Profile/DecisionPatterns 전체 로드.
 
     이전: 파일당 5000자 silent truncation 으로 사용자가 알아챌 수 없는 손실 발생.
     이후 (B2, eng-review 2026-05-13): 전체 로드. 시스템 prompt 32KB cap 이 자동

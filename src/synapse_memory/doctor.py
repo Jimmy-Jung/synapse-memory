@@ -220,7 +220,7 @@ def _runtime_rerun_guidance(target: Path) -> FixResult:
     return FixResult(
         action_id="recreate_runtime_shim",
         status="manual_required",
-        summary=f"{target} 재생성은 installer 또는 scripts/bootstrap_runtime.sh 재실행 필요",
+        summary=f"{target} 재생성은 scripts/bootstrap_runtime.sh 재실행 필요",
     )
 
 
@@ -267,7 +267,7 @@ def diagnose_vault_config_consistency(
             status=DiagnosticStatus.WARN,
             message=(
                 "config.yaml vault 미설정 + 자동 감지 실패. "
-                "installer 또는 수동 설정 필요."
+                "수동 설정 필요."
             ),
             fixable=False,
         )

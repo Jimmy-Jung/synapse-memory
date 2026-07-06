@@ -154,14 +154,14 @@ def test_cmd_daily_strips_comma_separated_stage_names(
     rc = cmd_daily(
         _args(
             only="collect_claude_code, report",
-            skip="collect_cursor, collect_obsidian",
+            skip="collect_codex, collect_obsidian",
             dry_run=True,
         )
     )
 
     assert rc == 0
     assert captured["only"] == {"collect_claude_code", "report"}
-    assert captured["skip"] == {"collect_cursor", "collect_obsidian"}
+    assert captured["skip"] == {"collect_codex", "collect_obsidian"}
 
 
 def test_cmd_daily_unknown_only_returns_2(

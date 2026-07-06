@@ -293,7 +293,7 @@ def _load_profile_text(vault_path: Path | None = None) -> str:
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     parts: list[str] = []
     profile_root = vault / get_config().vault_folders.system.ai.root
-    for fname in ("Profile.md", "DecisionPatterns.md", "DecisionQualityRegistry.md"):
+    for fname in ("Profile.md", "DecisionPatterns.md"):
         p = profile_root / fname
         if p.is_file():
             try:

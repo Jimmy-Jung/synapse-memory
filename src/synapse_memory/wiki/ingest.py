@@ -1,7 +1,7 @@
 # src/synapse_memory/wiki/ingest.py
 """ingest 오케스트레이터 — raw → 관련페이지 → 통합 → 적용 + 로그 + watermark.
 
-엔진은 ai_api.complete_structured(json_schema=INTEGRATION_SCHEMA). redaction 없음(D4).
+엔진은 ai_api.complete_structured(json_schema=INTEGRATION_SCHEMA). raw 입력 유지(D4).
 
 저자: Synapse Memory Maintainers
 작성일: 2026-06-14

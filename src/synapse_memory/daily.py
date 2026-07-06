@@ -4,18 +4,13 @@ Steps (incremental — 이미 처리된 건 자동 skip)::
 
     1.  collect claude-code           (mirror 새 줄만)
     2.  collect codex                 (~/.codex 새 줄만)
-    3.  collect cursor                (Cursor IDE SQLite snapshot)
-    4.  collect continue.dev          (~/.continue 세션 JSON)
-    5.  collect aider                 (~/.aider.* append-only)
-    6.  collect day-one               (Day One journal)
-    7.  collect gmail-sent            (opt-in)
-    8.  collect obsidian              (변경 .md만)
-    9.  cluster classify --resume     (새 cluster만)
-    10. card generate (--force=False) (새 cluster만 Card 생성)
-    11. wiki/card provider sync       (provider-only context refresh)
-    12. persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
-    13. report                        (DailyReport 작성)
-    14. lint                          (wiki 구조 lint)
+    3.  collect obsidian              (변경 .md만)
+    4.  cluster classify --resume     (새 cluster만)
+    5.  card generate (--force=False) (새 cluster만 Card 생성)
+    6.  wiki/card provider sync       (provider-only context refresh)
+    7.  persona update-profile        (오늘 활동 분석 → MemoryInbox PR)
+    8.  report                        (DailyReport 작성)
+    9.  lint                          (wiki 구조 lint)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -55,11 +50,6 @@ class DailyStage:
 DAILY_STAGES = (
     DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
     DailyStage("collect_codex", "Codex CLI 로그 mirror"),
-    DailyStage("collect_cursor", "Cursor IDE 로그 mirror"),
-    DailyStage("collect_continue", "Continue.dev 세션 mirror"),
-    DailyStage("collect_aider", "Aider 대화 mirror"),
-    DailyStage("collect_day_one", "Day One journal mirror"),
-    DailyStage("collect_gmail_sent", "Gmail Sent mirror (opt-in)"),
     DailyStage("collect_obsidian", "Obsidian vault mirror"),
     DailyStage("classify", "신규 cluster 분류"),
     DailyStage("generate", "Project/Company Card 생성", ("classify",)),
@@ -269,11 +259,6 @@ def _build_stage_actions(
     return {
         "collect_claude_code": _collect_claude_code_action,
         "collect_codex": _collect_codex_action,
-        "collect_cursor": _collect_cursor_action,
-        "collect_continue": _collect_continue_action,
-        "collect_aider": _collect_aider_action,
-        "collect_day_one": _collect_day_one_action,
-        "collect_gmail_sent": _collect_gmail_sent_action,
         "collect_obsidian": obsidian_action,
         "classify": _build_classify_action(
             classify_model,
@@ -304,41 +289,6 @@ def _collect_codex_action() -> str:
     from synapse_memory.collectors.codex import collect_codex
 
     stats = collect_codex()
-    return stats.summary()
-
-
-def _collect_cursor_action() -> str:
-    from synapse_memory.collectors.cursor import collect_cursor
-
-    stats = collect_cursor()
-    return stats.summary()
-
-
-def _collect_continue_action() -> str:
-    from synapse_memory.collectors.continue_dev import collect_continue
-
-    stats = collect_continue()
-    return stats.summary()
-
-
-def _collect_aider_action() -> str:
-    from synapse_memory.collectors.aider import collect_aider
-
-    stats = collect_aider()
-    return stats.summary()
-
-
-def _collect_day_one_action() -> str:
-    from synapse_memory.collectors.day_one import collect_day_one
-
-    stats = collect_day_one()
-    return stats.summary()
-
-
-def _collect_gmail_sent_action() -> str:
-    from synapse_memory.collectors.gmail_sent import collect_gmail_sent
-
-    stats = collect_gmail_sent()
     return stats.summary()
 
 
@@ -958,12 +908,10 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
     if stage in (
         "collect_claude_code",
         "collect_codex",
-        "collect_aider",
     ):
         labels = {
             "collect_claude_code": "Claude 활동 로그",
             "collect_codex": "Codex 활동 로그",
-            "collect_aider": "Aider 대화",
         }
         label = labels[stage]
         kv = _parse_kv(raw)
@@ -980,44 +928,6 @@ def _humanize_stage_summary(stage: str, raw: str) -> str:
                 extras.append(f"에러 {kv['errors']}")
             if extras:
                 parts.append("· " + ", ".join(extras))
-            return " ".join(parts)
-    elif stage in (
-        "collect_cursor",
-        "collect_continue",
-        "collect_day_one",
-    ):
-        labels = {
-            "collect_cursor": "Cursor DB",
-            "collect_continue": "Continue.dev 세션",
-            "collect_day_one": "Day One DB",
-        }
-        label = labels[stage]
-        kv = _parse_kv(raw)
-        if "mirrored" in kv:
-            parts = [f"{label} {kv['mirrored']}개 mirror"]
-            if kv.get("bytes", 0) > 0:
-                parts.append(f"({_format_bytes(kv['bytes'])})")
-            extras = []
-            if kv.get("unchanged", 0):
-                extras.append(f"변경 없음 {kv['unchanged']}")
-            if kv.get("errors", 0):
-                extras.append(f"에러 {kv['errors']}")
-            if extras:
-                parts.append("· " + ", ".join(extras))
-            return " ".join(parts)
-    elif stage == "collect_gmail_sent":
-        if raw.strip() == "disabled":
-            return "Gmail Sent — opt-out (SYNAPSE_GMAIL_ENABLE 미설정)"
-        kv = _parse_kv(raw)
-        if "added" in kv:
-            parts = [
-                f"Gmail Sent {kv.get('added', 0)}개 mirror "
-                f"(목록 {kv.get('listed', 0)}개)"
-            ]
-            if kv.get("bytes", 0) > 0:
-                parts.append(f"({_format_bytes(kv['bytes'])})")
-            if kv.get("errors", 0):
-                parts.append(f"· 에러 {kv['errors']}")
             return " ".join(parts)
     elif stage == "collect_obsidian":
         kv = _parse_kv(raw)

@@ -162,12 +162,12 @@ def detect_vault_candidates(
     return [default_vault_path(home=root)]
 
 
-def installer_vault_choices(
+def setup_vault_choices(
     *,
     home: Path | None = None,
     existing_config: Path | None = None,
 ) -> list[VaultCandidate]:
-    """GUI installer에 표시할 기존 vault + 새 vault 생성 후보."""
+    """설정 화면에 표시할 기존 vault + 새 vault 생성 후보."""
     existing = [
         candidate
         for candidate in detect_vault_candidates(

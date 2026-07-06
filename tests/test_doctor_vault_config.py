@@ -81,7 +81,7 @@ def test_vault_null_no_detection_warns_not_fixable(tmp_path: Path) -> None:
 
     assert result.status == DiagnosticStatus.WARN
     assert result.fixable is False
-    assert "감지 실패" in result.message or "installer" in result.message
+    assert "감지 실패" in result.message or "수동 설정" in result.message
 
 
 def test_vault_invalid_config_no_detection_fails(tmp_path: Path) -> None:

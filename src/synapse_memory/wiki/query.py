@@ -7,7 +7,7 @@
     ai_api.complete(system=ASK_WIKI_SYSTEM) → [[slug]] 인용 답변 →
     (save=True) insight WikiPage write-back
 
-원칙(D4: redaction 없음)
+원칙(D4: raw 입력 유지)
 - 제공된 wiki 페이지**만** 근거. 각 주장에 ``[[slug]]`` 인용.
 - 자료 없으면 "자료에 없음". 한국어, 짧고 정확.
 

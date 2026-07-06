@@ -3,7 +3,7 @@
 CLI subprocess 패턴. API key 별도 발급 불필요 — 사용자 Claude Code
 OAuth 인증 그대로 사용.
 
-**철칙 1**: D4 — raw 텍스트를 그대로 cloud claude CLI에 전달한다 (redaction 제거).
+**철칙 1**: D4 — raw 텍스트를 그대로 cloud claude CLI에 전달한다.
 **철칙 2**: 비용 절감 — ``--system-prompt``로 default system prompt 대체.
    default 사용 시 CLAUDE.md/memory/plugins가 자동 합쳐져 35K+ cache 만들어짐 ($0.24/call).
    ``--system-prompt`` 명시하면 dynamic sections 자동 제외 → ~$0.001/call.
