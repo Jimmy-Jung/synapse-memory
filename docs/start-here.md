@@ -68,15 +68,16 @@ $ask "내 최근 프로젝트를 요약해줘"
 | Profile 후보 GUI 승인 | `/sm:apply-profile` | `$apply-profile` |
 | 자료에 질문 | `/sm:ask` | `$ask` |
 
-첫 `daily`는 노트 양에 따라 오래 걸릴 수 있습니다. 빠르게 체험하려면 터미널에서
-quick 모드를 먼저 실행합니다.
+첫 `daily`는 raw 로그 양에 따라 오래 걸릴 수 있습니다. 실행 전에 pending queue를
+확인하려면 ingest audit을 먼저 실행합니다.
 
 ```bash
-synapse-memory daily --quick
+synapse-memory ingest-audit --source codex --limit 50
+synapse-memory daily
 ```
 
-quick 모드는 최근 변경분만 처리하므로 첫 답변까지 가는 시간이 짧습니다. 이후 주 1회
-정도는 전체 `daily`를 실행해 Profile 후보와 누락된 카드를 정리하는 흐름을 권장합니다.
+대량 재구축은 `daily` 대신 [Re-ingest Runbook](reingest-runbook.md)의 backfill 절차를
+따릅니다.
 
 ## 4. 결과는 어디에 남나요?
 
@@ -93,8 +94,8 @@ Obsidian vault 안에서는 보통 다음 폴더를 씁니다.
 | --- | --- |
 | `00_Inbox/` | 아직 정리하지 않은 새 메모 |
 | `10_Active/<회사>/<프로젝트>/` | 진행 중인 프로젝트 노트 |
-| `20_Reference/Projects/` | Synapse가 만든 프로젝트 요약 카드 |
-| `20_Reference/Companies/` | Synapse가 만든 회사 요약 카드 |
+| `Entities/Projects/` | Synapse가 만든 프로젝트 요약 카드 |
+| `Entities/Companies/` | Synapse가 만든 회사 요약 카드 |
 | `30_Creative/Drafts/` | 이력서, 설계 초안 같은 생성물 |
 | `90_System/AI/` | Profile, MemoryInbox, DailyReports 같은 시스템 자료 |
 

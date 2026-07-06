@@ -141,7 +141,7 @@ def _swap_profile(vault: Path, variant: str) -> None:
 
 def _set_company_resume_language(vault: Path, lang: str) -> None:
     """fixture acme_co.md 의 frontmatter 에 resume_language 를 삽입."""
-    p = vault / "20_Reference" / "Companies" / "acme_co.md"
+    p = vault / "Entities" / "Companies" / "acme_co.md"
     text = p.read_text(encoding="utf-8")
     # frontmatter 끝(--- 단독 줄) 직전에 한 줄 추가
     lines = text.split("\n")

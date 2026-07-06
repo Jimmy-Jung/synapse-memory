@@ -7,8 +7,6 @@
     synapse-memory card list                    Project Card 목록
     synapse-memory card show <id>               Project Card 내용
     synapse-memory card new <id> <name>         Project Card 빈 템플릿 생성
-    synapse-memory cluster scan                 raw → 프로젝트 클러스터
-    synapse-memory cluster classify             cluster → kind (Claude Code CLI)
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -53,18 +51,8 @@ from synapse_memory.cards import (  # noqa: E402
     serialize_company_card,
     serialize_project_card,
 )
-from synapse_memory.cards.auto_classify import (  # noqa: E402
-    classify_cluster,
-    load_classifications,
-    save_classifications,
-)
-from synapse_memory.cards.auto_generate import (  # noqa: E402
-    generate_company_card,
-    generate_project_card,
-)
 from synapse_memory.cards.company import companies_dir  # noqa: E402
 from synapse_memory.cards.project import projects_dir  # noqa: E402
-from synapse_memory.clusters import identify_clusters  # noqa: E402
 from synapse_memory.collectors.claude_code import (  # noqa: E402
     DEFAULT_CLAUDE_HOME,
     collect_claude_code,
@@ -970,19 +958,6 @@ def cmd_watch_status(args: argparse.Namespace) -> int:
 
 def cmd_daily(args: argparse.Namespace) -> int:
     """일일 통합 파이프라인."""
-    if args.quick:
-        print(
-            f"⚡ quick mode — 최근 {args.quick_days}일 modified 노트 + "
-            f"최대 {args.quick_max_clusters}개 cluster classify. "
-            "update_profile auto-skip. full pipeline 은 `synapse-memory daily` (no flag)."
-        )
-
-    # CLI 인자가 None이면 config (models.<provider>.<task>) 우선 적용.
-    # run_daily는 None을 받으면 자체 기본값 "sonnet"/"haiku"로 폴백.
-    classify_model = _resolve_model(args.classify_model, "classify") or "haiku"
-    generate_model = _resolve_model(args.generate_model, "card_generate") or "sonnet"
-    profile_model = _resolve_model(args.profile_model, "update_profile") or "sonnet"
-
     try:
         only = _parse_stage_csv(args.only) if args.only else None
         skip = _parse_stage_csv(args.skip) if args.skip else None
@@ -994,14 +969,7 @@ def cmd_daily(args: argparse.Namespace) -> int:
                 only=only,
                 skip=skip,
                 resume_from=args.resume_from,
-                classify_model=classify_model,
-                generate_model=generate_model,
-                profile_model=profile_model,
-                profile_sample_lines=args.profile_sample_lines,
-                profile_facts_only=args.profile_facts_only,
-                quick=args.quick,
-                quick_days=args.quick_days,
-                quick_max_clusters=args.quick_max_clusters,
+                ingest_model=args.model,
                 dry_run=args.dry_run,
             )
     except ValueError as exc:
@@ -2074,211 +2042,6 @@ def _feedback_targets(args: argparse.Namespace) -> list[FeedbackTarget]:
     raise ValueError(f"unknown feedback target: {args.feedback_target}")
 
 
-def cmd_card_generate(args: argparse.Namespace) -> int:
-    """classify된 cluster들로 ProjectCard/CompanyCard 자동 생성."""
-    args.model = _resolve_model(args.model, "card_generate")
-    _enforce_cost_cap("card generate")
-    ai_env = detect_ai_environment()
-    if not ai_env.ready:
-        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
-        for r in ai_env.reasons_unavailable():
-            print(f"  - {r}", file=sys.stderr)
-        return 2
-
-    classifications = load_classifications()
-    if not classifications:
-        print(f"{FAIL} 분류 결과 없음 — 먼저 `synapse-memory cluster classify`")
-        return 2
-
-    obs_root = _resolve_vault(require_exists=True)
-    if not obs_root.is_dir():
-        print(f"{FAIL} vault 경로 없음: {obs_root}", file=sys.stderr)
-        return 2
-
-    # cluster 다시 식별 (classifications에 source 정보 없으니 다시 매칭)
-    clusters = {c.cluster_id: c for c in identify_clusters()}
-
-    # filter by kind
-    kinds_to_run: set[str] = (
-        {"project", "company"} if args.kind == "all" else {args.kind}
-    )
-
-    targets: list[tuple[str, str, str]] = []  # (cluster_id, kind, candidate_name)
-    for cid, cls in classifications.items():
-        if cls.kind not in kinds_to_run:
-            continue
-        if cid not in clusters:
-            continue
-        targets.append((cid, cls.kind, cls.candidate_name))
-
-    if args.limit and args.limit > 0:
-        targets = targets[: args.limit]
-
-    if not targets:
-        print(f"생성 대상 0 (kind={args.kind})")
-        return 0
-
-    print(f"Card 생성: {len(targets)}개 (model={args.model})")
-
-    fails: list[tuple[str, str]] = []
-    saved_cards: list[Path] = []
-
-    for i, (cid, kind, name) in enumerate(targets, 1):
-        cluster = clusters[cid]
-        try:
-            if kind == "project":
-                target_path = projects_dir() / f"{cid}.md"
-                if target_path.exists() and not args.force:
-                    print(
-                        f"[{i}/{len(targets)}] {cid:<25} → skip (이미 존재)"
-                    )
-                    continue
-                card = generate_project_card(
-                    cluster,
-                    candidate_name=name,
-                    obs_root=obs_root,
-                    ai_env=ai_env,
-                    model=args.model,
-                )
-                path = save_project_card(card)
-            else:
-                target_path = companies_dir() / f"{cid}.md"
-                if target_path.exists() and not args.force:
-                    print(
-                        f"[{i}/{len(targets)}] {cid:<25} → skip (이미 존재)"
-                    )
-                    continue
-                card_c = generate_company_card(
-                    cluster,
-                    candidate_name=name,
-                    obs_root=obs_root,
-                    ai_env=ai_env,
-                    model=args.model,
-                )
-                path = save_company_card(card_c)
-
-            saved_cards.append(path)
-            print(f"[{i}/{len(targets)}] {cid:<25} → {kind} → {path.name}")
-        except (AIError, ValueError) as exc:
-            fails.append((cid, str(exc)))
-            print(
-                f"[{i}/{len(targets)}] {cid} — 실패: {exc}",
-                file=sys.stderr,
-            )
-
-    print(f"\n생성 완료: {len(saved_cards)}/{len(targets)}")
-    if fails:
-        print(f"실패: {len(fails)}")
-    return 1 if fails else 0
-
-
-def cmd_cluster_classify(args: argparse.Namespace) -> int:
-    """모든 cluster를 LLM 분류 → classifications.json 저장."""
-    args.model = _resolve_model(args.model, "classify")
-    _enforce_cost_cap("cluster classify")
-    ai_env = detect_ai_environment()
-    if not ai_env.ready:
-        print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)
-        for r in ai_env.reasons_unavailable():
-            print(f"  - {r}", file=sys.stderr)
-        return 2
-
-    clusters = identify_clusters()
-    if not clusters:
-        print("클러스터 없음 — 먼저 collect")
-        return 0
-
-    obs_root = _resolve_vault(require_exists=True)
-    if not obs_root.is_dir():
-        print(f"{FAIL} vault 경로 없음: {obs_root}", file=sys.stderr)
-        return 2
-
-    existing = load_classifications() if args.resume else {}
-    if args.resume:
-        clusters = [c for c in clusters if c.cluster_id not in existing]
-        print(f"--resume: 기존 {len(existing)} 분류 skip, {len(clusters)}개 남음")
-
-    if args.limit and args.limit > 0:
-        clusters = clusters[: args.limit]
-
-    print(f"분류 시작: {len(clusters)} cluster (AI provider 호출)")
-
-    classifications = dict(existing)
-    fails: list[tuple[str, str]] = []
-    for i, cluster in enumerate(clusters, 1):
-        try:
-            cls = classify_cluster(
-                cluster,
-                obs_root=obs_root,
-                ai_env=ai_env,
-                model=args.model,
-            )
-            classifications[cls.cluster_id] = cls
-            print(
-                f"[{i}/{len(clusters)}] {cluster.cluster_id:<25} → "
-                f"{cls.kind:<8} ({cls.candidate_name})"
-            )
-        except AIError as exc:
-            fails.append((cluster.cluster_id, str(exc)))
-            print(
-                f"[{i}/{len(clusters)}] {cluster.cluster_id} — 실패: {exc}",
-                file=sys.stderr,
-            )
-
-    path = save_classifications(classifications)
-    print(f"\n저장: {path}")
-
-    # 분포
-    from collections import Counter
-    by_kind = Counter(c.kind for c in classifications.values())
-    print("\n분포:")
-    for kind, n in by_kind.most_common():
-        print(f"  {kind}: {n}")
-
-    return 1 if fails else 0
-
-
-def cmd_cluster_scan(args: argparse.Namespace) -> int:
-    """raw mirror 스캔 → 프로젝트 클러스터 식별."""
-    clusters = identify_clusters()
-    if not clusters:
-        print("클러스터 0개. 먼저:")
-        print("  synapse-memory collect claude-code")
-        print("  synapse-memory collect obsidian")
-        return 0
-
-    print(
-        f"{'CLUSTER_ID':<25} {'CONF':>5} {'CC':>4} {'OBS':>4} "
-        f"{'TAGS':>5} CWD"
-    )
-    print("-" * 90)
-    for c in clusters:
-        cwd_preview = ", ".join(sorted(c.cwd_paths))[:40]
-        print(
-            f"{c.cluster_id[:24]:<25} {c.confidence:>5.2f} "
-            f"{len(c.claude_jsonl):>4} {len(c.obsidian_files):>4} "
-            f"{len(c.tags):>5} {cwd_preview}"
-        )
-    print(f"\n총 {len(clusters)}개 클러스터")
-
-    if args.show_details and args.show_details > 0:
-        print(f"\n=== 상세 (상위 {args.show_details}) ===")
-        for c in clusters[: args.show_details]:
-            print(f"\n[{c.cluster_id}] confidence={c.confidence:.2f}")
-            print(f"  cwd: {sorted(c.cwd_paths)}")
-            print(f"  claude_jsonl ({len(c.claude_jsonl)}):")
-            for f in c.claude_jsonl[:5]:
-                print(f"    - {f}")
-            if len(c.claude_jsonl) > 5:
-                print(f"    ... 외 {len(c.claude_jsonl) - 5}개")
-            print(f"  obsidian ({len(c.obsidian_files)}):")
-            for f in c.obsidian_files[:5]:
-                print(f"    - {f}")
-            if c.tags:
-                print(f"  tags: {sorted(c.tags)}")
-    return 0
-
-
 def _setup_registry_path() -> Path:
     """projects.yaml 경로 (테스트에서 monkeypatch 가능)."""
     return Path.home() / ".synapse" / "projects.yaml"
@@ -3345,27 +3108,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_card_new.set_defaults(func=cmd_card_new)
 
-    p_card_gen = card_sub.add_parser(
-        "generate", help="classify된 cluster들로 Card 자동 생성 (Claude)"
-    )
-    p_card_gen.add_argument(
-        "--kind",
-        choices=["project", "company", "all"],
-        default="all",
-    )
-    p_card_gen.add_argument(
-        "--limit", type=int, default=0, help="처리할 cluster 수 (0=전체)"
-    )
-    p_card_gen.add_argument(
-        "--model",
-        default=None,
-        help="AI 모델 (생략 시 config.models.card_generate — 기본 sonnet)",
-    )
-    p_card_gen.add_argument(
-        "--force", action="store_true", help="기존 Card 덮어쓰기"
-    )
-    p_card_gen.set_defaults(func=cmd_card_generate)
-
     p_wiki = sub.add_parser("wiki", help="wiki-first 검색 + 답변 환원")
     wiki_sub = p_wiki.add_subparsers(dest="action", required=True, metavar="ACTION")
 
@@ -3399,37 +3141,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="설치 여부와 source별 watermark를 JSON으로 출력",
     )
     p_watch_status.set_defaults(func=cmd_watch_status)
-
-    p_cluster = sub.add_parser(
-        "cluster", help="raw에서 같은 프로젝트로 묶기"
-    )
-    cluster_sub = p_cluster.add_subparsers(
-        dest="action", required=True, metavar="ACTION"
-    )
-    p_cl_scan = cluster_sub.add_parser("scan", help="모든 raw 스캔 + 클러스터 출력")
-    p_cl_scan.add_argument(
-        "--show-details",
-        type=int,
-        default=5,
-        help="상위 N개 클러스터 상세 출력 (0=요약만)",
-    )
-    p_cl_scan.set_defaults(func=cmd_cluster_scan)
-
-    p_cl_class = cluster_sub.add_parser(
-        "classify", help="cluster를 Claude로 카테고리 분류"
-    )
-    p_cl_class.add_argument(
-        "--limit", type=int, default=0, help="처리할 cluster 수 (0=전체)"
-    )
-    p_cl_class.add_argument(
-        "--resume", action="store_true", help="이미 분류된 cluster skip"
-    )
-    p_cl_class.add_argument(
-        "--model",
-        default=None,
-        help="AI 모델 (생략 시 config.models.classify — 기본 haiku)",
-    )
-    p_cl_class.set_defaults(func=cmd_cluster_classify)
 
     p_ask = sub.add_parser(
         "ask",
@@ -3659,33 +3370,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=STEPS,
         help="지정 stage부터 daily 재개",
     )
-    # default=None — CLI 인자가 명시되지 않으면 cmd_daily에서
-    # _resolve_model() 로 config.models.<provider>.<task> 를 따른다.
-    p_daily.add_argument("--classify-model", default=None)
-    p_daily.add_argument("--generate-model", default=None)
-    p_daily.add_argument("--profile-model", default=None)
-    p_daily.add_argument("--profile-sample-lines", type=int, default=200)
-    p_daily.add_argument("--profile-facts-only", action="store_true")
     p_daily.add_argument(
-        "--quick",
-        action="store_true",
-        help=(
-            "Quick mode — 최근 N일 modified 노트만 처리 + classify cluster 수 제한 "
-            "+ update_profile auto-skip. 첫 답변 ~3분 목표. full pipeline 은 "
-            "별도 cron 또는 수동 `daily` (no flag) 호출 (wiki write 동시성 회피)."
-        ),
-    )
-    p_daily.add_argument(
-        "--quick-days",
-        type=int,
-        default=7,
-        help="--quick 모드의 mtime cutoff 일수 (기본 7)",
-    )
-    p_daily.add_argument(
-        "--quick-max-clusters",
-        type=int,
-        default=10,
-        help="--quick 모드의 classify 최대 cluster 수 (기본 10)",
+        "--model",
+        default=None,
+        help="ingest 단계에 사용할 단일 AI 모델 (생략 시 provider default)",
     )
     p_daily.add_argument(
         "--watch-status",

@@ -7,7 +7,7 @@
 ```
 recipes_vault/
 ├── 10_Journal/Drafts/                    # journal recipe 의 save_subpath
-├── 20_Reference/
+├── Entities/
 │   ├── Projects/
 │   │   ├── prj-2026-w19-alpha.md         # ProjectCard 1
 │   │   └── prj-2026-w19-beta.md          # ProjectCard 2

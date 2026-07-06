@@ -31,8 +31,8 @@ def _make_vault(tmp_path: Path) -> Path:
     for sub in (
         "00_Inbox",
         "10_Active",
-        "20_Reference/Projects",
-        "20_Reference/Companies",
+        "Entities/Projects",
+        "Entities/Companies",
         "30_Creative/Drafts",
         "40_Archive",
         "90_System/AI/MemoryInbox",
@@ -138,7 +138,7 @@ def test_scan_stale_memory_inbox(tmp_path):
 
 def test_scan_empty_card(tmp_path):
     vault = _make_vault(tmp_path)
-    card = vault / "20_Reference" / "Projects" / "empty.md"
+    card = vault / "Entities" / "Projects" / "empty.md"
     card.write_text(
         "---\nproject_id: empty\ndisplay_name: Empty\nstatus: draft\n---\n\nbody",
         encoding="utf-8",
@@ -150,7 +150,7 @@ def test_scan_empty_card(tmp_path):
 
 def test_scan_does_not_flag_active_card(tmp_path):
     vault = _make_vault(tmp_path)
-    card = vault / "20_Reference" / "Projects" / "active.md"
+    card = vault / "Entities" / "Projects" / "active.md"
     card.write_text(
         "---\nproject_id: a\ndisplay_name: A\nstatus: active\nkeywords:\n  - foo\n---\n",
         encoding="utf-8",

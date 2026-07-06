@@ -96,14 +96,6 @@ class CleanupConfig:
 
 
 @dataclass
-class VaultReferenceFoldersConfig:
-    root: str = "20_Reference"
-    projects: str = "20_Reference/Projects"
-    companies: str = "20_Reference/Companies"
-    insights: str = "20_Reference/Insights"
-
-
-@dataclass
 class VaultCreativeFoldersConfig:
     root: str = "30_Creative"
     drafts: str = "30_Creative/Drafts"
@@ -152,7 +144,6 @@ class VaultFoldersConfig:
 
     inbox: str = "00_Inbox"
     active: str = "10_Active"
-    reference: VaultReferenceFoldersConfig = field(default_factory=VaultReferenceFoldersConfig)
     creative: VaultCreativeFoldersConfig = field(default_factory=VaultCreativeFoldersConfig)
     life: str = "40_Life"
     archive: str = "40_Archive"

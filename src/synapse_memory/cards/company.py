@@ -5,7 +5,7 @@
     - 사용자가 누적한 회사 메모 (web 검색, 면접 후기 등)
     - Project Card와 매칭되어 회사별 맞춤 이력서 생성
 
-저장 위치: ``<vault>/20_Reference/Companies/<company_id>.md``
+저장 위치: ``<vault>/Entities/Companies/<company_id>.md``
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -20,7 +20,7 @@ from synapse_memory.cards.project import ProjectSource
 from synapse_memory.config import get_config, get_vault_path
 from synapse_memory.model import Entity, attr_dict, parse_frontmatter, serialize_entity
 
-DEFAULT_COMPANIES_SUBPATH = Path("20_Reference") / "Companies"
+DEFAULT_COMPANIES_SUBPATH = Path("Entities") / "Companies"
 
 VALID_STATUSES = (
     "target", "applied", "interviewing", "offered", "rejected", "hired", "superseded"
@@ -153,7 +153,7 @@ def parse_company_card(text: str) -> Entity:
 
 def companies_dir(vault_path: Path | None = None) -> Path:
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / get_config().vault_folders.reference.companies
+    return vault / get_config().vault_folders.wiki.companies
 
 
 def load_company_card(

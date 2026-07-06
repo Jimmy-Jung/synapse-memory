@@ -1,8 +1,8 @@
 """테스트 전역 fixture — L0 루트 기본값 격리.
 
 `synapse_memory.storage.l0.l0_root()` 의 default 동작은 `~/.synapse/private/`
-실 시스템 경로를 가리킨다. profile/extract, clusters/identify 등이 path 인자를
-명시하지 않으면 그 default 가 적용돼 테스트 격리가 깨질 수 있다.
+실 시스템 경로를 가리킨다. profile/extract, wiki ingest 등이 path 인자를 명시하지
+않으면 그 default 가 적용돼 테스트 격리가 깨질 수 있다.
 
 이 autouse fixture 는 `SYNAPSE_L0_ROOT` 를 tmp 디렉터리로 강제해 default 호출이
 실 데이터에 닿지 않도록 보장한다. 개별 테스트가 자기 `monkeypatch.setenv` 로

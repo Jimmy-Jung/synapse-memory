@@ -2,7 +2,7 @@
 
 좋은 답변은 채팅에서 증발하지 않고 vault에 쌓인다.
 
-저장 위치: ``<vault>/20_Reference/Insights/<yyyy>/<mm>/<insight_id>.md``
+저장 위치: ``<vault>/Insights/<yyyy>/<mm>/<insight_id>.md``
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from synapse_memory.cards.project import slugify
 from synapse_memory.config import get_config, get_vault_path
 from synapse_memory.model import Entity, parse_frontmatter, serialize_entity
 
-DEFAULT_INSIGHTS_SUBPATH = Path("20_Reference") / "Insights"
+DEFAULT_INSIGHTS_SUBPATH = Path("Insights")
 INSIGHT_DEFAULT_ATTRS: dict[str, Any] = {
     "question": "",
     "command": "",
@@ -68,7 +68,7 @@ def new_insight_id(question: str, *, now: datetime | None = None) -> str:
 def insights_dir(created: str, *, vault_path: Path | None = None) -> Path:
     """InsightCard 년/월 저장 디렉토리."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    root = vault / get_config().vault_folders.reference.insights
+    root = vault / get_config().vault_folders.wiki.insights
     yyyy = created[:4]
     mm = created[5:7]
     return root / yyyy / mm
@@ -142,7 +142,7 @@ def load_insight_card(
 def list_insight_cards(*, vault_path: Path | None = None) -> list[Entity]:
     """vault 안 모든 Insight Card 로드. parse 실패 파일은 skip."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    root = vault / get_config().vault_folders.reference.insights
+    root = vault / get_config().vault_folders.wiki.insights
     if not root.is_dir():
         return []
 

@@ -23,8 +23,8 @@ from synapse_memory.doctor import DiagnosticResult, DiagnosticStatus
 
 def _make_vault(tmp_path: Path) -> Path:
     vault = tmp_path / "vault"
-    (vault / "20_Reference" / "Projects").mkdir(parents=True)
-    (vault / "20_Reference" / "Companies").mkdir(parents=True)
+    (vault / "Entities" / "Projects").mkdir(parents=True)
+    (vault / "Entities" / "Companies").mkdir(parents=True)
     (vault / "90_System" / "AI" / "MemoryInbox").mkdir(parents=True)
     return vault
 

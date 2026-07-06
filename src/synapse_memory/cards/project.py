@@ -1,6 +1,6 @@
 """Project entity compatibility helpers.
 
-저장 위치: ``<vault>/20_Reference/Projects/<project_id>.md``
+저장 위치: ``<vault>/Entities/Projects/<project_id>.md``
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from synapse_memory.model import (
     serialize_entity,
 )
 
-DEFAULT_PROJECTS_SUBPATH = Path("20_Reference") / "Projects"
+DEFAULT_PROJECTS_SUBPATH = Path("Entities") / "Projects"
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9가-힣\-_]+")
 
 PROJECT_DEFAULT_ATTRS: dict[str, Any] = {
@@ -155,9 +155,9 @@ def parse_project_card(text: str) -> Entity:
 
 
 def projects_dir(vault_path: Path | None = None) -> Path:
-    """Project Card 저장 디렉토리. ``<vault>/20_Reference/Projects``."""
+    """Project Card 저장 디렉토리. ``<vault>/Entities/Projects``."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / get_config().vault_folders.reference.projects
+    return vault / get_config().vault_folders.wiki.projects
 
 
 def slugify(name: str) -> str:

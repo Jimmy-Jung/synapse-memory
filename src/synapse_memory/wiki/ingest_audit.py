@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
 
-from synapse_memory.wiki.ingest import classify_ingest_text
+from synapse_memory.wiki.ingest_routing import classify_ingest_text
 from synapse_memory.wiki.rawdoc import iter_new_raw
 from synapse_memory.wiki.watermark import load_watermark
 
