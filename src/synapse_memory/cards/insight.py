@@ -19,7 +19,6 @@ DEFAULT_INSIGHTS_SUBPATH = Path("20_Reference") / "Insights"
 INSIGHT_DEFAULT_ATTRS: dict[str, Any] = {
     "question": "",
     "command": "",
-    "created": "",
     "related": [],
     "keywords": [],
     "confidence": 0.7,
@@ -30,18 +29,19 @@ def InsightCard(
     insight_id: str,
     question: str,
     command: str,
-    created: str,
+    created: str | None = None,
     related: list[str] | None = None,
     keywords: list[str] | None = None,
     status: str = "draft",
     confidence: float = 0.7,
+    observed_at: str | None = None,
+    supersedes: list[str] | None = None,
     body: str = "",
 ) -> Entity:
     """Compatibility constructor returning the single Entity model."""
     attrs = _insight_attrs(
         question=question,
         command=command,
-        created=created,
         related=list(related or []),
         keywords=list(keywords or []),
         confidence=confidence,
@@ -51,8 +51,11 @@ def InsightCard(
         title=question,
         type="insight",
         status=status,
+        created=created,
+        observed_at=observed_at,
         body=body,
         attrs=attrs,
+        supersedes=tuple(supersedes or ()),
     )
 
 
@@ -104,6 +107,8 @@ def parse_insight_card(text: str) -> Entity:
         keywords=list(meta.get("keywords") or []),
         status=str(meta.get("status", "draft")),
         confidence=float(meta.get("confidence", 0.7)),
+        observed_at=str(meta.get("observed_at", "")),
+        supersedes=_relation_list(meta.get("supersedes")),
         body=body.strip(),
     )
 
@@ -166,3 +171,11 @@ def _unique_insight_path(directory: Path, insight_id: str) -> Path:
 
 def _insight_attrs(**values: Any) -> dict[str, Any]:
     return {**INSIGHT_DEFAULT_ATTRS, **values}
+
+
+def _relation_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value]

@@ -23,7 +23,7 @@ from synapse_memory.model import Entity, attr_dict, parse_frontmatter, serialize
 DEFAULT_COMPANIES_SUBPATH = Path("20_Reference") / "Companies"
 
 VALID_STATUSES = (
-    "target", "applied", "interviewing", "offered", "rejected", "hired"
+    "target", "applied", "interviewing", "offered", "rejected", "hired", "superseded"
 )
 VALID_SIZES = ("startup", "small", "medium", "large", "mega")
 
@@ -36,7 +36,6 @@ COMPANY_DEFAULT_ATTRS: dict[str, Any] = {
     "positions": [],
     "notes": "",
     "confidence": 1.0,
-    "created": "",
     "last_reviewed": "",
 }
 
@@ -67,8 +66,9 @@ def CompanyCard(
     notes: str = "",
     sources: list[Any] | None = None,
     confidence: float = 1.0,
-    created: str = "",
+    created: str | None = None,
     last_reviewed: str = "",
+    supersedes: list[str] | None = None,
     body: str = "",
     resume_language: str | None = None,
 ) -> Entity:
@@ -81,7 +81,6 @@ def CompanyCard(
         positions=list(positions or []),
         notes=notes,
         confidence=confidence,
-        created=created,
         last_reviewed=last_reviewed,
     )
     return Entity(
@@ -89,9 +88,11 @@ def CompanyCard(
         title=display_name,
         type="company",
         status=status,
+        created=created,
         sources=tuple(sources or ()),
         body=body,
         attrs=attrs,
+        supersedes=tuple(supersedes or ()),
     )
 
 
@@ -144,6 +145,7 @@ def parse_company_card(text: str) -> Entity:
         confidence=float(meta.get("confidence", 1.0)),
         created=str(meta.get("created", "")),
         last_reviewed=str(meta.get("last_reviewed", "")),
+        supersedes=_relation_list(meta.get("supersedes")),
         body=body,
         resume_language=meta.get("resume_language"),
     )
@@ -189,3 +191,11 @@ def list_company_cards(
 
 def _company_attrs(**values: Any) -> dict[str, Any]:
     return {**COMPANY_DEFAULT_ATTRS, **values}
+
+
+def _relation_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value]

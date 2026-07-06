@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from synapse_memory.store.page import (
     entity_path,
+    list_current_entities,
     list_entities,
     list_pages,
     load_entity,
@@ -19,6 +20,7 @@ from synapse_memory.store.page import (
 
 __all__ = [
     "entity_path",
+    "list_current_entities",
     "list_entities",
     "list_pages",
     "load_entity",

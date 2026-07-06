@@ -8,9 +8,12 @@ from synapse_memory.model.entity import (
     AttrDict,
     Entity,
     attr_dict,
+    backfill_created,
+    current_entities,
     entity_from_meta,
     parse_entity,
     serialize_entity,
+    supersedes_history,
 )
 from synapse_memory.model.frontmatter import (
     FRONTMATTER_DELIMITER,
@@ -34,6 +37,8 @@ __all__ = [
     "AttrDict",
     "Entity",
     "attr_dict",
+    "backfill_created",
+    "current_entities",
     "entity_from_meta",
     "extract_frontmatter",
     "fields_for",
@@ -44,5 +49,6 @@ __all__ = [
     "relation_fields",
     "serialize_entity",
     "serialize_frontmatter",
+    "supersedes_history",
     "uses_year_month_folder",
 ]

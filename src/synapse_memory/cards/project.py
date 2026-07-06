@@ -29,7 +29,6 @@ PROJECT_DEFAULT_ATTRS: dict[str, Any] = {
     "keywords": [],
     "metrics": [],
     "confidence": 1.0,
-    "created": "",
     "last_reviewed": "",
 }
 
@@ -62,8 +61,9 @@ def ProjectCard(
     metrics: list[Any] | None = None,
     sources: list[Any] | None = None,
     confidence: float = 1.0,
-    created: str = "",
+    created: str | None = None,
     last_reviewed: str = "",
+    supersedes: list[str] | None = None,
     body: str = "",
 ) -> Entity:
     """Compatibility constructor returning the single Entity model."""
@@ -76,7 +76,6 @@ def ProjectCard(
         keywords=list(keywords or []),
         metrics=list(metrics or []),
         confidence=confidence,
-        created=created,
         last_reviewed=last_reviewed,
     )
     return Entity(
@@ -84,9 +83,11 @@ def ProjectCard(
         title=display_name,
         type="project",
         status=status,
+        created=created,
         sources=tuple(sources or ()),
         body=body,
         attrs=attrs,
+        supersedes=tuple(supersedes or ()),
     )
 
 
@@ -143,6 +144,7 @@ def parse_project_card(text: str) -> Entity:
         confidence=float(meta.get("confidence", 1.0)),
         created=str(meta.get("created", "")),
         last_reviewed=str(meta.get("last_reviewed", "")),
+        supersedes=_relation_list(meta.get("supersedes")),
         body=body,
     )
 
@@ -216,3 +218,11 @@ def list_project_cards(
 
 def _project_attrs(**values: Any) -> dict[str, Any]:
     return {**PROJECT_DEFAULT_ATTRS, **values}
+
+
+def _relation_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value]

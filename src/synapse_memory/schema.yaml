@@ -5,7 +5,7 @@ version: 1
 types:
   project:
     folder: Entities/Projects
-    statuses: [active, draft, completed, archived]
+    statuses: [active, draft, completed, archived, superseded]
     fields:
       role:
         type: string
@@ -45,7 +45,7 @@ types:
 
   company:
     folder: Entities/Companies
-    statuses: [target, applied, interviewing, offered, rejected, hired, archived]
+    statuses: [target, applied, interviewing, offered, rejected, hired, archived, superseded]
     fields:
       country:
         type: string
@@ -83,7 +83,7 @@ types:
 
   concept:
     folder: Concepts
-    statuses: [active, draft, archived]
+    statuses: [active, draft, archived, superseded]
     fields:
       aliases:
         type: list
@@ -91,17 +91,21 @@ types:
       keywords:
         type: list
         items: string
+      created:
+        type: string
 
   insight:
     folder: Insights
     year_month: true
-    statuses: [draft, active, archived]
+    statuses: [draft, active, archived, superseded]
     fields:
       question:
         type: string
       command:
         type: string
       created:
+        type: string
+      observed_at:
         type: string
       related:
         type: list
@@ -115,11 +119,15 @@ types:
   log:
     folder: Logs
     year_month: true
-    statuses: [active, archived]
+    statuses: [active, archived, superseded]
     fields:
       command:
         type: string
       summary:
+        type: string
+      created:
+        type: string
+      observed_at:
         type: string
       related:
         type: list
@@ -130,12 +138,14 @@ types:
 
   profile:
     folder: Profile
-    statuses: [active, draft, archived]
+    statuses: [active, draft, archived, superseded]
     fields:
       scope:
         type: string
       confidence:
         type: number
+      created:
+        type: string
 
 relations:
   uses:

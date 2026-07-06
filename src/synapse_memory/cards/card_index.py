@@ -87,6 +87,8 @@ def build_card_index(
 
     if "project" in kinds:
         for project in list_project_cards(vault_path=vault_path):
+            if not project.is_current:
+                continue
             entries.append(
                 CardEntry(
                     card_id=project.project_id,
@@ -106,6 +108,8 @@ def build_card_index(
 
     if "company" in kinds:
         for company in list_company_cards(vault_path=vault_path):
+            if not company.is_current:
+                continue
             entries.append(
                 CardEntry(
                     card_id=company.company_id,
@@ -124,6 +128,8 @@ def build_card_index(
 
     if "insight" in kinds:
         for insight in list_insight_cards(vault_path=vault_path):
+            if not insight.is_current:
+                continue
             entries.append(
                 CardEntry(
                     card_id=insight.insight_id,
@@ -133,6 +139,7 @@ def build_card_index(
                     meta={
                         "source_kind": "card_insight",
                         "display_name": insight.question,
+                        "status": insight.status,
                         "created": insight.created,
                     },
                 )

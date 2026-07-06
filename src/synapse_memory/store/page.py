@@ -14,6 +14,7 @@ from synapse_memory.folders import year_month_path
 from synapse_memory.model import (
     ENTITY_TYPES,
     Entity,
+    current_entities,
     folder_for,
     parse_entity,
     serialize_entity,
@@ -149,6 +150,15 @@ def list_entities(
         except (ValueError, OSError):
             continue
     return sorted(entities, key=lambda entity: entity.slug)
+
+
+def list_current_entities(
+    entity_type: str,
+    *,
+    vault_path: Path | None = None,
+) -> list[Entity]:
+    """해당 타입 Entity 중 현재형 답변 후보만 로드."""
+    return list(current_entities(list_entities(entity_type, vault_path=vault_path)))
 
 
 def _entity_file_path(
