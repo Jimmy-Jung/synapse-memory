@@ -1,9 +1,5 @@
 """WikiPage — 통합형 wiki 페이지 (yaml frontmatter + markdown body).
 
-6개 타입(project/company/person/concept/profile/insight)을 단일 frozen
-dataclass로 표현. cards/project.py 패턴을 일반화. 사람이 Obsidian에서 직접
-편집 가능하고 Python에서도 parse/serialize 가능.
-
 저자: Synapse Memory Maintainers
 작성일: 2026-06-14
 """
@@ -15,25 +11,17 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.config import get_vault_path
 from synapse_memory.folders import year_month_path
-
-FRONTMATTER_DELIMITER = "---"
-VALID_TYPES: tuple[str, ...] = (
-    "project",
-    "company",
-    "person",
-    "concept",
-    "profile",
-    "insight",
+from synapse_memory.model import (
+    ENTITY_TYPES,
+    folder_for,
+    parse_frontmatter,
+    serialize_frontmatter,
+    uses_year_month_folder,
 )
 
-_FRONTMATTER_RE = re.compile(
-    r"^---\s*\n(?P<yaml>.*?)\n---\s*\n?(?P<body>.*)$",
-    re.DOTALL,
-)
+VALID_TYPES = ENTITY_TYPES
 
 # slug에 허용하지 않는 문자(영숫자·한글 음절·하이픈 외)를 ``-``로 치환.
 _SLUG_RE = re.compile(r"[^0-9a-z가-힣-]+")
@@ -88,14 +76,7 @@ def serialize_page(page: WikiPage) -> str:
     if page.type not in VALID_TYPES:
         raise ValueError(f"알 수 없는 type: {page.type!r}")
     fm = _frontmatter_dict(page)
-    yaml_text = yaml.safe_dump(
-        fm,
-        sort_keys=False,
-        allow_unicode=True,
-        default_flow_style=False,
-    ).rstrip()
-    body = page.body.lstrip("\n")
-    return f"{FRONTMATTER_DELIMITER}\n{yaml_text}\n{FRONTMATTER_DELIMITER}\n\n{body}"
+    return serialize_frontmatter(fm, page.body)
 
 
 def parse_page(text: str) -> WikiPage:
@@ -104,15 +85,10 @@ def parse_page(text: str) -> WikiPage:
     Raises:
         ValueError: frontmatter 없음 / type 미지원 / slug·title 누락 / yaml 오류.
     """
-    m = _FRONTMATTER_RE.match(text)
-    if not m:
-        raise ValueError("frontmatter (--- ... ---) 없음")
     try:
-        meta = yaml.safe_load(m.group("yaml")) or {}
-    except (yaml.YAMLError, ValueError) as exc:
+        meta, body = parse_frontmatter(text)
+    except ValueError as exc:
         raise ValueError(f"frontmatter yaml 파싱 실패: {exc}") from exc
-    if not isinstance(meta, dict):
-        raise ValueError(f"frontmatter가 dict 아님: {type(meta).__name__}")
 
     page_type = meta.get("type")
     if page_type not in VALID_TYPES:
@@ -139,26 +115,13 @@ def parse_page(text: str) -> WikiPage:
         sources=tuple(str(x) for x in (meta.get("sources") or [])),
         updated=updated_str,
         status=str(meta.get("status") or "active"),
-        body=m.group("body"),
+        body=body,
     )
 
 
 # ---------------------------------------------------------------------------
 # slug + 디스크 I/O
 # ---------------------------------------------------------------------------
-
-_TYPE_FOLDER_ATTR = {
-    "project": "projects",
-    "company": "companies",
-    "person": "people",
-    "concept": "concepts",
-    "profile": "profile",
-}
-
-assert set(VALID_TYPES) - {"insight"} == set(_TYPE_FOLDER_ATTR), (
-    "VALID_TYPES와 _TYPE_FOLDER_ATTR 동기화 필요"
-)
-
 
 def slugify(name: str) -> str:
     """display name → file-safe slug. 한국어 음절 보존, 공백 → ``-``."""
@@ -168,10 +131,10 @@ def slugify(name: str) -> str:
     return s or "untitled"
 
 
-def _insight_base(vault_path: Path | None = None) -> Path:
-    """Insights 루트 (연/월 하위폴더 없이)."""
+def _type_base(page_type: str, vault_path: Path | None = None) -> Path:
+    """타입별 schema 선언 루트."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / get_config().vault_folders.wiki.insights
+    return vault / folder_for(page_type)
 
 
 def page_dir(
@@ -180,14 +143,13 @@ def page_dir(
     vault_path: Path | None = None,
     when: date | None = None,
 ) -> Path:
-    """페이지 타입별 저장 디렉토리. insight는 연/월 하위폴더 사용."""
+    """페이지 타입별 저장 디렉토리. schema의 year_month 타입은 연/월 하위폴더 사용."""
     if page_type not in VALID_TYPES:
         raise ValueError(f"알 수 없는 type: {page_type!r}")
-    if page_type == "insight":
-        return year_month_path(_insight_base(vault_path), when or date.today())
-    vault = (vault_path or get_vault_path()).expanduser().resolve()
-    sub = str(getattr(get_config().vault_folders.wiki, _TYPE_FOLDER_ATTR[page_type]))
-    return vault / sub
+    base = _type_base(page_type, vault_path)
+    if uses_year_month_folder(page_type):
+        return year_month_path(base, when or date.today())
+    return base
 
 
 def _insight_when(page: WikiPage) -> date:
@@ -202,7 +164,7 @@ def _insight_when(page: WikiPage) -> date:
 
 def page_path(page: WikiPage, *, vault_path: Path | None = None) -> Path:
     """페이지의 디스크 경로."""
-    when = _insight_when(page) if page.type == "insight" else None
+    when = _insight_when(page) if uses_year_month_folder(page.type) else None
     return page_dir(page.type, vault_path=vault_path, when=when) / page.filename
 
 
@@ -241,10 +203,10 @@ def list_pages(
 ) -> list[WikiPage]:
     """해당 타입 모든 페이지 로드 (parse 실패는 skip). slug 알파벳순.
 
-    insight는 연/월 하위폴더를 재귀 탐색한다.
+    schema의 year_month 타입은 연/월 하위폴더를 재귀 탐색한다.
     """
-    if page_type == "insight":
-        base = _insight_base(vault_path)
+    if uses_year_month_folder(page_type):
+        base = _type_base(page_type, vault_path)
     else:
         base = page_dir(page_type, vault_path=vault_path)
     if not base.is_dir():

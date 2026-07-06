@@ -14,35 +14,26 @@ precedence:
 
 from __future__ import annotations
 
-import re
 from collections import Counter
 from typing import Any
 
+from synapse_memory.model import extract_frontmatter
 from synapse_memory.recipes.recipe import DomainSource
 
 DEFAULT_DOMAIN = "generic"
 TAG_FREQUENCY_THRESHOLD = 0.3
 
-_FRONTMATTER_RE = re.compile(
-    r"^---\s*\n(?P<yaml>.*?)\n---\s*\n", re.DOTALL | re.MULTILINE
-)
-_FIELD_RE = re.compile(
-    r"^\s*domain\s*:\s*(?P<v>['\"]?)(?P<value>[^\"'\n]+)(?P=v)\s*$",
-    re.MULTILINE,
-)
-
-
 def _parse_profile_domain(profile_text: str) -> str | None:
     if not profile_text:
         return None
-    m = _FRONTMATTER_RE.search(profile_text)
-    if not m:
+    try:
+        meta, _body = extract_frontmatter(profile_text)
+    except ValueError:
         return None
-    field = _FIELD_RE.search(m.group("yaml"))
-    if not field:
+    value = meta.get("domain")
+    if not isinstance(value, str):
         return None
-    val = field.group("value").strip()
-    return val or None
+    return value.strip() or None
 
 
 def _collect_tags(matched: list[tuple[Any, float]]) -> list[str]:

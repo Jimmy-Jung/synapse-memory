@@ -59,7 +59,6 @@ class TestRoundTrip:
             role="iOS Lead",
             period_start="2023-09",
             period_end="2024-12",
-            team_size=4,
             domains=["ios", "mobile"],
             stack=["Swift", "TCA"],
             keywords=["retention"],
@@ -67,7 +66,6 @@ class TestRoundTrip:
                 ProjectMetric(name="D7 retention", before="18%", after="31%"),
                 ProjectMetric(name="paid", value="2.1%"),
             ],
-            links=["https://github.com/example/dansim"],
             sources=[
                 ProjectSource(type="obsidian", path="10_Active/단심.md"),
             ],
@@ -79,7 +77,6 @@ class TestRoundTrip:
         text = serialize_project_card(card)
         parsed = parse_project_card(text)
         assert parsed.role == "iOS Lead"
-        assert parsed.team_size == 4
         assert parsed.domains == ["ios", "mobile"]
         assert parsed.stack == ["Swift", "TCA"]
         assert len(parsed.metrics) == 2

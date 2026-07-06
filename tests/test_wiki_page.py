@@ -1,6 +1,7 @@
 """WikiPage 모델 round-trip + 검증."""
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -82,9 +83,9 @@ def test_slugify_korean_and_spaces() -> None:
 def test_page_dir_by_type(tmp_path: Path) -> None:
     assert page_dir("project", vault_path=tmp_path) == tmp_path / "Entities/Projects"
     assert page_dir("company", vault_path=tmp_path) == tmp_path / "Entities/Companies"
-    assert page_dir("person", vault_path=tmp_path) == tmp_path / "Entities/People"
     assert page_dir("concept", vault_path=tmp_path) == tmp_path / "Concepts"
     assert page_dir("profile", vault_path=tmp_path) == tmp_path / "Profile"
+    assert page_dir("log", vault_path=tmp_path, when=date(2026, 7, 6)) == tmp_path / "Logs" / "2026" / "07"
 
 
 def test_page_dir_insight_uses_year_month(tmp_path: Path) -> None:

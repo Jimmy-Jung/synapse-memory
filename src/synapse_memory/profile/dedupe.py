@@ -82,14 +82,14 @@ def _is_duplicate(
 # vault 파싱
 # ---------------------------------------------------------------------------
 
-_FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
+_PROFILE_FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
 _H2_RE = re.compile(r"^##\s+(.+?)\s*$")
 _H3_RE = re.compile(r"^###\s+(.+?)\s*$")
 _BULLET_RE = re.compile(r"^\s*[-*]\s+(.+?)\s*$")
 
 
 def _strip_frontmatter(text: str) -> str:
-    return _FRONTMATTER_RE.sub("", text, count=1)
+    return _PROFILE_FRONTMATTER_PATTERN.sub("", text, count=1)
 
 
 def parse_profile_facts(path: Path) -> list[str]:

@@ -454,15 +454,13 @@ def cmd_card_list(args: argparse.Namespace) -> int:
     company_cards = list_company_cards() if kind in ("company", "all") else []
 
     if args.json:
-        from dataclasses import asdict
-
         print(
             json.dumps(
                 {
                     "type": kind,
                     "total": len(project_cards) + len(company_cards),
-                    "projects": [asdict(card) for card in project_cards],
-                    "companies": [asdict(card) for card in company_cards],
+                    "projects": [_project_card_payload(card) for card in project_cards],
+                    "companies": [_company_card_payload(card) for card in company_cards],
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -510,6 +508,47 @@ def cmd_card_list(args: argparse.Namespace) -> int:
     else:
         print(f"\n총 {shown}개")
     return 0
+
+
+def _project_card_payload(card: Any) -> dict[str, object]:
+    """Legacy card-list JSON shape for project Entity shims."""
+    return {
+        "project_id": card.project_id,
+        "display_name": card.display_name,
+        "status": card.status,
+        "role": getattr(card, "role", None),
+        "period_start": getattr(card, "period_start", None),
+        "period_end": getattr(card, "period_end", None),
+        "domains": list(getattr(card, "domains", []) or []),
+        "stack": list(getattr(card, "stack", []) or []),
+        "keywords": list(getattr(card, "keywords", []) or []),
+        "metrics": [m.to_dict() if hasattr(m, "to_dict") else dict(m) for m in getattr(card, "metrics", []) or []],
+        "sources": [s.to_dict() if hasattr(s, "to_dict") else dict(s) for s in getattr(card, "sources", []) or []],
+        "confidence": getattr(card, "confidence", 1.0),
+        "created": getattr(card, "created", ""),
+        "last_reviewed": getattr(card, "last_reviewed", ""),
+        "body": getattr(card, "body", ""),
+    }
+
+
+def _company_card_payload(card: Any) -> dict[str, object]:
+    """Legacy card-list JSON shape for company Entity shims."""
+    return {
+        "company_id": card.company_id,
+        "display_name": card.display_name,
+        "status": card.status,
+        "country": getattr(card, "country", None),
+        "size": getattr(card, "size", None),
+        "website": getattr(card, "website", None),
+        "positions": [p.to_dict() if hasattr(p, "to_dict") else dict(p) for p in getattr(card, "positions", []) or []],
+        "notes": getattr(card, "notes", ""),
+        "sources": [s.to_dict() if hasattr(s, "to_dict") else dict(s) for s in getattr(card, "sources", []) or []],
+        "confidence": getattr(card, "confidence", 1.0),
+        "created": getattr(card, "created", ""),
+        "last_reviewed": getattr(card, "last_reviewed", ""),
+        "body": getattr(card, "body", ""),
+        "resume_language": getattr(card, "resume_language", None),
+    }
 
 
 def cmd_card_show(args: argparse.Namespace) -> int:

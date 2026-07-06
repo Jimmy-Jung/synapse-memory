@@ -1,4 +1,4 @@
-"""Company Card — 지원/관심 회사의 진실원본.
+"""Company entity compatibility helpers.
 
 이력서 작성 시:
     - 회사별 매칭 키워드, 포지션 정보
@@ -13,18 +13,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from synapse_memory.cards.project import (
-    _FRONTMATTER_RE,
-    FRONTMATTER_DELIMITER,
-    ProjectSource,
-)
+from synapse_memory.cards.project import ProjectSource
 from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.model import Entity, attr_dict, parse_frontmatter, serialize_entity
 
 DEFAULT_COMPANIES_SUBPATH = Path("20_Reference") / "Companies"
 
@@ -34,101 +28,90 @@ VALID_STATUSES = (
 VALID_SIZES = ("startup", "small", "medium", "large", "mega")
 
 
-@dataclass
-class JobPosition:
-    """관심/지원 포지션."""
-
-    title: str
-    seniority: str | None = None  # junior | mid | senior | lead | principal
-    keywords: list[str] = field(default_factory=list)
-    jd_url: str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"title": self.title}
-        if self.seniority:
-            d["seniority"] = self.seniority
-        if self.keywords:
-            d["keywords"] = self.keywords
-        if self.jd_url:
-            d["jd_url"] = self.jd_url
-        return d
+COMPANY_DEFAULT_ATTRS: dict[str, Any] = {
+    "country": None,
+    "size": None,
+    "website": None,
+    "resume_language": None,
+    "positions": [],
+    "notes": "",
+    "confidence": 1.0,
+    "created": "",
+    "last_reviewed": "",
+}
 
 
-@dataclass
-class CompanyCard:
-    """회사 단위 진실원본."""
-
-    company_id: str
-    display_name: str
-    status: str = "target"
-    country: str | None = None
-    size: str | None = None
-    website: str | None = None
-    positions: list[JobPosition] = field(default_factory=list)
-    notes: str = ""
-    sources: list[ProjectSource] = field(default_factory=list)
-    confidence: float = 1.0
-    created: str = ""
-    last_reviewed: str = ""
-    body: str = ""
-    resume_language: str | None = None
-
-    @property
-    def filename(self) -> str:
-        return f"{self.company_id}.md"
+def JobPosition(
+    title: str,
+    seniority: str | None = None,
+    keywords: list[str] | None = None,
+    jd_url: str | None = None,
+) -> Any:
+    """Company position attr value."""
+    return attr_dict(
+        title=title,
+        seniority=seniority,
+        keywords=list(keywords or []),
+        jd_url=jd_url,
+    )
 
 
-def _frontmatter_dict(card: CompanyCard) -> dict[str, Any]:
-    d: dict[str, Any] = {
-        "company_id": card.company_id,
-        "display_name": card.display_name,
-        "status": card.status,
-    }
-    for k, v in {
-        "country": card.country,
-        "size": card.size,
-        "website": card.website,
-        "resume_language": card.resume_language,
-    }.items():
-        if v:
-            d[k] = v
-    if card.positions:
-        d["positions"] = [p.to_dict() for p in card.positions]
-    if card.notes:
-        d["notes"] = card.notes
-    if card.sources:
-        d["sources"] = [s.to_dict() for s in card.sources]
-    d["confidence"] = card.confidence
-    if card.created:
-        d["created"] = card.created
-    if card.last_reviewed:
-        d["last_reviewed"] = card.last_reviewed
-    return d
+def CompanyCard(
+    company_id: str,
+    display_name: str,
+    status: str = "target",
+    country: str | None = None,
+    size: str | None = None,
+    website: str | None = None,
+    positions: list[Any] | None = None,
+    notes: str = "",
+    sources: list[Any] | None = None,
+    confidence: float = 1.0,
+    created: str = "",
+    last_reviewed: str = "",
+    body: str = "",
+    resume_language: str | None = None,
+) -> Entity:
+    """Compatibility constructor returning the single Entity model."""
+    attrs = _company_attrs(
+        country=country,
+        size=size,
+        website=website,
+        resume_language=resume_language,
+        positions=list(positions or []),
+        notes=notes,
+        confidence=confidence,
+        created=created,
+        last_reviewed=last_reviewed,
+    )
+    return Entity(
+        slug=company_id,
+        title=display_name,
+        type="company",
+        status=status,
+        sources=tuple(sources or ()),
+        body=body,
+        attrs=attrs,
+    )
 
 
-def serialize_company_card(card: CompanyCard) -> str:
-    fm = _frontmatter_dict(card)
-    yaml_text = yaml.safe_dump(
-        fm, sort_keys=False, allow_unicode=True, default_flow_style=False
-    ).rstrip()
-    body = card.body.lstrip("\n")
-    return f"{FRONTMATTER_DELIMITER}\n{yaml_text}\n{FRONTMATTER_DELIMITER}\n\n{body}"
+def serialize_company_card(card: Entity) -> str:
+    return serialize_entity(card)
 
 
-def parse_company_card(text: str) -> CompanyCard:
-    m = _FRONTMATTER_RE.match(text)
-    if not m:
-        raise ValueError("frontmatter (--- ... ---) 없음")
-
-    try:
-        meta = yaml.safe_load(m.group("yaml")) or {}
-    except yaml.YAMLError as exc:
-        raise ValueError(f"frontmatter yaml 파싱 실패: {exc}") from exc
-    if not isinstance(meta, dict):
-        raise ValueError(f"frontmatter가 dict 아님: {type(meta).__name__}")
-
-    company_id = meta.get("company_id")
-    display_name = meta.get("display_name")
+def parse_company_card(text: str) -> Entity:
+    meta, body = parse_frontmatter(text)
+    if "type" not in meta:
+        meta = {
+            **meta,
+            "type": "company",
+            "slug": meta.get("company_id"),
+            "title": meta.get("display_name"),
+        }
+    if meta.get("type") != "company":
+        raise ValueError(f"알 수 없는 company type: {meta.get('type')!r}")
+    company_id = meta.get("slug")
+    display_name = meta.get("title")
     if not company_id or not display_name:
         raise ValueError("필수 필드 누락: company_id, display_name")
 
@@ -161,7 +144,7 @@ def parse_company_card(text: str) -> CompanyCard:
         confidence=float(meta.get("confidence", 1.0)),
         created=str(meta.get("created", "")),
         last_reviewed=str(meta.get("last_reviewed", "")),
-        body=m.group("body"),
+        body=body,
         resume_language=meta.get("resume_language"),
     )
 
@@ -173,7 +156,7 @@ def companies_dir(vault_path: Path | None = None) -> Path:
 
 def load_company_card(
     company_id: str, *, vault_path: Path | None = None
-) -> CompanyCard:
+) -> Entity:
     path = companies_dir(vault_path) / f"{company_id}.md"
     if not path.is_file():
         raise FileNotFoundError(f"Company Card 없음: {path}")
@@ -181,7 +164,7 @@ def load_company_card(
 
 
 def save_company_card(
-    card: CompanyCard, *, vault_path: Path | None = None
+    card: Entity, *, vault_path: Path | None = None
 ) -> Path:
     path = companies_dir(vault_path) / card.filename
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,14 +174,18 @@ def save_company_card(
 
 def list_company_cards(
     *, vault_path: Path | None = None
-) -> list[CompanyCard]:
+) -> list[Entity]:
     d = companies_dir(vault_path)
     if not d.is_dir():
         return []
-    cards: list[CompanyCard] = []
+    cards: list[Entity] = []
     for p in sorted(d.glob("*.md")):
         try:
             cards.append(parse_company_card(p.read_text(encoding="utf-8")))
         except (ValueError, OSError):
             continue
     return sorted(cards, key=lambda c: c.company_id)
+
+
+def _company_attrs(**values: Any) -> dict[str, Any]:
+    return {**COMPANY_DEFAULT_ATTRS, **values}
