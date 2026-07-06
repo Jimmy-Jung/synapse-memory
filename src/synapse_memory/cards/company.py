@@ -24,8 +24,7 @@ from synapse_memory.cards.project import (
     FRONTMATTER_DELIMITER,
     ProjectSource,
 )
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.config import get_config, get_vault_path
 
 DEFAULT_COMPANIES_SUBPATH = Path("20_Reference") / "Companies"
 

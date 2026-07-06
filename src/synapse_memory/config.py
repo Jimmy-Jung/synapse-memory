@@ -29,6 +29,10 @@ from typing import Any, TypeVar, cast
 import yaml
 
 DEFAULT_CONFIG_PATH = Path.home() / ".synapse" / "config.yaml"
+DEFAULT_VAULT_PATH = (
+    Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents"
+)
+ENV_VAR_VAULT = "SYNAPSE_OBSIDIAN_VAULT"
 T = TypeVar("T")
 
 
@@ -653,6 +657,29 @@ def get_config(*, refresh: bool = False) -> SynapseConfig:
         _cached = load_config(path)
         _cached_mtime = current_mtime
     return _cached
+
+
+def get_vault_path(*, cfg: SynapseConfig | None = None, refresh_config: bool = False) -> Path:
+    """vault 경로 SSOT.
+
+    해석 순서: ``SYNAPSE_OBSIDIAN_VAULT`` env → config.vault → vault detector.
+    """
+    raw_env = os.environ.get(ENV_VAR_VAULT)
+    if raw_env and raw_env.strip():
+        return Path(raw_env).expanduser().resolve()
+
+    active_cfg = cfg if cfg is not None else get_config(refresh=refresh_config)
+    if active_cfg.vault and active_cfg.vault.strip():
+        return Path(active_cfg.vault).expanduser().resolve()
+
+    from synapse_memory.vault_detector import (
+        detect_vault_candidates,
+        select_default_candidate,
+    )
+
+    candidates = detect_vault_candidates()
+    candidate = select_default_candidate(candidates) or candidates[0]
+    return candidate.path.expanduser().resolve()
 
 
 def clear_cache() -> None:

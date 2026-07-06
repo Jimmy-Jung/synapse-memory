@@ -19,8 +19,7 @@ from typing import Any
 import yaml
 
 from synapse_memory.cards.project import FRONTMATTER_DELIMITER, slugify
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.config import get_config, get_vault_path
 
 DEFAULT_INSIGHTS_SUBPATH = Path("20_Reference") / "Insights"
 _FRONTMATTER_RE = re.compile(

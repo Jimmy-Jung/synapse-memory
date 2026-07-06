@@ -31,7 +31,7 @@ def _scaffold_vault(tmp_path: Path) -> Path:
 def _setup_env(
     monkeypatch: pytest.MonkeyPatch, vault: Path, registry: Path, project: Path
 ) -> None:
-    monkeypatch.setattr("synapse_memory.cli._setup_vault_path", lambda: vault)
+    monkeypatch.setattr("synapse_memory.cli._resolve_vault", lambda *a, **kw: vault)
     monkeypatch.setattr("synapse_memory.cli._setup_registry_path", lambda: registry)
     monkeypatch.setenv("SYNAPSE_HOME", str(registry.parent / ".synapse"))
     monkeypatch.chdir(project)

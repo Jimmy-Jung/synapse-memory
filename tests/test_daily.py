@@ -294,9 +294,9 @@ class TestRunDaily:
     def test_default_report_includes_final_elapsed_and_report_row(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import synapse_memory.collectors.obsidian as obsidian_mod
+        import synapse_memory.config as config_mod
 
-        monkeypatch.setattr(obsidian_mod, "get_vault_path", lambda: tmp_path)
+        monkeypatch.setattr(config_mod, "get_vault_path", lambda: tmp_path)
 
         def slow_collect() -> str:
             time.sleep(0.11)

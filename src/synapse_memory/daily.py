@@ -323,7 +323,7 @@ def _build_classify_action(
             save_classifications,
         )
         from synapse_memory.clusters import identify_clusters
-        from synapse_memory.collectors.obsidian import get_vault_path as obs_path
+        from synapse_memory.config import get_vault_path as obs_path
         from synapse_memory.llm import detect_ai_environment
 
         env = detect_ai_environment(model=classify_model)
@@ -394,7 +394,7 @@ def _build_generate_action(
         from synapse_memory.cards.company import companies_dir, save_company_card
         from synapse_memory.cards.project import projects_dir, save_project_card
         from synapse_memory.clusters import identify_clusters
-        from synapse_memory.collectors.obsidian import get_vault_path as obs_path
+        from synapse_memory.config import get_vault_path as obs_path
         from synapse_memory.llm import detect_ai_environment
 
         env = detect_ai_environment(model=generate_model)
@@ -488,8 +488,7 @@ def _build_update_profile_action(
     result: DailyResult | None = None,
 ) -> StageAction:
     def step() -> str:
-        from synapse_memory.collectors.obsidian.mirror import get_vault_path
-        from synapse_memory.config import get_config
+        from synapse_memory.config import get_config, get_vault_path
         from synapse_memory.llm import detect_ai_environment
         from synapse_memory.profile.dedupe import (
             dedupe_against_vault,
@@ -716,8 +715,7 @@ def write_daily_report(
     date: datetime.date | None = None,
     vault_path: Path | None = None,
 ) -> Path:
-    from synapse_memory.collectors.obsidian import get_vault_path
-    from synapse_memory.config import get_config
+    from synapse_memory.config import get_config, get_vault_path
     from synapse_memory.folders import year_month_path
 
     report_date = date or datetime.date.today()

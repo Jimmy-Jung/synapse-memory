@@ -7,8 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.config import get_config, get_vault_path
 
 _FIELD_RE = re.compile(r"^\s*(?:[-*]\s*)?(trigger|action|rationale|confidence):\s*(.+?)\s*$")
 

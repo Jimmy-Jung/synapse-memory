@@ -28,8 +28,7 @@ from synapse_memory.cards.card_text import (
     insight_card_to_text,
     project_card_to_text,
 )
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.config import get_config, get_vault_path
 from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
 from synapse_memory.recipes.domain import resolve_domain

@@ -17,8 +17,7 @@ from typing import Any
 
 import yaml
 
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.config import get_config, get_vault_path
 
 DEFAULT_PROJECTS_SUBPATH = Path("20_Reference") / "Projects"
 FRONTMATTER_DELIMITER = "---"

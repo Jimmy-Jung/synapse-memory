@@ -20,8 +20,7 @@ from typing import Literal
 from synapse_memory.cards.card_index import build_card_index
 from synapse_memory.cards.card_text import company_card_to_text
 from synapse_memory.cards.company import CompanyCard, load_company_card
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.config import get_config, get_vault_path
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.storage.last_response import (
     AnswerCitation,

@@ -349,8 +349,8 @@ class TestDailyIntegration:
         profile_md: Path,
         decision_patterns_md: Path,
     ) -> None:
+        import synapse_memory.config as config_mod
         from synapse_memory import daily
-        from synapse_memory.collectors.obsidian import mirror as obs_mirror
 
         # 실 ~/.synapse/private 격리 — ledger.save 가 실 ledger 를 건드리지 않게.
         fake_l0 = tmp_path / "private"
@@ -366,7 +366,7 @@ class TestDailyIntegration:
             decision_patterns_md.read_bytes()
         )
 
-        monkeypatch.setattr(obs_mirror, "get_vault_path", lambda: vault_root)
+        monkeypatch.setattr(config_mod, "get_vault_path", lambda: vault_root)
 
         class FakeEnv:
             ready = True

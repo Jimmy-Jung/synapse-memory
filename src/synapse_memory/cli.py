@@ -75,9 +75,8 @@ from synapse_memory.collectors.codex import (  # noqa: E402
 )
 from synapse_memory.collectors.obsidian import (  # noqa: E402
     collect_obsidian,
-    get_vault_path,
-    get_vault_path as get_obsidian_vault,
 )
+from synapse_memory.config import get_vault_path  # noqa: E402
 from synapse_memory.cost.events import command_context  # noqa: E402
 from synapse_memory.cost.summary import (  # noqa: E402
     load_summary,
@@ -1114,7 +1113,6 @@ def cmd_daily_status(args: argparse.Namespace) -> int:
 
 def cmd_migrate_folders(args: argparse.Namespace) -> int:
     """기존 flat 파일을 {YYYY}/{MM}/ 폴더 구조로 이동."""
-    from synapse_memory.collectors.obsidian import get_vault_path
     from synapse_memory.config import get_config
     from synapse_memory.folders.migrate import (
         DAILY_REPORT_PATTERN,
@@ -1123,14 +1121,7 @@ def cmd_migrate_folders(args: argparse.Namespace) -> int:
         scan_flat_files,
     )
 
-    vault = (
-        Path(args.vault).expanduser().resolve()
-        if args.vault
-        else get_vault_path()
-    )
-    if not vault.is_dir():
-        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
-        return 2
+    vault = _resolve_vault(args, require_exists=True)
 
     cfg = get_config()
     targets = [
@@ -1346,25 +1337,25 @@ def cmd_assistant_status(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_vault_or_fail() -> Path:
-    """env 또는 인자에서 vault 경로 해결. 없으면 종료."""
-    from synapse_memory.assistant_status import resolve_vault_path
-
-    v = resolve_vault_path()
-    if v is None or not v.exists():
-        print(
-            f"{FAIL} vault 경로 없음 — `export SYNAPSE_OBSIDIAN_VAULT='<vault 경로>'`",
-            file=sys.stderr,
-        )
-        sys.exit(2)
-    return v
+def _resolve_vault(
+    args: argparse.Namespace | None = None, *, require_exists: bool = False
+) -> Path:
+    """CLI 공통 vault 해석: --vault/--vault-path → config.get_vault_path."""
+    raw = None
+    if args is not None:
+        raw = getattr(args, "vault", None) or getattr(args, "vault_path", None)
+    vault = Path(raw).expanduser().resolve() if raw else get_vault_path()
+    if require_exists and not vault.is_dir():
+        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
+        raise SystemExit(2)
+    return vault
 
 
 def cmd_cleanup_scan(args: argparse.Namespace) -> int:
     """vault read-only 스캔 — 청소 후보 출력 (이동 없음)."""
     from synapse_memory.cleanup import scan_cleanup_candidates
 
-    vault = _resolve_vault_or_fail()
+    vault = _resolve_vault(require_exists=True)
     plan = scan_cleanup_candidates(
         vault,
         inbox_stale_days=args.inbox_days,
@@ -1408,7 +1399,7 @@ def cmd_cleanup_apply(args: argparse.Namespace) -> int:
         write_cleanup_manifest,
     )
 
-    vault = _resolve_vault_or_fail()
+    vault = _resolve_vault(require_exists=True)
     plan = scan_cleanup_candidates(
         vault,
         inbox_stale_days=args.inbox_days,
@@ -1735,11 +1726,10 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
     # recipe source (builtin vs user) — RecipeRegistry 한 번 더 스캔해 source 표시
     recipe_source = "?"
     try:
-        from synapse_memory.collectors.obsidian.mirror import get_vault_path
         from synapse_memory.config import get_config
         from synapse_memory.recipes.registry import RecipeRegistry
 
-        _vault = vault_path or get_vault_path()
+        _vault = vault_path or _resolve_vault()
         _reg = RecipeRegistry(
             builtin_dir=Path(__file__).resolve().parent / "recipes" / "builtin",
             user_dir=_vault / get_config().vault_folders.system.ai.recipes,
@@ -1769,11 +1759,7 @@ def _recipes_registry_for_vault(vault_arg: str | None) -> Any:
     from synapse_memory.config import get_config
     from synapse_memory.recipes.registry import RecipeRegistry
 
-    vault = (
-        Path(vault_arg).expanduser().resolve()
-        if vault_arg
-        else get_obsidian_vault().expanduser().resolve()
-    )
+    vault = _resolve_vault(argparse.Namespace(vault=vault_arg))
     builtin_dir = Path(__file__).resolve().parent / "recipes" / "builtin"
     user_dir = vault / get_config().vault_folders.system.ai.recipes
     reg = RecipeRegistry(builtin_dir=builtin_dir, user_dir=user_dir)
@@ -2068,7 +2054,7 @@ def cmd_card_generate(args: argparse.Namespace) -> int:
         print(f"{FAIL} 분류 결과 없음 — 먼저 `synapse-memory cluster classify`")
         return 2
 
-    obs_root = get_obsidian_vault()
+    obs_root = _resolve_vault(require_exists=True)
     if not obs_root.is_dir():
         print(f"{FAIL} vault 경로 없음: {obs_root}", file=sys.stderr)
         return 2
@@ -2166,7 +2152,7 @@ def cmd_cluster_classify(args: argparse.Namespace) -> int:
         print("클러스터 없음 — 먼저 collect")
         return 0
 
-    obs_root = get_obsidian_vault()
+    obs_root = _resolve_vault(require_exists=True)
     if not obs_root.is_dir():
         print(f"{FAIL} vault 경로 없음: {obs_root}", file=sys.stderr)
         return 2
@@ -2257,16 +2243,6 @@ def cmd_cluster_scan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _setup_vault_path() -> Path:
-    """vault 경로 resolver (테스트에서 monkeypatch 가능)."""
-    from synapse_memory.config import get_config
-
-    vault = get_config().vault
-    if vault is None:
-        raise ValueError("config.yaml vault 미설정")
-    return Path(vault).expanduser().resolve()
-
-
 def _setup_registry_path() -> Path:
     """projects.yaml 경로 (테스트에서 monkeypatch 가능)."""
     return Path.home() / ".synapse" / "projects.yaml"
@@ -2312,7 +2288,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     )
     from synapse_memory.projects.summary import generate_marker_body, render_context_cache
 
-    vault = _setup_vault_path()
+    vault = _resolve_vault(require_exists=True)
     profile, patterns = _setup_profile_patterns_paths(vault)
     body = generate_marker_body(profile, patterns)
     _, _, max_inject_bytes = _hook_runtime_settings()
@@ -2378,7 +2354,7 @@ def cmd_sync(args: argparse.Namespace) -> int:
     )
     from synapse_memory.projects.summary import generate_marker_body, render_context_cache
 
-    vault = _setup_vault_path()
+    vault = _resolve_vault(require_exists=True)
     profile, patterns = _setup_profile_patterns_paths(vault)
     body = generate_marker_body(profile, patterns)
     _, _, max_inject_bytes = _hook_runtime_settings()
@@ -2443,7 +2419,7 @@ def cmd_context(args: argparse.Namespace) -> int:
     if args.action == "render":
         from synapse_memory.projects.summary import render_context_cache
 
-        vault = _setup_vault_path()
+        vault = _resolve_vault(require_exists=True)
         profile, patterns = _setup_profile_patterns_paths(vault)
         out_path = Path(args.out).expanduser().resolve() if args.out else None
         _, _, configured_max = _hook_runtime_settings()
@@ -2506,7 +2482,7 @@ def _refresh_hook_sidecars() -> None:
     with contextlib.suppress(Exception):
         from synapse_memory.projects.summary import render_context_cache
 
-        vault = _setup_vault_path()
+        vault = _resolve_vault(require_exists=True)
         profile, patterns = _setup_profile_patterns_paths(vault)
         _, _, max_inject_bytes = _hook_runtime_settings()
         render_context_cache(profile, patterns, max_bytes=max_inject_bytes)
@@ -2518,18 +2494,10 @@ def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
     import json as _json
     import re as _re
 
-    from synapse_memory.collectors.obsidian import get_vault_path
     from synapse_memory.config import get_config
     from synapse_memory.folders import find_candidate_files
 
-    vault = (
-        Path(args.vault).expanduser().resolve()
-        if args.vault
-        else get_vault_path()
-    )
-    if not vault.is_dir():
-        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
-        return 2
+    vault = _resolve_vault(args, require_exists=True)
 
     inbox = vault / get_config().vault_folders.system.ai.memory_inbox
     candidates = find_candidate_files(inbox, pattern="Profile-*.md")
@@ -2573,17 +2541,9 @@ def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
 
 def cmd_dismiss_profile(args: argparse.Namespace) -> int:
     """ProfileFact/DecisionPattern 후보를 dismissed 목록에 append."""
-    from synapse_memory.collectors.obsidian import get_vault_path
     from synapse_memory.profile.dismissed import append_dismissed, dismissed_path
 
-    vault = (
-        Path(args.vault).expanduser().resolve()
-        if args.vault
-        else get_vault_path()
-    )
-    if not vault.is_dir():
-        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
-        return 2
+    vault = _resolve_vault(args, require_exists=True)
 
     target = dismissed_path(vault)
     record = append_dismissed(
@@ -2621,19 +2581,6 @@ def cmd_dismiss_profile(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_vault_or_exit(args: argparse.Namespace) -> Path:
-    """공통 vault 인자 해석. 디렉토리 없으면 exit 2 (caller 에서 sys.exit 호출)."""
-    from synapse_memory.collectors.obsidian import get_vault_path
-
-    vault = (
-        Path(args.vault).expanduser().resolve() if args.vault else get_vault_path()
-    )
-    if not vault.is_dir():
-        print(f"{FAIL} vault 경로가 존재하지 않습니다: {vault}", file=sys.stderr)
-        raise SystemExit(2)
-    return vault
-
-
 def cmd_dismiss_list(args: argparse.Namespace) -> int:
     """dismissed.jsonl 조회 — kind/reason/active 필터링."""
     import datetime as _dt
@@ -2647,7 +2594,7 @@ def cmd_dismiss_list(args: argparse.Namespace) -> int:
         profile_to_ttl_overrides,
     )
 
-    vault = _resolve_vault_or_exit(args)
+    vault = _resolve_vault(args, require_exists=True)
     target = dismissed_path(vault)
     if not target.is_file():
         if args.json:
@@ -2744,7 +2691,7 @@ def cmd_dismiss_purge_expired(args: argparse.Namespace) -> int:
         profile_to_ttl_overrides,
     )
 
-    vault = _resolve_vault_or_exit(args)
+    vault = _resolve_vault(args, require_exists=True)
     target = dismissed_path(vault)
     if not target.is_file():
         print("dismissed.jsonl 파일이 없습니다.")
@@ -2890,7 +2837,6 @@ def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
     awaiting 후보가 있을 때, 사용자가 명시적으로 임계치를 완화해 검토하고
     싶을 때 호출. dedupe/dismissed 안전망은 그대로 적용.
     """
-    from synapse_memory.collectors.obsidian.mirror import get_vault_path
     from synapse_memory.config import get_config
     from synapse_memory.profile.dedupe import dedupe_against_vault
     from synapse_memory.profile.dismissed import dismissed_path, load_dismissed
@@ -2903,7 +2849,7 @@ def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
     )
 
     cfg = get_config()
-    vault = get_vault_path()
+    vault = _resolve_vault(require_exists=True)
     ai = cfg.vault_folders.system.ai
     profile_path = vault / ai.profile
     dp_path = vault / ai.decision_patterns
@@ -3959,7 +3905,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     with command_context(_command_name(args)):
-        return int(args.func(args))
+        try:
+            return int(args.func(args))
+        except SystemExit as exc:
+            return int(exc.code) if isinstance(exc.code, int) else 1
 
 
 def _command_name(args: argparse.Namespace) -> str:
