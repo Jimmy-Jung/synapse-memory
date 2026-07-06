@@ -15,6 +15,7 @@ from synapse_memory.model import (
     parse_frontmatter,
     serialize_frontmatter,
 )
+from synapse_memory.model.entity import OBSERVED_AT_TYPES
 from synapse_memory.store import (
     list_pages,
     load_page,
@@ -60,7 +61,9 @@ class WikiPage:
     title: str
     related: tuple[str, ...] = ()
     sources: tuple[str, ...] = ()
+    created: str = ""
     updated: str = ""
+    observed_at: str = ""
     status: str = "active"
     body: str = ""
 
@@ -80,8 +83,12 @@ def _frontmatter_dict(page: WikiPage) -> dict[str, Any]:
         d["related"] = list(page.related)
     if page.sources:
         d["sources"] = list(page.sources)
+    if page.created:
+        d["created"] = page.created
     if page.updated:
         d["updated"] = page.updated
+    if page.type in OBSERVED_AT_TYPES and page.observed_at:
+        d["observed_at"] = page.observed_at
     d["status"] = page.status
     return d
 
@@ -131,7 +138,13 @@ def parse_page(text: str) -> WikiPage:
         title=str(title),
         related=tuple(str(x) for x in (meta.get("related") or [])),
         sources=tuple(str(x) for x in (meta.get("sources") or [])),
+        created=str(meta.get("created") or ""),
         updated=updated_str,
+        observed_at=(
+            str(meta.get("observed_at") or "")
+            if page_type in OBSERVED_AT_TYPES
+            else ""
+        ),
         status=str(meta.get("status") or "active"),
         body=body,
     )

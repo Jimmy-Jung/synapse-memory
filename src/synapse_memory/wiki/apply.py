@@ -10,6 +10,7 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+from synapse_memory.model.entity import OBSERVED_AT_TYPES
 from synapse_memory.store import load_page, save_page
 from synapse_memory.wiki.integration import PageOp
 from synapse_memory.wiki.page import WikiPage
@@ -26,14 +27,22 @@ def _merge_tuple(existing: tuple[str, ...], incoming: tuple[str, ...]) -> tuple[
     return tuple(merged)
 
 
+def _stamped_page(page: WikiPage, *, stamp: str, existing: WikiPage | None) -> WikiPage:
+    created = (existing.created if existing else "") or page.created or stamp
+    observed_at = ""
+    if page.type in OBSERVED_AT_TYPES:
+        observed_at = (existing.observed_at if existing else "") or page.observed_at or created
+    return replace(page, created=created, updated=stamp, observed_at=observed_at)
+
+
 def _page_for_apply(page: WikiPage, op: str, *, vault_path: Path | None, stamp: str) -> WikiPage:
-    stamped = replace(page, updated=stamp)
     if op != "update":
-        return stamped
+        return _stamped_page(page, stamp=stamp, existing=None)
     try:
         existing = load_page(page.type, page.slug, vault_path=vault_path)
     except (FileNotFoundError, ValueError):
-        return stamped
+        return _stamped_page(page, stamp=stamp, existing=None)
+    stamped = _stamped_page(page, stamp=stamp, existing=existing)
     return replace(
         stamped,
         related=_merge_tuple(existing.related, stamped.related),
