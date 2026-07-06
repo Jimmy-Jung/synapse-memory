@@ -5,7 +5,7 @@
 흐름::
 
     history.jsonl 마지막 N entry → AI provider → JSON → ProfileFact 리스트
-    → MemoryInbox/Profile-YYYY-MM-DD.md에 저장 (사용자 승인 후 vault 진실원본)
+    → Profile/user-profile.md wiki profile page에 반영
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
@@ -18,13 +18,19 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.config import get_vault_path
 from synapse_memory.llm import ai_api
 from synapse_memory.llm.ai_api import AIEnvironment, AIError
+from synapse_memory.model import parse_frontmatter, serialize_frontmatter
 from synapse_memory.profile.schema import (
     PROFILE_CATEGORIES,
     DecisionPattern,
     ProfileFact,
+)
+from synapse_memory.profile.wiki import (
+    PROFILE_SLUG,
+    PROFILE_TITLE,
+    profile_page_path,
 )
 from synapse_memory.storage.l0 import l0_root
 
@@ -575,7 +581,7 @@ def extract_decision_patterns(
 
 
 # ---------------------------------------------------------------------------
-# 저장 — MemoryInbox에 PR
+# 저장 — wiki profile page
 # ---------------------------------------------------------------------------
 
 
@@ -630,24 +636,20 @@ def save_profile_update(
     date: datetime.date | None = None,
     ledger: Mapping[str, object] | None = None,
 ) -> Path:
-    """후보 → vault MemoryInbox에 markdown PR. 사용자 검토 후 진실원본 반영.
+    """추출 결과 → wiki ``profile`` page source of truth에 반영.
 
     Args:
         ledger: ``profile/ledger.py`` 의 ``load_ledger`` 결과. 있으면 각 fact/pattern
             아래에 누적 메타(``seen_count`` / peak conf / 첫 등장)를 출력하고
-            ledger 기반으로 정렬 — apply 단계 판단 보조.
+            ledger 기반으로 정렬한다.
     """
-    from synapse_memory.folders import year_month_path
     from synapse_memory.profile.ledger import LedgerEntry, find_entry
 
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    inbox_base = vault / get_config().vault_folders.system.ai.memory_inbox
     today_date = date or datetime.date.today()
-    inbox = year_month_path(inbox_base, today_date)
-    inbox.mkdir(parents=True, exist_ok=True)
-
     today = today_date.isoformat()
-    path = inbox / f"Profile-{today}.md"
+    path = profile_page_path(vault)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     # ledger lookup helper — find_entry 가 정확 fingerprint + Jaccard fallback
     # 둘 다 처리. 흡수된 entry 의 best_statement 로 만든 ProfileFact 도 매칭됨.
@@ -663,28 +665,21 @@ def save_profile_update(
     fact_confs = [f.confidence for f in facts]
     pattern_confs = [p.confidence for p in (patterns or [])]
 
-    lines: list[str] = [
-        "---",
-        "type: profile_update",
-        f"generated: {today}",
-        f"fact_count: {len(facts)}",
-        f"pattern_count: {len(patterns) if patterns else 0}",
-        f"fact_avg_confidence: {_avg(fact_confs):.2f}",
-        f"pattern_avg_confidence: {_avg(pattern_confs):.2f}",
-        "status: pending_review",
-        "tags:",
-        "  - node/profile-update",
-        "---",
-        "",
-        f"# Profile 갱신 후보 ({today})",
-        "",
-        "검토 후 `90_System/AI/Profile.md` / `DecisionPatterns.md`에 반영.",
-        "각 항목의 `↳ ledger:` 라인은 multi-day 누적 신호 — 등장 횟수가 많고 peak 가 높을수록 안정 신호.",
-        "",
-    ]
+    existing_meta: dict[str, object] = {}
+    existing_body = ""
+    if path.is_file():
+        try:
+            existing_meta, existing_body = parse_frontmatter(
+                path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            existing_meta = {}
+            existing_body = ""
+
+    lines: list[str] = []
 
     if facts:
-        lines.append("## ProfileFact 후보")
+        lines.append(f"## Profile Facts - {today}")
         lines.append("")
         by_cat: dict[str, list[ProfileFact]] = {}
         for f in facts:
@@ -706,7 +701,7 @@ def save_profile_update(
             lines.append("")
 
     if patterns:
-        lines.append("## DecisionPattern 후보")
+        lines.append(f"## Decision Patterns - {today}")
         lines.append("")
         ordered_p = sorted(
             patterns,
@@ -725,5 +720,22 @@ def save_profile_update(
                 lines.append(meta)
             lines.append("")
 
-    path.write_text("\n".join(lines), encoding="utf-8")
+    meta = {
+        **existing_meta,
+        "type": "profile",
+        "slug": PROFILE_SLUG,
+        "title": str(existing_meta.get("title") or PROFILE_TITLE),
+        "status": str(existing_meta.get("status") or "active"),
+        "updated": today,
+        "scope": str(existing_meta.get("scope") or "user"),
+        "fact_count": len(facts),
+        "pattern_count": len(patterns) if patterns else 0,
+        "fact_avg_confidence": f"{_avg(fact_confs):.2f}",
+        "pattern_avg_confidence": f"{_avg(pattern_confs):.2f}",
+    }
+    body_parts = [existing_body.strip()] if existing_body.strip() else ["# User Profile"]
+    if lines:
+        body_parts.append("\n".join(lines).strip())
+    body = "\n\n".join(part for part in body_parts if part).strip() + "\n"
+    path.write_text(serialize_frontmatter(meta, body), encoding="utf-8")
     return path

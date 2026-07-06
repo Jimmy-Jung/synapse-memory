@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from synapse_memory.model import extract_frontmatter
+from synapse_memory.profile.wiki import parse_profile_frontmatter_field
 from synapse_memory.recipes.recipe import LocaleSource
 
 DEFAULT_LOCALE = "한국어"
@@ -47,16 +47,7 @@ def _normalize(value: str) -> str:
 
 
 def _parse_profile_preferred_lang(profile_text: str) -> str | None:
-    if not profile_text:
-        return None
-    try:
-        meta, _body = extract_frontmatter(profile_text)
-    except ValueError:
-        return None
-    value = meta.get("preferred_lang")
-    if not isinstance(value, str):
-        return None
-    return value.strip()
+    return parse_profile_frontmatter_field(profile_text, "preferred_lang")
 
 
 def resolve_locale(

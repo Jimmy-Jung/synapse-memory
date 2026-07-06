@@ -49,8 +49,12 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from synapse_memory.profile.dedupe import _jaccard, _normalize, _token_set
 from synapse_memory.profile.schema import DecisionPattern, ProfileFact
+from synapse_memory.profile.similarity import (
+    jaccard as _jaccard,
+    normalize as _normalize,
+    token_set as _token_set,
+)
 from synapse_memory.storage.l0 import L0_FILE_MODE, ensure_secure_dir, l0_root
 
 _LEDGER_SUBPATH = Path("state") / "profile_ledger.jsonl"

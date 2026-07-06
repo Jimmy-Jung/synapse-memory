@@ -336,27 +336,11 @@ def _build_update_profile_action(
     def step() -> str:
         from synapse_memory.config import get_config, get_vault_path
         from synapse_memory.llm import detect_ai_environment
-        from synapse_memory.profile.dedupe import (
-            dedupe_against_vault,
-            parse_decision_pattern_triggers,
-            parse_profile_facts,
-        )
-        from synapse_memory.profile.dismissed import (
-            dismissed_path,
-            load_dismissed,
-        )
+        from synapse_memory.profile.candidate_filter import CandidateFilter
         from synapse_memory.profile.extract import (
             extract_decision_patterns,
             extract_profile_facts,
             save_profile_update,
-        )
-        from synapse_memory.profile.ledger import (
-            enrich_promoted_patterns,
-            load_ledger,
-            mark_promoted,
-            promote_candidates,
-            record_extraction,
-            save_ledger,
         )
 
         env = detect_ai_environment(model=profile_model)
@@ -365,19 +349,14 @@ def _build_update_profile_action(
 
         cfg = get_config()
         vault = get_vault_path()
-        ai_folders = cfg.vault_folders.system.ai
-        profile_path = vault / ai_folders.profile
-        dp_path = vault / ai_folders.decision_patterns
-        existing_facts = parse_profile_facts(profile_path)
-        existing_triggers = parse_decision_pattern_triggers(dp_path)
-        dismissed = load_dismissed(dismissed_path(vault))
+        candidate_filter = CandidateFilter(vault_path=vault, config=cfg)
         # strong (misclassified+irrelevant) 는 별도 섹션으로 LLM 에 강한 차단 신호.
-        strong_facts = sorted(dismissed.strong_facts())
-        strong_patterns = sorted(dismissed.strong_patterns())
+        strong_facts = candidate_filter.strong_facts()
+        strong_patterns = candidate_filter.strong_patterns()
         # normal 제외 = vault + dismissed 전체. strong 항목이 두 섹션에 중복돼도
         # LLM 측 무해 (차단 효과만 강화) — 단순성 우선.
-        excluded_facts = existing_facts + sorted(dismissed.facts)
-        excluded_triggers = existing_triggers + sorted(dismissed.patterns)
+        excluded_facts = candidate_filter.excluded_facts()
+        excluded_triggers = candidate_filter.excluded_pattern_triggers()
 
         # 1) 추출 — claude-code + codex history, negative example 주입.
         raw_facts = extract_profile_facts(
@@ -398,33 +377,13 @@ def _build_update_profile_action(
                 excluded_triggers_strong=strong_patterns,
             )
 
-        # 2) ledger 누적 + promotion — multi-day cross-validation.
-        ledger = load_ledger()
-        record_extraction(ledger, raw_facts, raw_patterns)
-        promoted_facts, promoted_patterns, promo_report = promote_candidates(
-            ledger,
-            facts_input=raw_facts,
-            patterns_input=raw_patterns,
-            min_count=cfg.profile.promotion_min_count,
-            window_days=cfg.profile.promotion_window_days,
-            fast_path_confidence=cfg.profile.fast_path_confidence,
-        )
-        # pattern 의 action/rationale 은 ledger 가 안 저장 — 오늘 호출 결과로 보강.
-        promoted_patterns = enrich_promoted_patterns(promoted_patterns, raw_patterns)
-
-        # 3) 후처리 dedupe — vault/dismissed 와 비교 안전망.
-        facts, patterns, report = dedupe_against_vault(
-            promoted_facts,
-            promoted_patterns,
-            profile_path=profile_path,
-            decision_patterns_path=dp_path,
-            dismissed_facts=dismissed.facts,
-            dismissed_patterns=dismissed.patterns,
-        )
-
-        # 4) ledger 마크 + persist — promoted 만 마크 (dedupe 로 drop 된 건 다음 호출에서 다시).
-        mark_promoted(ledger, facts, patterns)
-        save_ledger(ledger)
+        filtered = candidate_filter.filter(raw_facts, raw_patterns)
+        facts = filtered.facts
+        patterns = filtered.patterns
+        report = filtered.dedupe_report
+        promo_report = filtered.promotion_report
+        dismissed = filtered.dismissed
+        ledger = filtered.ledger
 
         # 관찰성: DailyReport 의 Profile Pipeline 섹션 렌더용 구조화 메타.
         if result is not None:
@@ -432,6 +391,8 @@ def _build_update_profile_action(
 
             reason_counts: dict[str, int] = {}
             try:
+                from synapse_memory.profile.dismissed import dismissed_path
+
                 dpath = dismissed_path(vault)
                 if dpath.is_file():
                     import json as _json

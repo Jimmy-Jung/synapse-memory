@@ -17,23 +17,14 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from synapse_memory.model import extract_frontmatter
+from synapse_memory.profile.wiki import parse_profile_frontmatter_field
 from synapse_memory.recipes.recipe import DomainSource
 
 DEFAULT_DOMAIN = "generic"
 TAG_FREQUENCY_THRESHOLD = 0.3
 
 def _parse_profile_domain(profile_text: str) -> str | None:
-    if not profile_text:
-        return None
-    try:
-        meta, _body = extract_frontmatter(profile_text)
-    except ValueError:
-        return None
-    value = meta.get("domain")
-    if not isinstance(value, str):
-        return None
-    return value.strip() or None
+    return parse_profile_frontmatter_field(profile_text, "domain")
 
 
 def _collect_tags(matched: list[tuple[Any, float]]) -> list[str]:

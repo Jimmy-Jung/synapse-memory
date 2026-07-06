@@ -45,12 +45,12 @@ def _make_vault(
     *,
     profile_body: str | None = None,
 ) -> Path:
-    """20_Projects/Drafts/ 및 90_System/AI/Profile.md 가 있는 최소 vault."""
+    """20_Projects/Drafts/ 및 wiki profile page 가 있는 최소 vault."""
     vault = tmp_path / "vault"
     (vault / "20_Projects" / "Drafts").mkdir(parents=True)
-    (vault / "90_System" / "AI").mkdir(parents=True)
+    (vault / "Profile").mkdir(parents=True)
     if profile_body is not None:
-        (vault / "90_System" / "AI" / "Profile.md").write_text(
+        (vault / "Profile" / "user-profile.md").write_text(
             profile_body, encoding="utf-8"
         )
     return vault

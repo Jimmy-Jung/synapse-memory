@@ -14,12 +14,12 @@ import pytest
 import synapse_memory.cli as cli_mod
 from synapse_memory.cards.project import ProjectCard, save_project_card
 from synapse_memory.cli import cmd_feedback
-from synapse_memory.storage.l0 import L0_ENV_VAR
-from synapse_memory.storage.last_response import (
+from synapse_memory.feedback.last_response import (
     AnswerCitation,
     LastAnswerReference,
     save_last_answer,
 )
+from synapse_memory.storage.l0 import L0_ENV_VAR
 
 
 def _last_args(**overrides: object) -> argparse.Namespace:
@@ -142,11 +142,12 @@ def test_feedback_pattern_records_weight(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
-    ai_dir = tmp_path / "90_System" / "AI"
-    ai_dir.mkdir(parents=True)
-    (ai_dir / "DecisionPatterns.md").write_text(
-        "- trigger: 큰 작업 시작\n"
-        "  action: 계획 먼저 작성\n",
+    profile_dir = tmp_path / "Profile"
+    profile_dir.mkdir(parents=True)
+    (profile_dir / "user-profile.md").write_text(
+        "## Decision Patterns - 2026-07-06\n\n"
+        "### 큰 작업 시작\n\n"
+        "- 행동: 계획 먼저 작성\n",
         encoding="utf-8",
     )
 

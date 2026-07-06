@@ -1,4 +1,4 @@
-"""DecisionPatterns.md parsing tests.
+"""Wiki profile decision pattern parsing tests.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-05-12
@@ -12,14 +12,14 @@ from synapse_memory.profile.patterns import list_decision_patterns
 
 
 def test_list_decision_patterns_from_markdown(tmp_path: Path) -> None:
-    ai_dir = tmp_path / "90_System" / "AI"
-    ai_dir.mkdir(parents=True)
-    (ai_dir / "DecisionPatterns.md").write_text(
-        "# DecisionPatterns\n\n"
-        "- trigger: 큰 작업 시작\n"
-        "  action: 계획 먼저 작성\n"
-        "  rationale: 범위 관리\n"
-        "  confidence: 0.8\n",
+    profile_dir = tmp_path / "Profile"
+    profile_dir.mkdir(parents=True)
+    (profile_dir / "user-profile.md").write_text(
+        "## Decision Patterns - 2026-07-06\n\n"
+        "### 큰 작업 시작\n\n"
+        "- 행동: 계획 먼저 작성\n"
+        "- 이유: 범위 관리\n"
+        "- 신뢰도: 0.8\n",
         encoding="utf-8",
     )
 

@@ -95,7 +95,8 @@ def test_sc_002_builtin_recipes_produce_markdown(vault: Path) -> None:
 def test_sc_003_english_resume_zero_korean_headers(vault: Path) -> None:
     """SC-003 — Profile.preferred_lang=en 이면 system prompt 가 영어 placeholder 와 함께 렌더."""
     src = vault / "profile_en_design" / "90_System" / "AI" / "Profile.md"
-    dst = vault / "90_System" / "AI" / "Profile.md"
+    dst = vault / "Profile" / "user-profile.md"
+    dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
     captured: dict[str, str] = {}

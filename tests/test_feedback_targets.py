@@ -12,15 +12,15 @@ import pytest
 
 from synapse_memory.cards.company import CompanyCard, save_company_card
 from synapse_memory.cards.project import ProjectCard, save_project_card
+from synapse_memory.feedback.last_response import (
+    AnswerCitation,
+    LastAnswerReference,
+)
 from synapse_memory.feedback.targets import (
     FeedbackTarget,
     resolve_card_target,
     resolve_last_answer_targets,
     resolve_pattern_target,
-)
-from synapse_memory.storage.last_response import (
-    AnswerCitation,
-    LastAnswerReference,
 )
 
 
@@ -96,12 +96,13 @@ def test_resolve_unknown_card_target(tmp_path: Path) -> None:
 
 
 def test_resolve_pattern_target(tmp_path: Path) -> None:
-    ai_dir = tmp_path / "90_System" / "AI"
-    ai_dir.mkdir(parents=True)
-    (ai_dir / "DecisionPatterns.md").write_text(
-        "- trigger: 큰 작업 시작\n"
-        "  action: 계획 먼저 작성\n"
-        "  rationale: 범위 관리\n",
+    profile_dir = tmp_path / "Profile"
+    profile_dir.mkdir(parents=True)
+    (profile_dir / "user-profile.md").write_text(
+        "## Decision Patterns - 2026-07-06\n\n"
+        "### 큰 작업 시작\n\n"
+        "- 행동: 계획 먼저 작성\n"
+        "- 이유: 범위 관리\n",
         encoding="utf-8",
     )
 

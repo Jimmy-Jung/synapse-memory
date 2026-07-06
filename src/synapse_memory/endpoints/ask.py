@@ -16,14 +16,15 @@ from synapse_memory.cards.insight import (
     new_insight_id,
     save_insight_card,
 )
-from synapse_memory.llm.ai_api import AIEnvironment
-from synapse_memory.recipes import generate as recipes_generate
-from synapse_memory.storage.last_response import (
+from synapse_memory.feedback.last_response import (
     AnswerCitation,
     LastAnswerReference,
     new_answer_reference,
     save_last_answer,
 )
+from synapse_memory.llm.ai_api import AIEnvironment
+from synapse_memory.recipes import generate as recipes_generate
+from synapse_memory.recipes.kinds import is_known_source_kind
 
 _ASK_RECIPE_NAME = "ask"
 DEFAULT_TOP_K = 5
@@ -50,7 +51,7 @@ def _rag_filter_from_where(where: dict[str, object] | None) -> dict[str, str] | 
     if not where:
         return None
     source_kind = where.get("source_kind")
-    if source_kind in {"card_project", "card_company", "card_insight"}:
+    if is_known_source_kind(source_kind):
         return {"source_kind": str(source_kind)}
     return None
 

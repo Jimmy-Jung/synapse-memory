@@ -1,4 +1,8 @@
-"""Last AI answer metadata storage for feedback commands."""
+"""Last AI answer metadata state for feedback commands.
+
+Author: JunyoungJung
+Created: 2026-07-06
+"""
 
 from __future__ import annotations
 
@@ -11,9 +15,7 @@ from synapse_memory.feedback.events import new_event_id
 from synapse_memory.storage.l0 import ensure_l0_root_secure, l0_root, secure_write_text
 
 AnswerCommand: TypeAlias = str
-"""Open string alias. Recognized values: "ask", "persona.what_did_i_think", "persona.decide",
-and dynamic "persona.generate.<recipe_name>" identifiers introduced by 007-persona-recipes.
-Validation in :func:`LastAnswerReference.from_dict` accepts any non-empty string."""
+"""Open string alias for ask/persona/recipe answer commands."""
 
 CitationTargetKind: TypeAlias = Literal["card", "pattern"]
 LAST_RESPONSE_FILENAME = "last_response.json"
@@ -58,7 +60,7 @@ class LastAnswerReference:
             "command": self.command,
             "query": self.query,
             "session_id": self.session_id,
-            "citations": [c.to_dict() for c in self.citations],
+            "citations": [citation.to_dict() for citation in self.citations],
         }
 
     @classmethod
@@ -75,9 +77,9 @@ class LastAnswerReference:
             command=command,
             query=str(data.get("query", "")),
             citations=tuple(
-                AnswerCitation.from_dict(c)
-                for c in raw_citations
-                if isinstance(c, dict)
+                AnswerCitation.from_dict(citation)
+                for citation in raw_citations
+                if isinstance(citation, dict)
             ),
             session_id=(
                 str(data["session_id"]) if data.get("session_id") is not None else None

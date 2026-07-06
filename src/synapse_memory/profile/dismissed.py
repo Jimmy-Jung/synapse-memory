@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Literal
 
 from synapse_memory.config import get_config, get_vault_path
-from synapse_memory.profile.dedupe import _normalize
+from synapse_memory.profile.similarity import normalize as _normalize
 
 DismissKind = Literal["fact", "pattern"]
 DismissReason = Literal[

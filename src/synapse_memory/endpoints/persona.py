@@ -17,6 +17,11 @@ from pathlib import Path
 from typing import Literal
 
 from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.feedback.last_response import (
+    AnswerCitation,
+    new_answer_reference,
+    save_last_answer,
+)
 from synapse_memory.llm.ai_api import AIEnvironment
 from synapse_memory.model import Entity
 from synapse_memory.recall.timeline import (
@@ -27,11 +32,6 @@ from synapse_memory.recall.timeline import (
     _sort_by_time,
 )
 from synapse_memory.recipes.pipeline import build_entity_index, entity_to_text
-from synapse_memory.storage.last_response import (
-    AnswerCitation,
-    new_answer_reference,
-    save_last_answer,
-)
 from synapse_memory.store import load_entity
 
 DEFAULT_PROJECTS_FOR_RESUME = 6
@@ -281,26 +281,6 @@ class DecideResult:
     answer: str
     profile_used: bool
     source_ids: list[str] = field(default_factory=list)
-
-
-def _load_profile_text(vault_path: Path | None = None) -> str:
-    """vault Profile.md + DecisionPatterns.md → 단일 텍스트. 없으면 빈 문자열.
-
-    Note: 본 함수는 endpoints 레벨 헬퍼이며, 실제 decide() 흐름은
-    ``recipes.pipeline._load_profile_text`` 가 담당한다. 외부 호출자 호환을 위해
-    유지. 5000자 silent cap 제거 (eng-review B2) — Profile 전체 로드.
-    """
-    vault = (vault_path or get_vault_path()).expanduser().resolve()
-    parts: list[str] = []
-    profile_root = vault / get_config().vault_folders.system.ai.root
-    for fname in ("Profile.md", "DecisionPatterns.md"):
-        p = profile_root / fname
-        if p.is_file():
-            try:
-                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')}")
-            except OSError:
-                continue
-    return "\n\n".join(parts)
 
 
 def decide(

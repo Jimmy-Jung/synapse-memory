@@ -19,13 +19,13 @@ import pytest
 from synapse_memory.cards.project import ProjectCard, save_project_card
 from synapse_memory.endpoints.persona import (
     WhatDidIThinkResult,
-    _load_profile_text,
     decide,
     what_did_i_think,
 )
+from synapse_memory.feedback.last_response import load_last_answer
 from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.profile.wiki import load_profile_text
 from synapse_memory.storage.l0 import L0_ENV_VAR
-from synapse_memory.storage.last_response import load_last_answer
 
 
 def _ai_env() -> ClaudeEnvironment:
@@ -174,9 +174,9 @@ class TestDecide:
         assert result.answer == "**추천**: A"
 
     def test_with_profile(self, tmp_path: Path) -> None:
-        ai_dir = tmp_path / "90_System" / "AI"
-        ai_dir.mkdir(parents=True)
-        (ai_dir / "Profile.md").write_text(
+        profile_dir = tmp_path / "Profile"
+        profile_dir.mkdir(parents=True)
+        (profile_dir / "user-profile.md").write_text(
             "# Profile\n- 한국어 응답 선호\n- 단계별 작업", encoding="utf-8"
         )
         _seed(tmp_path, "x")
@@ -240,27 +240,27 @@ class TestDecide:
 
 class TestLoadProfileText:
     def test_missing_returns_empty(self, tmp_path: Path) -> None:
-        assert _load_profile_text(tmp_path) == ""
+        assert load_profile_text(tmp_path) == ""
 
     def test_loads_full_profile_no_5000_char_cap(self, tmp_path: Path) -> None:
         """B2: 5000자 silent truncation 제거 회귀 검증."""
-        ai_dir = tmp_path / "90_System" / "AI"
-        ai_dir.mkdir(parents=True)
+        profile_dir = tmp_path / "Profile"
+        profile_dir.mkdir(parents=True)
         long_profile = "# Profile\n" + ("x" * 5900) + "\nMARKER_END"
         assert len(long_profile) > 5000
-        (ai_dir / "Profile.md").write_text(long_profile, encoding="utf-8")
+        (profile_dir / "user-profile.md").write_text(long_profile, encoding="utf-8")
 
-        loaded = _load_profile_text(tmp_path)
+        loaded = load_profile_text(tmp_path)
 
         assert len(loaded) > 5000
         assert "MARKER_END" in loaded
 
     def test_loads_multiple_files(self, tmp_path: Path) -> None:
-        ai_dir = tmp_path / "90_System" / "AI"
-        ai_dir.mkdir(parents=True)
-        (ai_dir / "Profile.md").write_text("# Profile\nA", encoding="utf-8")
-        (ai_dir / "DecisionPatterns.md").write_text("# Patterns\nB", encoding="utf-8")
-        text = _load_profile_text(tmp_path)
+        profile_dir = tmp_path / "Profile"
+        profile_dir.mkdir(parents=True)
+        (profile_dir / "user-profile.md").write_text("# Profile\nA", encoding="utf-8")
+        (profile_dir / "decision-style.md").write_text("# Patterns\nB", encoding="utf-8")
+        text = load_profile_text(tmp_path)
         assert "Profile" in text
         assert "Patterns" in text
         assert "A" in text and "B" in text

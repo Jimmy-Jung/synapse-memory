@@ -19,13 +19,13 @@ import pytest
 
 
 def _build_vault(tmp_path: Path, *, profile_fm: str = "") -> Path:
-    """minimal vault with Profile.md + 1 ProjectCard."""
+    """minimal vault with wiki profile page."""
     vault = tmp_path / "vault"
-    profile_dir = vault / "90_System" / "AI"
+    profile_dir = vault / "Profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
     profile_body = "이름: 테스트\n강점: 명료한 글쓰기\n"
     profile_text = profile_fm + profile_body if profile_fm else profile_body
-    (profile_dir / "Profile.md").write_text(profile_text, encoding="utf-8")
+    (profile_dir / "user-profile.md").write_text(profile_text, encoding="utf-8")
     return vault
 
 

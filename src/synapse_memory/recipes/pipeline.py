@@ -20,13 +20,24 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.feedback.last_response import (
+    AnswerCitation,
+    LastAnswerReference,
+    new_answer_reference,
+    save_last_answer,
+)
 from synapse_memory.llm.ai_api import complete as ai_api_complete
 from synapse_memory.model import Entity
 from synapse_memory.postprocess import strip_meta_prefix
+from synapse_memory.profile.wiki import load_profile_text
 from synapse_memory.recipes.domain import resolve_domain
+from synapse_memory.recipes.kinds import (
+    SOURCE_KIND_TO_CARD_KIND,
+    CardKind as EntityKind,
+)
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
 from synapse_memory.recipes.locale import resolve_locale
 from synapse_memory.recipes.recipe import (
@@ -37,18 +48,10 @@ from synapse_memory.recipes.recipe import (
 )
 from synapse_memory.recipes.registry import RecipeRegistry
 from synapse_memory.retrieval.index import select_related
-from synapse_memory.storage.last_response import (
-    AnswerCitation,
-    LastAnswerReference,
-    new_answer_reference,
-    save_last_answer,
-)
 from synapse_memory.store import list_current_entities, load_entity
 
-_PROFILE_FILES = ("Profile.md", "DecisionPatterns.md")
 _BUILTIN_DIR_DEFAULT = Path(__file__).resolve().parent / "builtin"
 _FILENAME_UNSAFE_RE = re.compile(r"[\\/\x00\r\n]")
-EntityKind = Literal["project", "company", "insight"]
 DEFAULT_SUMMARY_CHARS = 240
 
 
@@ -72,14 +75,6 @@ class _CardMatch:
     id: str
     document: str
     metadata: dict[str, str] = field(default_factory=dict)
-
-
-# rag_filter.source_kind (예 "card_project") → Entity type ("project")
-_SOURCE_KIND_TO_ENTITY_KIND: dict[str, EntityKind] = {
-    "card_project": "project",
-    "card_company": "company",
-    "card_insight": "insight",
-}
 
 
 @dataclass(frozen=True)
@@ -115,25 +110,6 @@ class EntityIndex:
             head = f"[{e.slug}] ({e.kind}) {e.title}"
             lines.append(f"{head} — {e.summary}" if e.summary else head)
         return "\n".join(lines)
-
-
-def _load_profile_text(vault: Path) -> str:
-    """vault Profile/DecisionPatterns 전체 로드.
-
-    이전: 파일당 5000자 silent truncation 으로 사용자가 알아챌 수 없는 손실 발생.
-    이후 (B2, eng-review 2026-05-13): 전체 로드. 시스템 prompt 32KB cap 이 자동
-    안전망 — Profile 이 너무 크면 ``RecipePromptTooLargeError`` 로 명시적 실패 (silent X).
-    """
-    parts: list[str] = []
-    base = vault / get_config().vault_folders.system.ai.root
-    for fname in _PROFILE_FILES:
-        p = base / fname
-        if p.is_file():
-            try:
-                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')}")
-            except OSError:
-                continue
-    return "\n\n".join(parts)
 
 
 def _safe_filename_component(value: str, *, max_len: int = 80) -> str:
@@ -294,10 +270,14 @@ def _kinds_for_recipe(
     rag_filter_override: dict[str, str] | None = None,
 ) -> tuple[EntityKind, ...]:
     """recipe.rag_filter.source_kind → Entity type 제한. 미지정이면 전체."""
-    rag_filter = rag_filter_override if rag_filter_override is not None else (recipe.rag_filter or {})
+    rag_filter = (
+        rag_filter_override
+        if rag_filter_override is not None
+        else (recipe.rag_filter or {})
+    )
     source_kind = rag_filter.get("source_kind")
-    if source_kind and source_kind in _SOURCE_KIND_TO_ENTITY_KIND:
-        return (_SOURCE_KIND_TO_ENTITY_KIND[source_kind],)
+    if source_kind and source_kind in SOURCE_KIND_TO_CARD_KIND:
+        return (SOURCE_KIND_TO_CARD_KIND[source_kind],)
     return ("project", "company", "insight")
 
 
@@ -559,7 +539,7 @@ def generate(
         except (FileNotFoundError, ValueError):
             company = None  # 미존재 시 fallback
 
-    profile_text = _load_profile_text(vault) if recipe.use_profile else ""
+    profile_text = load_profile_text(vault) if recipe.use_profile else ""
     profile_used = bool(profile_text)
 
     locale, locale_src = (

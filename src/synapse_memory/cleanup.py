@@ -120,6 +120,7 @@ def _is_protected(rel_path: Path, folders: VaultFoldersConfig) -> bool:
         folders.system.ai.decision_patterns,
     }
     protected_dirs = {
+        "Profile",
         folders.system.ai.recipes,
     }
     if rel in protected_files:

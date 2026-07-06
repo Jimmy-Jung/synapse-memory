@@ -9,14 +9,14 @@ import pytest
 
 import synapse_memory.endpoints.ask as ask_mod
 from synapse_memory.endpoints.ask import ask
-from synapse_memory.llm.claude import ClaudeEnvironment
-from synapse_memory.recipes.recipe import GenerationResult
-from synapse_memory.storage.l0 import L0_ENV_VAR
-from synapse_memory.storage.last_response import (
+from synapse_memory.feedback.last_response import (
     AnswerCitation,
     load_last_answer,
     new_answer_reference,
 )
+from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.recipes.recipe import GenerationResult
+from synapse_memory.storage.l0 import L0_ENV_VAR
 
 
 def _ai_env() -> ClaudeEnvironment:

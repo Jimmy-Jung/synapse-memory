@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -16,7 +17,6 @@ import synapse_memory.profile.extract as ex_mod
 from synapse_memory.llm.ai_api import AIError
 from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.profile.extract import (
-    MEMORY_INBOX_SUBPATH,
     _read_history_tail,
     extract_decision_patterns,
     extract_profile_facts,
@@ -253,7 +253,10 @@ class TestExtractDecisionPatterns:
 
 
 class TestSaveProfileUpdate:
-    def test_creates_in_memory_inbox(self, tmp_path: Path) -> None:
+    def test_creates_profile_wiki_page_without_flat_files(
+        self,
+        tmp_path: Path,
+    ) -> None:
         facts = [
             ProfileFact(
                 category="work_style",
@@ -274,9 +277,11 @@ class TestSaveProfileUpdate:
         path = save_profile_update(facts, patterns, vault_path=tmp_path)
 
         assert path.is_file()
-        assert (tmp_path / MEMORY_INBOX_SUBPATH) in path.parents
+        assert path == tmp_path / "Profile" / "user-profile.md"
+        assert not (tmp_path / "90_System" / "AI" / "Profile.md").exists()
+        assert not (tmp_path / "90_System" / "AI" / "DecisionPatterns.md").exists()
         content = path.read_text(encoding="utf-8")
-        assert "type: profile_update" in content
+        assert "type: profile" in content
         assert "단계별 의사코드" in content
         assert "큰 작업" in content
         assert "work_style" in content
@@ -293,9 +298,8 @@ class TestSaveProfileUpdate:
         path = save_profile_update(facts, None, vault_path=tmp_path)
         content = path.read_text(encoding="utf-8")
         assert "Swift" in content
-        assert "ProfileFact 후보" in content
-        # DecisionPattern 섹션 헤더 (## DecisionPattern 후보)는 안 들어가야
-        assert "## DecisionPattern 후보" not in content
+        assert "Profile Facts" in content
+        assert "## Decision Patterns" not in content
 
     def test_empty_inputs(self, tmp_path: Path) -> None:
         path = save_profile_update([], [], vault_path=tmp_path)
@@ -316,8 +320,37 @@ class TestSaveProfileUpdateLedgerMeta:
         ]
         path = save_profile_update(facts, [], vault_path=tmp_path)
         content = path.read_text(encoding="utf-8")
-        assert "fact_avg_confidence: 0.70" in content
-        assert "pattern_avg_confidence: 0.00" in content
+        assert "fact_avg_confidence: '0.70'" in content
+        assert "pattern_avg_confidence: '0.00'" in content
+
+    def test_appends_to_existing_profile_page(self, tmp_path: Path) -> None:
+        first = ProfileFact(
+            category="tech",
+            statement="Swift",
+            confidence=0.9,
+            extracted_at="2026-05-18",
+        )
+        second = ProfileFact(
+            category="preference",
+            statement="한국어 응답",
+            confidence=0.8,
+            extracted_at="2026-05-19",
+        )
+        save_profile_update(
+            [first],
+            [],
+            vault_path=tmp_path,
+            date=datetime.date(2026, 5, 18),
+        )
+        path = save_profile_update(
+            [second],
+            [],
+            vault_path=tmp_path,
+            date=datetime.date(2026, 5, 19),
+        )
+        content = path.read_text(encoding="utf-8")
+        assert "Swift" in content
+        assert "한국어 응답" in content
 
     def test_meta_suffix_when_ledger_passed(self, tmp_path: Path) -> None:
         from synapse_memory.profile.ledger import (

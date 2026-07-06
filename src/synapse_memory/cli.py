@@ -93,6 +93,7 @@ from synapse_memory.feedback.events import (  # noqa: E402
     append_feedback_event,
     build_feedback_event,
 )
+from synapse_memory.feedback.last_response import load_last_answer  # noqa: E402
 from synapse_memory.feedback.targets import (  # noqa: E402
     FeedbackTarget,
     resolve_card_target,
@@ -111,7 +112,6 @@ from synapse_memory.profile.ingest import (  # noqa: E402
 )
 from synapse_memory.status import DailyAlreadyRunningError  # noqa: E402
 from synapse_memory.storage.l0 import l0_root  # noqa: E402
-from synapse_memory.storage.last_response import load_last_answer  # noqa: E402
 from synapse_memory.wiki.backfill import run_backfill  # noqa: E402
 from synapse_memory.wiki.compact import (  # noqa: E402
     CompactSourceResult,
@@ -1444,7 +1444,7 @@ def cmd_cleanup_apply(args: argparse.Namespace) -> int:
 
 
 def cmd_me_update_profile(args: argparse.Namespace) -> int:
-    """raw → Profile/DecisionPattern 후보 → MemoryInbox PR."""
+    """raw → Profile/DecisionPattern → wiki profile page."""
     args.sample_lines = _arg_or_config(args.sample_lines, "profile.sample_lines", 200)
     args.model = _resolve_model(args.model, "update_profile")
     _enforce_cost_cap("persona update-profile")
@@ -1482,16 +1482,12 @@ def cmd_me_update_profile(args: argparse.Namespace) -> int:
         return 1
 
     path = save_profile_update(facts, patterns)
-    print(f"\n{OK} MemoryInbox PR 저장: {path}")
-    from synapse_memory.config import get_config as _get_config
-
-    ai_folders = _get_config().vault_folders.system.ai
-    print(f"  검토 후 vault {ai_folders.profile}, {ai_folders.decision_patterns} 반영")
+    print(f"\n{OK} wiki profile 저장: {path}")
     return 0
 
 
 def cmd_persona_ingest(args: argparse.Namespace) -> int:
-    """외부 markdown/txt 파일 → L0 mirror → ProfileFact 후보 → MemoryInbox PR.
+    """외부 markdown/txt 파일 → L0 mirror → ProfileFact → wiki profile page.
 
     M1b: 회고록 · 일기 · 외부 메모를 흡수해 사용자 성향을 보강한다.
     """
@@ -1549,11 +1545,7 @@ def cmd_persona_ingest(args: argparse.Namespace) -> int:
         return 1
 
     path = save_profile_update(facts, patterns=None)
-    print(f"\n{OK} MemoryInbox PR 저장: {path}")
-    from synapse_memory.config import get_config as _get_config
-
-    profile_path = _get_config().vault_folders.system.ai.profile
-    print(f"  검토 후 vault {profile_path} 반영")
+    print(f"\n{OK} wiki profile 저장: {path}")
     return 0
 
 
@@ -2048,12 +2040,10 @@ def _setup_registry_path() -> Path:
 
 
 def _setup_profile_patterns_paths(vault: Path) -> tuple[Path, Path]:
-    from synapse_memory.config import get_config
+    from synapse_memory.profile.wiki import profile_page_path
 
-    cfg = get_config()
-    profile = vault / cfg.vault_folders.system.ai.profile
-    patterns = vault / cfg.vault_folders.system.ai.decision_patterns
-    return profile, patterns
+    profile = profile_page_path(vault)
+    return profile, profile
 
 
 def _hook_runtime_settings() -> tuple[bool, bool, int]:
@@ -2637,8 +2627,7 @@ def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
     싶을 때 호출. dedupe/dismissed 안전망은 그대로 적용.
     """
     from synapse_memory.config import get_config
-    from synapse_memory.profile.dedupe import dedupe_against_vault
-    from synapse_memory.profile.dismissed import dismissed_path, load_dismissed
+    from synapse_memory.profile.candidate_filter import CandidateFilter
     from synapse_memory.profile.extract import save_profile_update
     from synapse_memory.profile.ledger import (
         collect_review_candidates,
@@ -2649,10 +2638,7 @@ def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
 
     cfg = get_config()
     vault = _resolve_vault(require_exists=True)
-    ai = cfg.vault_folders.system.ai
-    profile_path = vault / ai.profile
-    dp_path = vault / ai.decision_patterns
-    dismissed = load_dismissed(dismissed_path(vault))
+    candidate_filter = CandidateFilter(vault_path=vault, config=cfg)
 
     ledger = load_ledger()
     if not ledger:
@@ -2673,13 +2659,9 @@ def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
         )
         return 0
 
-    facts, patterns, report = dedupe_against_vault(
+    facts, patterns, report = candidate_filter.dedupe(
         candidate_facts,
         candidate_patterns,
-        profile_path=profile_path,
-        decision_patterns_path=dp_path,
-        dismissed_facts=dismissed.facts,
-        dismissed_patterns=dismissed.patterns,
     )
 
     if args.dry_run:
@@ -3247,7 +3229,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_up = me_sub.add_parser(
         "update-profile",
-        help="raw → ProfileFact/DecisionPattern 후보 → MemoryInbox PR",
+        help="raw → ProfileFact/DecisionPattern → wiki profile page",
     )
     p_up.add_argument(
         "--sample-lines",
@@ -3265,7 +3247,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_ingest = me_sub.add_parser(
         "ingest",
-        help="외부 markdown/txt 흡수 → L0 mirror + ProfileFact 후보 → MemoryInbox PR",
+        help="외부 markdown/txt 흡수 → L0 mirror + ProfileFact → wiki profile page",
     )
     p_ingest.add_argument(
         "--file",
