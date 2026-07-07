@@ -33,6 +33,7 @@ from synapse_memory.wiki.links import link_target
 from synapse_memory.wiki.log import append_log
 
 COMMON_REQUIRED_FIELDS = ("type", "slug", "title", "status")
+CONTINUANT_TYPES = ("project", "company", "concept", "profile")
 INDEX_PATHS = ("index.md", "90_System/AI/index.md")
 INDEX_COUNT_RE = re.compile(
     r"(?:total[_ -]?pages|pages[_ -]?total|pages checked|총 페이지 수)\s*[:=]\s*(\d+)",
@@ -312,6 +313,7 @@ def _validate_page(
     violations.extend(
         _validate_relations(rel_path, meta, page_type, schema, page_types_by_slug)
     )
+    violations.extend(_validate_coverage_gate(rel_path, meta, page_type))
     return tuple(violations)
 
 
@@ -472,6 +474,34 @@ def _validate_relations(
                     )
                 )
     return tuple(violations)
+
+
+def _validate_coverage_gate(
+    rel_path: str,
+    meta: dict[str, Any],
+    page_type: str,
+) -> tuple[LintViolation, ...]:
+    if page_type not in CONTINUANT_TYPES:
+        return ()
+    if not _has_values(meta.get("related")):
+        return ()
+    if any(_has_values(meta.get(relation)) for relation in relation_fields()):
+        return ()
+    return (
+        LintViolation(
+            "legacy_related_residual",
+            rel_path,
+            "WARNING: continuant page has related but no typed relation",
+        ),
+    )
+
+
+def _has_values(value: Any) -> bool:
+    if value in (None, "", []):
+        return False
+    if isinstance(value, list):
+        return any(str(item).strip() for item in value)
+    return bool(str(value).strip())
 
 
 def _relation_target(target: str) -> tuple[str | None, str]:

@@ -16,6 +16,7 @@ def test_schema_is_object_with_operations() -> None:
     assert INTEGRATION_SCHEMA["type"] == "object"
     assert "operations" in INTEGRATION_SCHEMA["properties"]
     properties = INTEGRATION_SCHEMA["properties"]["operations"]["items"]["properties"]
+    assert properties["related"]["description"] == "insight/log 전용 legacy relation"
     for relation in (
         "uses",
         "part_of",
@@ -51,6 +52,9 @@ def test_system_prompt_describes_typed_relation_ranges() -> None:
     assert "concept만 허용" in INTEGRATION_SYSTEM
     assert "decided_in" in INTEGRATION_SYSTEM
     assert "insight 또는 log만 허용" in INTEGRATION_SYSTEM
+    assert "반드시 typed relation" in INTEGRATION_SYSTEM
+    assert "project/company/concept/profile" in INTEGRATION_SYSTEM
+    assert "related 금지" in INTEGRATION_SYSTEM
     assert "period_start" in INTEGRATION_SYSTEM
     assert "resume_language" in INTEGRATION_SYSTEM
     assert "metrics" in INTEGRATION_SYSTEM
@@ -80,12 +84,37 @@ def test_parse_ops_valid() -> None:
     assert isinstance(ops[0], PageOp)
     assert ops[0].op == "update"
     assert ops[0].page.slug == "synapse-memory"
-    assert ops[0].page.related == ("[[rag]]",)
+    assert ops[0].page.related == ()
     assert ops[0].page.uses == ("rag",)
     assert ops[0].page.decided_in == ("decision-note",)
+    assert ops[0].warnings == ("dropped continuant related: [[rag]]",)
     assert ops[0].page.attrs["role"] == "Maintainer"
     assert ops[0].page.attrs["period_start"] == "2026-07"
     assert ops[0].page.attrs["metrics"][0].name == "coverage"
+
+
+def test_parse_ops_drops_related_for_continuant_pages() -> None:
+    payload = {"operations": [
+        {"op": "create", "type": "concept", "slug": "rag", "title": "RAG",
+         "body": "본문", "related": ["[[llm]]"]},
+    ]}
+
+    ops = parse_ops(payload)
+
+    assert ops[0].page.related == ()
+    assert ops[0].warnings == ("dropped continuant related: [[llm]]",)
+
+
+def test_parse_ops_keeps_related_for_episodic_pages() -> None:
+    payload = {"operations": [
+        {"op": "create", "type": "insight", "slug": "rag-note", "title": "RAG note",
+         "body": "본문", "related": ["[[rag]]"]},
+    ]}
+
+    ops = parse_ops(payload)
+
+    assert ops[0].page.related == ("[[rag]]",)
+    assert ops[0].warnings == ()
 
 
 def test_parse_ops_skips_invalid_entries() -> None:
