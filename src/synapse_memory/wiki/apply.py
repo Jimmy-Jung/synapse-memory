@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
-from synapse_memory.model.entity import OBSERVED_AT_TYPES
+from synapse_memory.model.entity import OBSERVED_AT_TYPES, RELATION_FIELDS
 from synapse_memory.store import load_page, save_page
 from synapse_memory.wiki.integration import PageOp
 from synapse_memory.wiki.page import WikiPage
@@ -47,6 +47,13 @@ def _page_for_apply(page: WikiPage, op: str, *, vault_path: Path | None, stamp: 
         stamped,
         related=_merge_tuple(existing.related, stamped.related),
         sources=_merge_tuple(existing.sources, stamped.sources),
+        **{
+            relation: _merge_tuple(
+                tuple(getattr(existing, relation) or ()),
+                tuple(getattr(stamped, relation) or ()),
+            )
+            for relation in RELATION_FIELDS
+        },
     )
 
 

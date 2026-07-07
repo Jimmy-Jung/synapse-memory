@@ -9,6 +9,7 @@ import pytest
 
 from synapse_memory.wiki.apply import apply_ops
 from synapse_memory.wiki.integration import PageOp
+from synapse_memory.wiki.lint import validate_schema_rules
 from synapse_memory.wiki.page import WikiPage, load_page, save_page
 
 
@@ -88,6 +89,114 @@ def test_apply_update_preserves_existing_created(tmp_path: Path) -> None:
     saved = load_page("project", "tablet", vault_path=tmp_path)
     assert saved.created == "2026-05-01"
     assert saved.updated == "2026-06-20"
+
+
+def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
+    tmp_path: Path,
+) -> None:
+    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(
+        WikiPage(
+            type="concept",
+            slug="provider-retrieval",
+            title="Provider Retrieval",
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(
+        WikiPage(type="project", slug="parent-project", title="Parent Project"),
+        vault_path=tmp_path,
+    )
+    save_page(
+        WikiPage(type="project", slug="old-project", title="Old Project"),
+        vault_path=tmp_path,
+    )
+    save_page(
+        WikiPage(
+            type="project",
+            slug="tablet-project-alias",
+            title="Tablet Project Alias",
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(
+        WikiPage(
+            type="insight",
+            slug="decision-note",
+            title="Decision Note",
+            created="2026-07-07",
+            updated="2026-07-07",
+            observed_at="2026-07-07",
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(
+        WikiPage(
+            type="log",
+            slug="daily-log",
+            title="Daily Log",
+            created="2026-07-07",
+            updated="2026-07-07",
+            observed_at="2026-07-07",
+        ),
+        vault_path=tmp_path,
+    )
+
+    apply_ops(
+        [
+            PageOp(
+                op="create",
+                page=WikiPage(
+                    type="project",
+                    slug="tablet",
+                    title="Tablet",
+                    uses=("rag",),
+                    part_of=("parent-project",),
+                    about=("provider-retrieval",),
+                    decided_in=("decision-note",),
+                    supersedes=("old-project",),
+                    same_as=("tablet-project-alias",),
+                    body="created body",
+                ),
+            )
+        ],
+        vault_path=tmp_path,
+        today="2026-07-07",
+    )
+    created_text = (tmp_path / "Entities/Projects/tablet.md").read_text(
+        encoding="utf-8"
+    )
+    assert "uses:\n- rag\n" in created_text
+    assert "decided_in:\n- decision-note\n" in created_text
+    assert "related:" not in created_text
+
+    apply_ops(
+        [
+            PageOp(
+                op="update",
+                page=WikiPage(
+                    type="project",
+                    slug="tablet",
+                    title="Tablet",
+                    uses=("provider-retrieval",),
+                    decided_in=("daily-log",),
+                    body="updated body",
+                ),
+            )
+        ],
+        vault_path=tmp_path,
+        today="2026-07-08",
+    )
+
+    saved = load_page("project", "tablet", vault_path=tmp_path)
+    assert saved.body == "updated body"
+    assert saved.uses == ("rag", "provider-retrieval")
+    assert saved.decided_in == ("decision-note", "daily-log")
+    assert saved.part_of == ("parent-project",)
+    assert saved.about == ("provider-retrieval",)
+    assert saved.supersedes == ("old-project",)
+    assert saved.same_as == ("tablet-project-alias",)
+    assert validate_schema_rules(vault_path=tmp_path).validation_violations == ()
 
 
 @pytest.mark.parametrize(

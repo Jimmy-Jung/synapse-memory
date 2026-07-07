@@ -31,6 +31,28 @@ def test_one_hop_link_expansion(tmp_path: Path) -> None:
     assert "rag" in slugs
 
 
+def test_one_hop_typed_relation_expansion(tmp_path: Path) -> None:
+    save_page(
+        WikiPage(
+            type="project",
+            slug="synapse-memory",
+            title="Synapse Memory",
+            uses=("rag",),
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    hits = find_related_pages(
+        "Synapse Memory 진행",
+        vault_path=tmp_path,
+        max_pages=10,
+        semantic_fn=None,
+    )
+    slugs = {p.slug for p in hits}
+    assert "synapse-memory" in slugs
+    assert "rag" in slugs
+
+
 def test_respects_max_pages(tmp_path: Path) -> None:
     for i in range(5):
         save_page(WikiPage(type="concept", slug=f"c{i}", title=f"Concept{i}"), vault_path=tmp_path)

@@ -15,7 +15,7 @@ from pathlib import Path
 from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.semantic import retrieve_items
-from synapse_memory.wiki.links import extract_wikilinks
+from synapse_memory.wiki.links import extract_wikilinks, neighbor_links
 from synapse_memory.wiki.page import WikiPage
 
 DEFAULT_MAX_PAGES = 12
@@ -38,10 +38,10 @@ def _expand_neighbors(
     matched_slugs: set[str],
     all_pages: list[WikiPage],
 ) -> list[WikiPage]:
-    """seeds의 related 1-hop 이웃을 (이미 매칭된 것 제외) 수집."""
+    """seeds의 related/typed relation 1-hop 이웃을 (이미 매칭된 것 제외) 수집."""
     neighbors: list[WikiPage] = []
     for p in seeds:
-        for link in p.related:
+        for link in neighbor_links(p):
             for target in (extract_wikilinks(link) or [link.strip("[]")]):
                 if target in matched_slugs:
                     continue

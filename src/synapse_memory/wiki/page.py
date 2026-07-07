@@ -15,7 +15,7 @@ from synapse_memory.model import (
     parse_frontmatter,
     serialize_frontmatter,
 )
-from synapse_memory.model.entity import OBSERVED_AT_TYPES
+from synapse_memory.model.entity import OBSERVED_AT_TYPES, RELATION_FIELDS
 from synapse_memory.store import (
     list_pages,
     load_page,
@@ -61,6 +61,12 @@ class WikiPage:
     title: str
     related: tuple[str, ...] = ()
     sources: tuple[str, ...] = ()
+    uses: tuple[str, ...] = ()
+    part_of: tuple[str, ...] = ()
+    about: tuple[str, ...] = ()
+    decided_in: tuple[str, ...] = ()
+    supersedes: tuple[str, ...] = ()
+    same_as: tuple[str, ...] = ()
     created: str = ""
     updated: str = ""
     observed_at: str = ""
@@ -83,6 +89,10 @@ def _frontmatter_dict(page: WikiPage) -> dict[str, Any]:
         d["related"] = list(page.related)
     if page.sources:
         d["sources"] = list(page.sources)
+    for key in RELATION_FIELDS:
+        values = tuple(getattr(page, key) or ())
+        if values:
+            d[key] = list(values)
     if page.created:
         d["created"] = page.created
     if page.updated:
@@ -138,6 +148,10 @@ def parse_page(text: str) -> WikiPage:
         title=str(title),
         related=tuple(str(x) for x in (meta.get("related") or [])),
         sources=tuple(str(x) for x in (meta.get("sources") or [])),
+        **{
+            key: tuple(str(x) for x in (meta.get(key) or []))
+            for key in RELATION_FIELDS
+        },
         created=str(meta.get("created") or ""),
         updated=updated_str,
         observed_at=(

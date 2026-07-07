@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from synapse_memory.wiki.integration import (
     INTEGRATION_SCHEMA,
+    INTEGRATION_SYSTEM,
     PageOp,
     build_integration_prompt,
     parse_ops,
@@ -14,6 +15,16 @@ from synapse_memory.wiki.page import WikiPage
 def test_schema_is_object_with_operations() -> None:
     assert INTEGRATION_SCHEMA["type"] == "object"
     assert "operations" in INTEGRATION_SCHEMA["properties"]
+    properties = INTEGRATION_SCHEMA["properties"]["operations"]["items"]["properties"]
+    for relation in (
+        "uses",
+        "part_of",
+        "about",
+        "decided_in",
+        "supersedes",
+        "same_as",
+    ):
+        assert properties[relation] == {"type": "array", "items": {"type": "string"}}
 
 
 def test_build_prompt_includes_text_and_related() -> None:
@@ -22,6 +33,13 @@ def test_build_prompt_includes_text_and_related() -> None:
     assert "새 대화 내용" in prompt
     assert "synapse-memory" in prompt
     assert "기존 본문" in prompt
+
+
+def test_system_prompt_describes_typed_relation_ranges() -> None:
+    assert "uses" in INTEGRATION_SYSTEM
+    assert "concept만 허용" in INTEGRATION_SYSTEM
+    assert "decided_in" in INTEGRATION_SYSTEM
+    assert "insight 또는 log만 허용" in INTEGRATION_SYSTEM
 
 
 def test_build_prompt_injects_source_date() -> None:
@@ -38,7 +56,8 @@ def test_parse_ops_valid() -> None:
     payload = {"operations": [
         {"op": "update", "type": "project", "slug": "synapse-memory",
          "title": "Synapse Memory", "body": "갱신된 본문",
-         "related": ["[[rag]]"], "sources": ["claude-code:s.jsonl"]},
+         "related": ["[[rag]]"], "uses": ["rag"], "decided_in": ["decision-note"],
+         "sources": ["claude-code:s.jsonl"]},
     ]}
     ops = parse_ops(payload)
     assert len(ops) == 1
@@ -46,6 +65,8 @@ def test_parse_ops_valid() -> None:
     assert ops[0].op == "update"
     assert ops[0].page.slug == "synapse-memory"
     assert ops[0].page.related == ("[[rag]]",)
+    assert ops[0].page.uses == ("rag",)
+    assert ops[0].page.decided_in == ("decision-note",)
 
 
 def test_parse_ops_skips_invalid_entries() -> None:

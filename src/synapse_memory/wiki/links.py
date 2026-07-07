@@ -9,6 +9,8 @@ import re
 from dataclasses import replace
 from typing import TypeVar, cast
 
+from synapse_memory.model.entity import RELATION_FIELDS
+
 PageT = TypeVar("PageT")
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
@@ -38,3 +40,11 @@ def with_related(page: PageT, link: str) -> PageT:
             return page
     related = tuple(getattr(page, "related", ()))
     return cast(PageT, replace(page, related=(*related, link)))
+
+
+def neighbor_links(page: object) -> tuple[str, ...]:
+    """1-hop 확장용 링크: legacy related와 typed relation을 합친다."""
+    links: list[str] = [str(link) for link in getattr(page, "related", ())]
+    for relation in RELATION_FIELDS:
+        links.extend(str(link) for link in getattr(page, relation, ()))
+    return tuple(links)
