@@ -46,6 +46,46 @@ def test_ingest_creates_page_and_updates_watermark(tmp_path, monkeypatch) -> Non
     assert again.docs_processed == 0
 
 
+def test_ingest_logs_dropped_continuant_related_warning(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "related", "Project update with legacy related")
+    state = tmp_path / "state.json"
+    messages: list[str] = []
+
+    monkeypatch.setattr(
+        ingest_mod.ai_api,
+        "complete_structured",
+        _fake_complete_structured({"operations": [
+            {"op": "create", "type": "project", "slug": "typed-gate",
+             "title": "Typed Gate", "body": "본문", "related": ["[[legacy-link]]"]}]}),
+    )
+    monkeypatch.setattr(
+        ingest_mod,
+        "append_log",
+        lambda message, **kwargs: messages.append(message),
+    )
+
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=state,
+        ai_env=None,
+        today="2026-06-14",
+    )
+
+    assert "typed-gate" in result.pages_written
+    assert any(
+        message
+        == "ingest claude-code: warning project/typed-gate: "
+        "dropped continuant related: [[legacy-link]]"
+        for message in messages
+    )
+
+
 def test_ingest_dry_run_writes_nothing(tmp_path, monkeypatch) -> None:
     raw_root = tmp_path / "raw" / "claude-code"
     _write_session(raw_root, "s", "RAG 개념 정리")

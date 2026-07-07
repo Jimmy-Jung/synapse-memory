@@ -54,6 +54,15 @@ def _stamp_sources(ops: list[PageOp], ref: str) -> list[PageOp]:
         out.append(replace(op, page=page))
     return out
 
+
+def _log_op_warnings(source: str, ops: list[PageOp]) -> None:
+    for op in ops:
+        for warning in op.warnings:
+            append_log(
+                f"ingest {source}: warning {op.page.type}/{op.page.slug}: {warning}"
+            )
+
+
 def _advance_watermark(current: str | None, candidate: str) -> str:
     if current is None or candidate > current:
         return candidate
@@ -154,6 +163,7 @@ def ingest_source(
                     # dry-run은 디스크에 아무것도 쓰지 않으며 pages_written도 비워 둔다
                     # (계획서 테스트 계약: result.pages_written == []).
                     continue
+                _log_op_warnings(source, ops)
                 written = apply_ops(ops, vault_path=vault_path, today=doc_date)
                 result.pages_written.extend(written)
                 # 020: 벡터 인덱싱 제거 — provider-only 검색(LLM-as-retriever).
