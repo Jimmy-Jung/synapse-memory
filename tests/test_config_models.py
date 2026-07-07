@@ -35,3 +35,28 @@ def test_fallback_map_when_no_default_field() -> None:
         overrides=ProviderModelOverridesConfig(codex=ProviderModelOverrideConfig())
     )
     assert m.model_for_task("codex", "ask") == "gpt-5.5"
+
+
+def test_resolve_model_prefers_config_provider_over_runtime(monkeypatch) -> None:
+    """Claude Code 세션 안에서 codex를 스폰해도 codex용 모델로 해석해야 한다.
+
+    회귀: runtime 감지(claude)가 config(codex)를 이기면 codex CLI에 sonnet이
+    전달되어 400이 난다. runtime은 config가 auto일 때만 참고.
+    """
+    import synapse_memory.cli.common as common
+    import synapse_memory.config as config_mod
+    from synapse_memory.config import SynapseConfig
+
+    monkeypatch.setenv("CLAUDECODE", "1")  # Claude Code 세션 시뮬레이션
+    monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    monkeypatch.setattr(
+        config_mod, "get_config", lambda: SynapseConfig(ai_provider="codex")
+    )
+
+    assert common._resolve_model(None, "ask") == "gpt-5.5"
+
+    # config=auto일 때만 runtime 감지 사용 → claude 모델
+    monkeypatch.setattr(
+        config_mod, "get_config", lambda: SynapseConfig(ai_provider="auto")
+    )
+    assert common._resolve_model(None, "ask") == "sonnet"

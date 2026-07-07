@@ -78,11 +78,13 @@ def _resolve_model(arg_model: str | None, task: str) -> str | None:
         from synapse_memory.config import get_config
 
         cfg = get_config()
-        provider = (
-            os.environ.get("SYNAPSE_AI_PROVIDER")
-            or _runtime_ai_provider()
-            or cfg.ai_provider
-        )
+        # 모델은 '스폰되는 provider'(config) 기준으로 해석한다. runtime 감지
+        # (Claude Code/Codex 세션 내부 여부)는 config가 auto일 때만 참고 —
+        # 그렇지 않으면 Claude Code 안에서 codex를 스폰할 때 claude용 모델
+        # (sonnet)이 codex에 전달되는 불일치가 생긴다.
+        provider = os.environ.get("SYNAPSE_AI_PROVIDER") or cfg.ai_provider
+        if provider == "auto":
+            provider = _runtime_ai_provider() or "auto"
         if provider == "auto":
             return None
         model_for_task = getattr(cfg.models, "model_for_task", None)

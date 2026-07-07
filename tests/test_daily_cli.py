@@ -61,9 +61,12 @@ def test_parser_has_daily_watch_status() -> None:
     assert args.status_interval == 0.75
 
 
-def test_resolve_model_prefers_runtime_provider(
+def test_resolve_model_prefers_config_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """모델은 스폰되는 provider(config) 기준 — runtime 세션 감지가 이기면
+    실행 provider와 모델이 어긋난다(예: codex에 sonnet 전달 → 400).
+    runtime 감지는 config가 auto일 때만 사용한다."""
     monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
     config = argparse.Namespace(
@@ -75,6 +78,16 @@ def test_resolve_model_prefers_runtime_provider(
     )
 
     with patch("synapse_memory.config.get_config", return_value=config):
+        assert cli_mod._resolve_model(None, "ask") == "claude-default"
+
+    auto_config = argparse.Namespace(
+        ai_provider="auto",
+        models=argparse.Namespace(
+            claude=argparse.Namespace(ask="claude-default"),
+            codex=argparse.Namespace(ask="codex-default"),
+        ),
+    )
+    with patch("synapse_memory.config.get_config", return_value=auto_config):
         assert cli_mod._resolve_model(None, "ask") == "codex-default"
 
 
