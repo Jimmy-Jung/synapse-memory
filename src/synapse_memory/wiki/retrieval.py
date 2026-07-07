@@ -9,6 +9,7 @@ Entity title/slug의 본문 등장 + related/typed relation 1-hop 이웃만.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from synapse_memory.retrieval.semantic import retrieve_items
 from synapse_memory.wiki.links import link_target, reverse_relations, typed_neighbors
 
 DEFAULT_MAX_PAGES = 12
+REVERSE_RELATION_SOURCE_LIMIT = 5
 
 # semantic_fn 미지정 vs None(끄기)을 구분하기 위한 sentinel.
 _DEFAULT = object()
@@ -35,12 +37,14 @@ def _find_page_by_slug(slug: str, pages: list[Entity]) -> Entity | None:
 
 def _query_relation_filter(text: str) -> set[str]:
     haystack = text.lower()
+    tokens = set(re.findall(r"[a-z0-9_]+", haystack))
     relations: set[str] = set()
-    if "uses" in haystack or "사용" in haystack:
+    # ponytail: keyword intent heuristic, 오탐 상한 존재. 정밀 의도분류는 후속.
+    if "uses" in tokens or "사용" in haystack:
         relations.add("uses")
-    if "decided_in" in haystack or "decision" in haystack or "결정" in haystack:
+    if "decided_in" in tokens or "decision" in tokens or "결정" in haystack:
         relations.add("decided_in")
-    if "part_of" in haystack or "속한" in haystack or "상위" in haystack:
+    if "part_of" in tokens or "속한" in haystack or "상위" in haystack:
         relations.add("part_of")
     return relations
 
@@ -50,14 +54,15 @@ def _append_neighbor(
     matched_slugs: set[str],
     all_pages: list[Entity],
     target: str,
-) -> None:
+) -> bool:
     if target in matched_slugs:
-        return
+        return False
     neighbor = _find_page_by_slug(target, all_pages)
     if neighbor is None:
-        return
+        return False
     neighbors.append(neighbor)
     matched_slugs.add(target)
+    return True
 
 
 def _expand_neighbors(
@@ -68,16 +73,21 @@ def _expand_neighbors(
 ) -> list[Entity]:
     """seeds의 typed/reverse/related 1-hop 이웃을 가중 순서로 수집."""
     neighbors: list[Entity] = []
-    reverse_index = reverse_relations(all_pages)
     reverse_filter = _query_relation_filter(text)
+    reverse_index = reverse_relations(all_pages) if reverse_filter else {}
     for page in seeds:
         for targets in typed_neighbors(page).values():
             for target in targets:
                 _append_neighbor(neighbors, matched_slugs, all_pages, target)
         if reverse_filter:
+            reverse_counts: dict[str, int] = {}
             for relation, source in reverse_index.get(page.slug, ()):
                 if relation in reverse_filter:
-                    _append_neighbor(neighbors, matched_slugs, all_pages, source)
+                    if reverse_counts.get(relation, 0) >= REVERSE_RELATION_SOURCE_LIMIT:
+                        continue
+                    appended = _append_neighbor(neighbors, matched_slugs, all_pages, source)
+                    if appended:
+                        reverse_counts[relation] = reverse_counts.get(relation, 0) + 1
         for link in getattr(page, "related", ()):
             _append_neighbor(neighbors, matched_slugs, all_pages, link_target(str(link)))
     return neighbors

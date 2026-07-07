@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import synapse_memory.wiki.retrieval as retrieval_mod
 from synapse_memory.model import Entity
 from synapse_memory.wiki.links import reverse_relations, typed_neighbors
 from synapse_memory.wiki.page import save_page
@@ -106,6 +107,53 @@ def test_reverse_uses_relation_expansion(tmp_path: Path) -> None:
     )
 
     assert [page.slug for page in hits] == ["swift-concurrency", "async-project"]
+
+
+def test_reverse_expansion_ignores_uses_substrings_and_skips_reverse_index(
+    monkeypatch,
+) -> None:
+    pages = [
+        Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency"),
+        Entity(type="project", slug="async-project", title="Async Project", uses=("swift-concurrency",)),
+    ]
+
+    def fail_reverse_relations(pages):
+        raise AssertionError("reverse index should be lazy when no relation intent exists")
+
+    monkeypatch.setattr(retrieval_mod, "reverse_relations", fail_reverse_relations)
+
+    hits = find_related_pages(
+        "Swift Concurrency focuses overview",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == ["swift-concurrency"]
+
+
+def test_reverse_expansion_caps_sources_per_relation() -> None:
+    pages = [Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency")]
+    pages.extend(
+        Entity(type="project", slug=f"async-project-{index}", title=f"Async Project {index}", uses=("swift-concurrency",))
+        for index in range(7)
+    )
+
+    hits = find_related_pages(
+        "Swift Concurrency uses project",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == [
+        "swift-concurrency",
+        "async-project-0",
+        "async-project-1",
+        "async-project-2",
+        "async-project-3",
+        "async-project-4",
+    ]
 
 
 def test_typed_neighbors_rank_before_legacy_related(tmp_path: Path) -> None:
