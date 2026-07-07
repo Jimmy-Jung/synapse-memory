@@ -16,6 +16,15 @@ from synapse_memory.store import list_current_entities
 MetricValue = int | float
 
 
+def concepts_by_kind(entities: Iterable[Entity], kind: str) -> list[Entity]:
+    """kind가 일치하는 concept 엔티티만 반환 (CQ09 분류 조회)."""
+    return [
+        entity
+        for entity in entities
+        if entity.type == "concept" and entity.attrs.get("kind") == kind
+    ]
+
+
 def calculate_relation_metrics(entities: Iterable[Entity]) -> dict[str, MetricValue]:
     """Calculate relation coverage metrics from Entity objects."""
     pages = tuple(entities)

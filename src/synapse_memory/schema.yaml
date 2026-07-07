@@ -95,6 +95,9 @@ types:
       keywords:
         type: list
         items: string
+      kind:
+        type: enum
+        values: [technology, tool, algorithm, methodology]
       created:
         type: string
       t_invalid:

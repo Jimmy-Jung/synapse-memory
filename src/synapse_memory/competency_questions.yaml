@@ -35,7 +35,7 @@
 - id: CQ09
   question: "concept 중 kind가 methodology인 것만 / technology인 것만 나열"
   kind: classification
-  status: xfail
+  status: supported
 - id: CQ10
   question: "이 typed edge('X uses Y')의 근거가 된 원본 문장/페이지는?"
   kind: provenance

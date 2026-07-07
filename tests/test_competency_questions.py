@@ -37,12 +37,11 @@ VALID_KINDS = {
     "coverage",
 }
 VALID_STATUSES = {"supported", "xfail"}
-EXPECTED_SUPPORTED = {"CQ01", "CQ02", "CQ03", "CQ06", "CQ07", "CQ13", "CQ15"}
+EXPECTED_SUPPORTED = {"CQ01", "CQ02", "CQ03", "CQ06", "CQ07", "CQ09", "CQ13", "CQ15"}
 EXPECTED_XFAIL = {
     "CQ04",
     "CQ05",
     "CQ08",
-    "CQ09",
     "CQ10",
     "CQ11",
     "CQ12",
@@ -255,13 +254,31 @@ def test_supported_cq13_apply_supersedes_invalidates_target(tmp_path: Path) -> N
     assert invalidated.t_invalid == "2026-07-07"
 
 
+def test_supported_cq09_concept_kind_classification() -> None:
+    from synapse_memory.wiki.metrics import concepts_by_kind
+
+    assert "kind" in fields_for("concept")
+    concepts = [
+        Entity(type="concept", slug="solid", title="SOLID", attrs={"kind": "methodology"}),
+        Entity(
+            type="concept",
+            slug="swift-concurrency",
+            title="Swift Concurrency",
+            attrs={"kind": "technology"},
+        ),
+        Entity(type="concept", slug="untagged", title="Untagged"),
+    ]
+
+    assert [c.slug for c in concepts_by_kind(concepts, "methodology")] == ["solid"]
+    assert [c.slug for c in concepts_by_kind(concepts, "technology")] == ["swift-concurrency"]
+
+
 @pytest.mark.parametrize(
     "cq_id",
     [
         pytest.param("CQ04", marks=pytest.mark.xfail(reason="broader/narrower 계층 관계는 Step 7 게이트 대상", strict=True)),
         pytest.param("CQ05", marks=pytest.mark.xfail(reason="part_of transitive closure는 Step 7 대상", strict=True)),
         pytest.param("CQ08", marks=pytest.mark.xfail(reason="same_as entity-resolution은 Step 7 대상", strict=True)),
-        pytest.param("CQ09", marks=pytest.mark.xfail(reason="concept.kind 분류는 Step 6 대상", strict=True)),
         pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 provenance 확장 대상", strict=True)),
         pytest.param("CQ11", marks=pytest.mark.xfail(reason="ask 경로의 관계 타입별 grouping 미구현 — 후속 retrieval 대상", strict=True)),
         pytest.param("CQ12", marks=pytest.mark.xfail(reason="episodic/semantic 분리 검색은 후속 retrieval 대상", strict=True)),
@@ -360,8 +377,6 @@ def _assert_future_competency_question(
         ]
         hits = find_related_pages("Swift Concurrency 중복 concept", max_pages=10, semantic_fn=None, pages=pages)
         assert "swift-concurrency-alias" in {page.slug for page in hits}
-    elif cq_id == "CQ09":
-        assert "kind" in fields_for("concept")
     elif cq_id == "CQ10":
         uses_spec = load_schema()["relations"]["uses"]
         assert "provenance" in uses_spec
