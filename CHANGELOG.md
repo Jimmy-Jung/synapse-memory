@@ -2,9 +2,32 @@
 
 All notable changes to Synapse Memory are documented here.
 
-## [2.0.0] — 2026-07-06
+## [2.0.0] — 2026-07-07
 
-구조 리디자인 (big-bang). 계획: `plans/synapse-structural-redesign.md`, 설계: `specs/021-unified-model/design.md`.
+구조 리디자인 (big-bang) + 온톨로지 완성. 계획: `plans/synapse-structural-redesign.md`,
+`plans/synapse-ontology-completion.md`, 설계: `specs/021-unified-model/design.md`,
+검증: `docs/ontology-architecture-review-2026-07-07.md`.
+
+### Added
+
+- **온톨로지 완성 (S1–S7)**: competency-question 스위트(15개 중 14개 supported) +
+  relation coverage 지표(`doctor`: typed_relation_coverage/legacy_related_residual/orphan_ratio).
+- **Ingest Gatekeeper**: continuant(project/company/concept/profile)의 무타입 `related`
+  차단·경고, lint coverage gate — typed 그래프 회귀 방지.
+- **타입 인지 retrieval**: 관계 타입별 이웃(`typed_neighbors`), 역인덱스(`reverse_relations`),
+  질의 의도 기반 역방향 확장, `part_of`/`broader` transitive 확장(depth≤2),
+  `same_as` 대칭 확장, ask 컨텍스트의 관계 타입별 grouping.
+- **시간 무효화**: `supersedes` 발행 시 대상 자동 무효화(`status=superseded` + `t_invalid`),
+  기본 조회는 현재 유효만, recall은 supersedes 이력 확장.
+- **분류**: `concept.kind` enum(technology/tool/algorithm/methodology) + 백필 태거(dry-run),
+  decision은 occurrent(insight/log) 레인으로 유도. `broader`(SKOS) 관계 신설, `about` 삭제.
+- 반복 log → insight 승격 후보(`wiki/promotion.py`), episodic 제외 검색 옵션(`exclude_types`).
+
+### Fixed
+
+- `synapse-memory ask` CLI가 `cli.ask` 서브모듈 이름 충돌로 크래시하던 버그.
+- 기본 모델을 스폰되는 provider(config) 기준으로 해석 — Claude Code 세션 안에서
+  codex 실행 시 sonnet이 전달되던 불일치 제거(runtime 감지는 `auto`일 때만).
 
 ### Changed
 

@@ -34,11 +34,11 @@
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
    - raw mirror 수동 축소와 원복 (`compact-raw`, v1.20.0)
 
-4. [현재 문제점과 개선 방향](current-issues-and-improvement-plan.md)
+4. [온톨로지 아키텍처 리뷰](ontology-architecture-review-2026-07-07.md)
 
-   2026-06-21 감사 기준으로 privacy/dataflow 정책 충돌, watch/backfill 동시성,
-   provider error 로그, source-of-truth drift, legacy RAG 표현, CI static-check 범위를
-   후속 작업 단위로 정리했습니다.
+   2.0.0 재설계 이후 typed relation 그래프가 실제로 채워지고 검색에 쓰이는지
+   실측으로 검증한 사후 감사입니다. 배경 지식은
+   [온톨로지 학습 가이드](ontology-learning-guide.md)를 함께 읽습니다.
 
 ## 한 문장으로 이해하기
 
