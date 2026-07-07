@@ -197,6 +197,9 @@ def _assert_future_competency_question(
         hits = find_related_pages("Old Fact", max_pages=10, semantic_fn=None, pages=pages)
         assert not hits
     elif cq_id == "CQ07":
+        # XPASS 계약: Step 5는 supersedes 체인 확장을 _retrieve_wiki/ask_wiki
+        # (retrieve_items '이후' 계층)에 배선해야 한다. retrieve_items 내부에 넣으면
+        # 아래 fake_retrieve_items가 우회해 이 테스트가 뒤집히지 않는다.
         from synapse_memory.store import save_page
 
         old = Entity(
