@@ -86,7 +86,7 @@ def make_options(*, default_timeout: int, kwargs: dict[str, Any]) -> CompleteOpt
     if unknown:
         names = ", ".join(unknown)
         raise TypeError(f"unexpected complete option(s): {names}")
-    data = {key: kwargs.get(key) for key in _OPTION_KEYS}
+    data: dict[str, Any] = {key: kwargs.get(key) for key in _OPTION_KEYS}
     data["timeout"] = kwargs.get("timeout", default_timeout)
     return CompleteOptions(**data)
 

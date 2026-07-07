@@ -97,8 +97,10 @@ class ModelsConfig:
     def model_for_task(self, provider: str, task: str) -> str | None:
         if not hasattr(self.tasks, task):
             return None
-        base = getattr(self.tasks, task)
-        provider_overrides = getattr(self.overrides, provider, None)
+        base: str | None = getattr(self.tasks, task)
+        provider_overrides: ProviderModelOverrideConfig | None = getattr(
+            self.overrides, provider, None
+        )
         override = (
             getattr(provider_overrides, task, None)
             if provider_overrides is not None

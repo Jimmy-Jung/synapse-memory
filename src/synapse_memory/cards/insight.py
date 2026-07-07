@@ -117,7 +117,7 @@ def save_insight_card(
     card: Entity, *, vault_path: Path | None = None
 ) -> Path:
     """InsightCard를 vault에 저장한다."""
-    directory = insights_dir(card.created, vault_path=vault_path)
+    directory = insights_dir(card.created or "", vault_path=vault_path)
     path = _unique_insight_path(directory, card.insight_id)
     if path.stem != card.insight_id:
         card.insight_id = path.stem

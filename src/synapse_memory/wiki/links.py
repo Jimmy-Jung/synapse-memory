@@ -6,8 +6,9 @@ Created: 2026-07-06
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from synapse_memory.model.entity import RELATION_FIELDS
 
@@ -39,7 +40,7 @@ def with_related(page: PageT, link: str) -> PageT:
         if new_target == link_target(existing):
             return page
     related = tuple(getattr(page, "related", ()))
-    return cast(PageT, replace(page, related=(*related, link)))
+    return cast(PageT, replace(cast(Any, page), related=(*related, link)))
 
 
 def typed_neighbors(page: object) -> dict[str, tuple[str, ...]]:
@@ -52,7 +53,7 @@ def typed_neighbors(page: object) -> dict[str, tuple[str, ...]]:
     return grouped
 
 
-def reverse_relations(pages: list[object]) -> dict[str, list[tuple[str, str]]]:
+def reverse_relations(pages: Sequence[object]) -> dict[str, list[tuple[str, str]]]:
     """Index typed incoming edges as target slug -> [(relation, source slug)]."""
     index: dict[str, list[tuple[str, str]]] = {}
     for page in pages:
@@ -76,7 +77,12 @@ def neighbor_links(page: object) -> tuple[str, ...]:
 
 def _relation_targets(values: object) -> tuple[str, ...]:
     seen: dict[str, None] = {}
-    raw_values = (values,) if isinstance(values, str) else tuple(values or ())
+    if isinstance(values, str):
+        raw_values: tuple[object, ...] = (values,)
+    elif isinstance(values, Iterable):
+        raw_values = tuple(values)
+    else:
+        raw_values = ()
     for value in raw_values:
         target = link_target(str(value))
         if target and target not in seen:

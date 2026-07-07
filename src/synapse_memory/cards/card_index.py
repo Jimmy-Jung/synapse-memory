@@ -100,7 +100,7 @@ def build_card_index(
                         "display_name": project.display_name,
                         "status": project.status,
                         "period_end": project.period_end or "",
-                        "created": project.created,
+                        "created": project.created or "",
                         "last_reviewed": project.last_reviewed,
                     },
                 )
@@ -120,7 +120,7 @@ def build_card_index(
                         "source_kind": "card_company",
                         "display_name": company.display_name,
                         "status": company.status,
-                        "created": company.created,
+                        "created": company.created or "",
                         "last_reviewed": company.last_reviewed,
                     },
                 )
@@ -140,7 +140,7 @@ def build_card_index(
                         "source_kind": "card_insight",
                         "display_name": insight.question,
                         "status": insight.status,
-                        "created": insight.created,
+                        "created": insight.created or "",
                     },
                 )
             )

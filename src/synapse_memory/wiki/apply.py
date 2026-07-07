@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from synapse_memory.model import Entity
 from synapse_memory.model.entity import (
@@ -48,18 +49,19 @@ def _page_for_apply(page: Entity, op: str, *, vault_path: Path | None, stamp: st
     except (FileNotFoundError, ValueError):
         return _stamped_page(page, stamp=stamp, existing=None)
     stamped = _stamped_page(page, stamp=stamp, existing=existing)
+    merged_relations: dict[str, Any] = {
+        relation: _merge_tuple(
+            tuple(getattr(existing, relation) or ()),
+            tuple(getattr(stamped, relation) or ()),
+        )
+        for relation in RELATION_FIELDS
+    }
     return replace(
         stamped,
         attrs={**existing.attrs, **stamped.attrs},
         related=_merge_tuple(existing.related, stamped.related),
         sources=_merge_tuple(existing.sources, stamped.sources),
-        **{
-            relation: _merge_tuple(
-                tuple(getattr(existing, relation) or ()),
-                tuple(getattr(stamped, relation) or ()),
-            )
-            for relation in RELATION_FIELDS
-        },
+        **merged_relations,
     )
 
 

@@ -202,6 +202,10 @@ def parse_ops(payload: Any) -> list[PageOp]:
             warnings.append(f"dropped continuant related: {', '.join(related_values)}")
             related_values = ()
 
+        relation_kwargs: dict[str, Any] = {
+            relation: tuple(str(x) for x in (entry.get(relation) or []))
+            for relation in RELATION_FIELDS
+        }
         page = Entity(
             type=str(page_type),
             slug=str(slug),
@@ -212,10 +216,7 @@ def parse_ops(payload: Any) -> list[PageOp]:
             observed_at=str(entry.get("observed_at") or ""),
             related=related_values,
             sources=tuple(str(x) for x in (entry.get("sources") or [])),
-            **{
-                relation: tuple(str(x) for x in (entry.get(relation) or []))
-                for relation in RELATION_FIELDS
-            },
+            **relation_kwargs,
             attrs=attrs,
             body=str(entry.get("body", "")),
         )

@@ -3,42 +3,45 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
+from types import ModuleType
+from typing import cast
 
 from synapse_memory.cli.common import api
 
 
-def _profile_ops():
+def _profile_ops() -> ModuleType:
     from synapse_memory.profile import control_plane
 
     return control_plane
 
 
-def _resolve_existing(args: argparse.Namespace | None = None):
-    return api()._resolve_vault(args, require_exists=True)
+def _resolve_existing(args: argparse.Namespace | None = None) -> Path:
+    return cast(Path, api()._resolve_vault(args, require_exists=True))
 
 
 def cmd_list_pending_profiles(args: argparse.Namespace) -> int:
-    return _profile_ops().list_pending_profiles(args, resolve_vault=_resolve_existing)
+    return cast(int, _profile_ops().list_pending_profiles(args, resolve_vault=_resolve_existing))
 
 
 def cmd_dismiss_profile(args: argparse.Namespace) -> int:
-    return _profile_ops().dismiss_profile(args, resolve_vault=_resolve_existing)
+    return cast(int, _profile_ops().dismiss_profile(args, resolve_vault=_resolve_existing))
 
 
 def cmd_dismiss_list(args: argparse.Namespace) -> int:
-    return _profile_ops().dismiss_list(args, resolve_vault=_resolve_existing)
+    return cast(int, _profile_ops().dismiss_list(args, resolve_vault=_resolve_existing))
 
 
 def cmd_dismiss_purge_expired(args: argparse.Namespace) -> int:
-    return _profile_ops().dismiss_purge_expired(args, resolve_vault=_resolve_existing)
+    return cast(int, _profile_ops().dismiss_purge_expired(args, resolve_vault=_resolve_existing))
 
 
 def cmd_ledger_show(args: argparse.Namespace) -> int:
-    return _profile_ops().ledger_show(args)
+    return cast(int, _profile_ops().ledger_show(args))
 
 
 def cmd_profile_review_awaiting(args: argparse.Namespace) -> int:
-    return _profile_ops().review_awaiting(args, resolve_vault=_resolve_existing)
+    return cast(int, _profile_ops().review_awaiting(args, resolve_vault=_resolve_existing))
 
 
 def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:

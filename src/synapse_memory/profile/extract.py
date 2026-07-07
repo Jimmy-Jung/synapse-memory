@@ -720,7 +720,7 @@ def save_profile_update(
                 lines.append(meta)
             lines.append("")
 
-    meta = {
+    page_meta = {
         **existing_meta,
         "type": "profile",
         "slug": PROFILE_SLUG,
@@ -737,5 +737,5 @@ def save_profile_update(
     if lines:
         body_parts.append("\n".join(lines).strip())
     body = "\n\n".join(part for part in body_parts if part).strip() + "\n"
-    path.write_text(serialize_frontmatter(meta, body), encoding="utf-8")
+    path.write_text(serialize_frontmatter(page_meta, body), encoding="utf-8")
     return path

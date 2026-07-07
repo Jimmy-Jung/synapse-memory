@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 from synapse_memory.cli.common import FAIL, OK, api
 
@@ -70,13 +71,13 @@ def _feedback_action(args: argparse.Namespace) -> str:
     return "weight"
 
 
-def _feedback_targets(args: argparse.Namespace) -> list[object]:
+def _feedback_targets(args: argparse.Namespace) -> list[Any]:
     vault_path = Path(args.vault_path).expanduser() if args.vault_path else None
     if args.feedback_target == "last":
         last_ref = api().load_last_answer()
         if last_ref is None:
             raise ValueError("No recent answer found. Run ask/me first, then retry feedback last.")
-        return api().resolve_last_answer_targets(last_ref)
+        return cast("list[Any]", api().resolve_last_answer_targets(last_ref))
     if args.feedback_target == "card":
         return [api().resolve_card_target(str(args.target_ref), vault_path=vault_path)]
     if args.feedback_target == "pattern":

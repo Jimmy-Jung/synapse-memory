@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import cast
 
 from synapse_memory.cli.common import FAIL, OK, api
 
@@ -70,11 +71,11 @@ def run_doctor_fix_config(*, assume_yes: bool = False) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     if getattr(args, "fix_config", False):
-        return api().run_doctor_fix_config(
+        return cast(int, api().run_doctor_fix_config(
             assume_yes=bool(getattr(args, "yes", False))
-        )
+        ))
     if getattr(args, "fix", False):
-        return api().run_doctor_fix(assume_yes=bool(getattr(args, "yes", False)))
+        return cast(int, api().run_doctor_fix(assume_yes=bool(getattr(args, "yes", False))))
 
     print("Synapse Memory 환경 진단")
     print("=" * 44)

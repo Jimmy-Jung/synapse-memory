@@ -6,7 +6,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 OK = "✓"
 FAIL = "✗"
@@ -89,11 +89,11 @@ def _resolve_model(arg_model: str | None, task: str) -> str | None:
             return None
         model_for_task = getattr(cfg.models, "model_for_task", None)
         if callable(model_for_task):
-            return model_for_task(provider, task)
+            return cast("str | None", model_for_task(provider, task))
         provider_models = getattr(cfg.models, provider, None)
         if provider_models is None:
             return None
-        return getattr(provider_models, task, None)
+        return cast("str | None", getattr(provider_models, task, None))
     except Exception:
         return None
 

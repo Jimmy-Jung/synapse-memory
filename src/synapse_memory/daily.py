@@ -23,7 +23,7 @@ import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from synapse_memory.status import DailyRunLock, StatusSink, StatusWriter
 
@@ -260,13 +260,13 @@ def _load_stage_callable(target: str) -> Callable[[], Any]:
     func = getattr(module, func_name)
     if not callable(func):
         raise TypeError(f"stage target is not callable: {target}")
-    return func
+    return cast("Callable[[], Any]", func)
 
 
 def _build_collect_action(target: str) -> StageAction:
     def step() -> str:
         stats = _load_stage_callable(target)()
-        return stats.summary()
+        return str(stats.summary())
 
     return step
 
@@ -294,16 +294,19 @@ def _build_ingest_action(
         errors: list[str] = []
         for index, source in enumerate(_INGEST_SOURCES, start=1):
             t_source = time.monotonic()
-            outcome = run_with_ingest_lock(
-                source=source,
-                mode="daily",
-                on_locked="fail",
-                operation=lambda target=source: ingest_source(
+            def _run_ingest(target: str = source) -> IngestResult:
+                return ingest_source(
                     target,
                     ai_env=env,
                     model=model,
                     checkpoint_each=True,
-                ),
+                )
+
+            outcome = run_with_ingest_lock(
+                source=source,
+                mode="daily",
+                on_locked="fail",
+                operation=_run_ingest,
             )
             if isinstance(outcome, LockedOutcome):
                 errors.append(f"{source}: {outcome.reason}")

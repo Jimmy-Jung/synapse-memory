@@ -140,7 +140,7 @@ def _coerce_env(
         if env_provider in PROVIDER_MODULES:
             return AIEnvironment(
                 provider=cast(ConcreteAIProvider, env_provider),
-                provider_env=cast(ProviderEnvironment, env),
+                provider_env=env,
             )
     return detect_ai_environment(provider, model=model)
 

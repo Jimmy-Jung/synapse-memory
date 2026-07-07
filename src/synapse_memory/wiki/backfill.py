@@ -13,15 +13,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from synapse_memory.llm import AIEnvironment, ClaudeEnvironment, CodexEnvironment
-from synapse_memory.wiki.ingest import ingest_source
+from synapse_memory.wiki.ingest import AIEnv, ingest_source
 from synapse_memory.wiki.lock import (
     IngestAlreadyRunningError,
     LockedOutcome,
     run_with_ingest_lock,
 )
-
-AIEnv = AIEnvironment | ClaudeEnvironment | CodexEnvironment | None
 
 
 @dataclass
