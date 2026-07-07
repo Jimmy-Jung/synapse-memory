@@ -3,7 +3,7 @@
 - id: CQ01
   question: "swift-concurrency를 uses하는 project는?"
   kind: relational
-  status: xfail
+  status: supported
 - id: CQ02
   question: "특정 company의 status가 target->applied->hired로 언제 바뀌었나?"
   kind: temporal

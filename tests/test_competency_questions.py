@@ -34,9 +34,8 @@ VALID_KINDS = {
     "coverage",
 }
 VALID_STATUSES = {"supported", "xfail"}
-EXPECTED_SUPPORTED = {"CQ03", "CQ15"}
+EXPECTED_SUPPORTED = {"CQ01", "CQ03", "CQ15"}
 EXPECTED_XFAIL = {
-    "CQ01",
     "CQ02",
     "CQ04",
     "CQ05",
@@ -88,6 +87,22 @@ def test_supported_cq03_decided_in_relation_is_retrievable() -> None:
     assert [page.slug for page in hits] == ["provider-only-decision", "log-2026-07-07"]
 
 
+def test_supported_cq01_uses_reverse_relation_is_retrievable() -> None:
+    pages = [
+        Entity(type="project", slug="async-project", title="Async Project", uses=("swift-concurrency",)),
+        Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency"),
+    ]
+
+    hits = find_related_pages(
+        "Swift Concurrency를 uses하는 project",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == ["swift-concurrency", "async-project"]
+
+
 def test_supported_cq03_ask_wiki_can_answer_from_retrieved_evidence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -123,7 +138,6 @@ def test_supported_cq15_orphan_pages_are_measurable() -> None:
 @pytest.mark.parametrize(
     "cq_id",
     [
-        pytest.param("CQ01", marks=pytest.mark.xfail(reason="uses 역방향 조회는 Step 3 역인덱스 대상", strict=True)),
         pytest.param("CQ02", marks=pytest.mark.xfail(reason="company status valid-time 이력은 Step 5 대상", strict=True)),
         pytest.param("CQ04", marks=pytest.mark.xfail(reason="broader/narrower 계층 관계는 Step 7 게이트 대상", strict=True)),
         pytest.param("CQ05", marks=pytest.mark.xfail(reason="part_of transitive closure는 Step 7 대상", strict=True)),
@@ -132,7 +146,7 @@ def test_supported_cq15_orphan_pages_are_measurable() -> None:
         pytest.param("CQ08", marks=pytest.mark.xfail(reason="same_as entity-resolution은 Step 7 대상", strict=True)),
         pytest.param("CQ09", marks=pytest.mark.xfail(reason="concept.kind 분류는 Step 6 대상", strict=True)),
         pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 provenance 확장 대상", strict=True)),
-        pytest.param("CQ11", marks=pytest.mark.xfail(reason="관계 타입별 grouping retrieval은 Step 3 대상", strict=True)),
+        pytest.param("CQ11", marks=pytest.mark.xfail(reason="ask 경로의 관계 타입별 grouping 미구현 — 후속 retrieval 대상", strict=True)),
         pytest.param("CQ12", marks=pytest.mark.xfail(reason="episodic/semantic 분리 검색은 후속 retrieval 대상", strict=True)),
         pytest.param("CQ13", marks=pytest.mark.xfail(reason="supersedes 감사 조회는 Step 5 대상", strict=True)),
         pytest.param("CQ14", marks=pytest.mark.xfail(reason="반복 log 승격은 후속 semantic promotion 대상", strict=True)),
@@ -151,19 +165,7 @@ def _assert_future_competency_question(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    if cq_id == "CQ01":
-        pages = [
-            Entity(type="project", slug="async-project", title="Async Project", uses=("swift-concurrency",)),
-            Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency"),
-        ]
-        hits = find_related_pages(
-            "Swift Concurrency를 uses하는 project",
-            max_pages=10,
-            semantic_fn=None,
-            pages=pages,
-        )
-        assert "async-project" in {page.slug for page in hits}
-    elif cq_id == "CQ02":
+    if cq_id == "CQ02":
         assert "t_invalid" in fields_for("company")
         target = Entity(
             type="company",
@@ -248,21 +250,59 @@ def _assert_future_competency_question(
         uses_spec = load_schema()["relations"]["uses"]
         assert "provenance" in uses_spec
     elif cq_id == "CQ11":
-        from synapse_memory.wiki.links import typed_neighbors
+        from synapse_memory.store import save_page
 
-        page = Entity(
+        company = Entity(type="company", slug="acme", title="Acme")
+        project = Entity(
             type="project",
-            slug="synapse-memory",
-            title="Synapse Memory",
-            related=("[[legacy-rag]]",),
-            uses=("rag",),
-            part_of=("memory-tools",),
+            slug="checkout",
+            title="Checkout Project",
+            part_of=("acme",),
+            body="Checkout project body.",
         )
-        neighbors = typed_neighbors(page)
-        assert neighbors == {
-            "uses": ("rag",),
-            "part_of": ("memory-tools",),
-        }
+        insight = Entity(
+            type="insight",
+            slug="acme-insight",
+            title="Acme Insight",
+            part_of=("acme",),
+            body="Acme insight body.",
+        )
+        log = Entity(
+            type="log",
+            slug="acme-log",
+            title="Acme Log",
+            part_of=("acme",),
+            body="Acme log body.",
+        )
+        for page in (company, project, insight, log):
+            save_page(page, vault_path=tmp_path)
+
+        def fake_retrieve_items(*args: object, **kwargs: object) -> list[Entity]:
+            all_pages = args[1]
+            return [page for page in all_pages if page.slug == "acme"]
+
+        def fake_complete(prompt: str, *args: object, **kwargs: object) -> str:
+            if "part_of:" in prompt and "project:" in prompt and "insight:" in prompt and "log:" in prompt:
+                return (
+                    "part_of:\n"
+                    "- project [[checkout]]\n"
+                    "- insight [[acme-insight]]\n"
+                    "- log [[acme-log]]"
+                )
+            return "flat related answer [[checkout]] [[acme-insight]] [[acme-log]]"
+
+        monkeypatch.setattr(wiki_query, "retrieve_items", fake_retrieve_items)
+        monkeypatch.setattr(wiki_query.ai_api, "complete", fake_complete)
+
+        answer = wiki_query.ask_wiki(
+            "Acme part_of 관계 타입별로 묶어줘",
+            vault_path=tmp_path,
+            top_k=10,
+        )
+        assert "part_of:" in answer.answer
+        assert "- project [[checkout]]" in answer.answer
+        assert "- insight [[acme-insight]]" in answer.answer
+        assert "- log [[acme-log]]" in answer.answer
     elif cq_id == "CQ12":
         pages = [
             Entity(type="log", slug="rag-log", title="RAG"),
