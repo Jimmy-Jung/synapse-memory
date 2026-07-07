@@ -4,8 +4,7 @@ All notable changes to Synapse Memory are documented here.
 
 ## [2.0.0] — 2026-07-07
 
-구조 리디자인 (big-bang) + 온톨로지 완성. 계획: `plans/synapse-structural-redesign.md`,
-`plans/synapse-ontology-completion.md`, 설계: `specs/021-unified-model/design.md`,
+구조 리디자인 (big-bang) + 온톨로지 완성. 설계: `specs/021-unified-model/design.md`,
 검증: `specs/022-ontology-completion/review.md`.
 
 ### Added
@@ -85,7 +84,6 @@ All notable changes to Synapse Memory are documented here.
 - cold-start 인터뷰 분기(첫 사용·기존 이력서/자소서 없음), no-JD 모드, 복수 포지션 확정, idempotency 규칙(`status: draft|approved` 재생성 방지).
 - 이력서 소스 자료를 `Entities/Projects` 외 `Profile`/`Concepts`/`Insights` 전체로 확장했다.
 - **Phase 4 정직성 게이트**: 초안 "제출 전 팩트체크"의 미해결(증빙 준비·표현 주의) 항목이 최종본에 유출되지 않도록 강제한다.
-- `plans/resume-skill-improvements.md` — Codex + Claude 이중 리뷰 기반 개선 blueprint.
 
 ### Fixed
 
@@ -351,7 +349,7 @@ wiki ingest의 librarian 호출이 Claude/Codex provider 모두에서 구조화 
 
 ## [1.17.0] — 2026-06-15
 
-Karpathy의 "LLM-maintained wiki" 패턴을 따르는 v2 엔진을 도입했다. 어떤 AI 툴(Claude/Codex 등)에서 대화하든 그 기록을 자동으로 인식해, 사람이 매일 수동 갱신하지 않아도 Obsidian vault에 상호 링크된 wiki를 구축·유지한다. 설계·구현 계획은 `specs/019-llm-wiki-redesign/`와 `docs/superpowers/plans/`에 있다.
+Karpathy의 "LLM-maintained wiki" 패턴을 따르는 v2 엔진을 도입했다. 어떤 AI 툴(Claude/Codex 등)에서 대화하든 그 기록을 자동으로 인식해, 사람이 매일 수동 갱신하지 않아도 Obsidian vault에 상호 링크된 wiki를 구축·유지한다. 설계는 `specs/019-llm-wiki-redesign/`에 있다.
 
 ### Added — Wiki Foundation (P0)
 

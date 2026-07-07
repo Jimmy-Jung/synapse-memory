@@ -21,23 +21,20 @@
 
 3. [명령과 문제 해결](reference.md)
 
-   Claude Code slash 명령, Codex skill 요청, CLI 명령, 설정 변경, 환경 복구 방법만
-   모았습니다. v0.9.0 이후 추가된 흐름도 같은 문서에 정리돼 있습니다.
+   Claude Code slash 명령, Codex skill 요청, CLI 명령, 설정 변경, 환경 복구 방법을
+   모았습니다.
 
-   - 기존 vault를 새 폴더 구조로 옮기기 (`migrate-folders`, v0.9.0)
-   - 다른 프로젝트에서 sm 컨텍스트 활용 (`/sm:setup`, `/sm:sync`, v0.11.0)
-   - Profile 후보 GUI 승인 (`/sm:apply-profile`, v0.12.0)
-   - Obsidian Graph 시각화 (`/sm:moc` + `node/*` 태그, v0.13.0)
-   - apply 중복 질문 5중 차단 + codex 통합 + 관찰성 (v0.14.0)
-   - 외부 데이터 수집기 — Claude Code / Codex / Cursor / Continue / Aider / Obsidian / Day One, Gmail Sent opt-in
-   - Codex 세션을 wiki 통합 소스로 추가 (`collect codex`, `ingest --source codex`, `backfill --source codex`)
+   - 자동 wiki 통합 데몬 (`watch`) + 수동 통합/검증 (`ingest`, `lint`)
+   - 다른 프로젝트에서 sm 컨텍스트 활용 (`/sm:setup`, `/sm:sync`)
+   - Profile 후보 GUI 승인 (`/sm:apply-profile`)
+   - 외부 데이터 수집기 (Claude Code / Codex / Obsidian 등)와 Codex 세션 통합
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
-   - raw mirror 수동 축소와 원복 (`compact-raw`, v1.20.0)
+   - raw mirror 수동 축소와 원복 (`compact-raw`)
 
 ## 한 문장으로 이해하기
 
-Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 mirror하고 wiki 카드로
-정리합니다. 질문 경로는 요약 카드와 승인된 Profile/DecisionPatterns를 중심으로
+Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 mirror하고 typed relation으로
+연결된 wiki 지식그래프로 정리합니다. 질문 경로는 관련 엔티티와 승인된 Profile/DecisionPatterns를 중심으로
 전송하지만, wiki 통합 경로(`ingest`/`backfill`/`watch`)는 small raw 또는 sampled raw를
 설정된 provider로 보낼 수 있습니다.
 
