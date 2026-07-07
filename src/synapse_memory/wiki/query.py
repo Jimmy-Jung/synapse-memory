@@ -34,6 +34,7 @@ from synapse_memory.wiki.links import extract_wikilinks
 from synapse_memory.wiki.page import (
     slugify,
 )
+from synapse_memory.wiki.retrieval import expand_related_pages
 
 AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
 
@@ -72,13 +73,14 @@ def _retrieve_wiki(
     고른 뒤 해당 페이지를 반환한다. 빈 vault/오류 시 ``[]`` (graceful).
     """
     all_pages = _all_pages(vault_path)
-    return retrieve_items(
+    seeds = retrieve_items(
         query,
         all_pages,
         build_index=build_page_index,
         item_id=lambda page: page.slug,
         top_k=top_k,
     )
+    return expand_related_pages(query, seeds, all_pages, max_pages=top_k)
 
 
 def _build_context(pages: list[Entity]) -> str:

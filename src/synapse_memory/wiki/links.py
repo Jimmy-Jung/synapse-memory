@@ -42,9 +42,43 @@ def with_related(page: PageT, link: str) -> PageT:
     return cast(PageT, replace(page, related=(*related, link)))
 
 
+def typed_neighbors(page: object) -> dict[str, tuple[str, ...]]:
+    """Typed relation neighbors grouped by relation name."""
+    grouped: dict[str, tuple[str, ...]] = {}
+    for relation in RELATION_FIELDS:
+        targets = _relation_targets(getattr(page, relation, ()))
+        if targets:
+            grouped[relation] = targets
+    return grouped
+
+
+def reverse_relations(pages: list[object]) -> dict[str, list[tuple[str, str]]]:
+    """Index typed incoming edges as target slug -> [(relation, source slug)]."""
+    index: dict[str, list[tuple[str, str]]] = {}
+    for page in pages:
+        source = str(getattr(page, "slug", "") or "")
+        if not source:
+            continue
+        for relation, targets in typed_neighbors(page).items():
+            for target in targets:
+                index.setdefault(target, []).append((relation, source))
+    return index
+
+
 def neighbor_links(page: object) -> tuple[str, ...]:
     """1-hop 확장용 링크: legacy related와 typed relation을 합친다."""
-    links: list[str] = [str(link) for link in getattr(page, "related", ())]
-    for relation in RELATION_FIELDS:
-        links.extend(str(link) for link in getattr(page, relation, ()))
+    links: list[str] = []
+    for targets in typed_neighbors(page).values():
+        links.extend(targets)
+    links.extend(link_target(str(link)) for link in getattr(page, "related", ()))
     return tuple(links)
+
+
+def _relation_targets(values: object) -> tuple[str, ...]:
+    seen: dict[str, None] = {}
+    raw_values = (values,) if isinstance(values, str) else tuple(values or ())
+    for value in raw_values:
+        target = link_target(str(value))
+        if target and target not in seen:
+            seen[target] = None
+    return tuple(seen)

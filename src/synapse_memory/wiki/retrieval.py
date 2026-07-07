@@ -16,7 +16,7 @@ from synapse_memory.model import Entity
 from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.semantic import retrieve_items
-from synapse_memory.wiki.links import extract_wikilinks, neighbor_links
+from synapse_memory.wiki.links import link_target, reverse_relations, typed_neighbors
 
 DEFAULT_MAX_PAGES = 12
 
@@ -33,23 +33,67 @@ def _find_page_by_slug(slug: str, pages: list[Entity]) -> Entity | None:
     return None
 
 
+def _query_relation_filter(text: str) -> set[str]:
+    haystack = text.lower()
+    relations: set[str] = set()
+    if "uses" in haystack or "사용" in haystack:
+        relations.add("uses")
+    if "decided_in" in haystack or "decision" in haystack or "결정" in haystack:
+        relations.add("decided_in")
+    if "part_of" in haystack or "속한" in haystack or "상위" in haystack:
+        relations.add("part_of")
+    return relations
+
+
+def _append_neighbor(
+    neighbors: list[Entity],
+    matched_slugs: set[str],
+    all_pages: list[Entity],
+    target: str,
+) -> None:
+    if target in matched_slugs:
+        return
+    neighbor = _find_page_by_slug(target, all_pages)
+    if neighbor is None:
+        return
+    neighbors.append(neighbor)
+    matched_slugs.add(target)
+
+
 def _expand_neighbors(
+    text: str,
     seeds: list[Entity],
     matched_slugs: set[str],
     all_pages: list[Entity],
 ) -> list[Entity]:
-    """seeds의 related/typed relation 1-hop 이웃을 (이미 매칭된 것 제외) 수집."""
+    """seeds의 typed/reverse/related 1-hop 이웃을 가중 순서로 수집."""
     neighbors: list[Entity] = []
-    for p in seeds:
-        for link in neighbor_links(p):
-            for target in (extract_wikilinks(link) or [link.strip("[]")]):
-                if target in matched_slugs:
-                    continue
-                neighbor = _find_page_by_slug(target, all_pages)
-                if neighbor is not None:
-                    neighbors.append(neighbor)
-                    matched_slugs.add(target)
+    reverse_index = reverse_relations(all_pages)
+    reverse_filter = _query_relation_filter(text)
+    for page in seeds:
+        for targets in typed_neighbors(page).values():
+            for target in targets:
+                _append_neighbor(neighbors, matched_slugs, all_pages, target)
+        if reverse_filter:
+            for relation, source in reverse_index.get(page.slug, ()):
+                if relation in reverse_filter:
+                    _append_neighbor(neighbors, matched_slugs, all_pages, source)
+        for link in getattr(page, "related", ()):
+            _append_neighbor(neighbors, matched_slugs, all_pages, link_target(str(link)))
     return neighbors
+
+
+def expand_related_pages(
+    text: str,
+    seeds: list[Entity],
+    all_pages: list[Entity],
+    *,
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> list[Entity]:
+    """Expand already-selected seed pages with weighted relation neighbors."""
+    matched_slugs = {page.slug for page in seeds}
+    neighbors = _expand_neighbors(text, seeds, matched_slugs, all_pages)
+    return (seeds + neighbors)[:max_pages]
 
 
 def find_related_pages(
@@ -106,5 +150,4 @@ def find_related_pages(
             matched.append(page)
             matched_slugs.add(page.slug)
 
-    neighbors = _expand_neighbors(matched, matched_slugs, all_pages)
-    return (matched + neighbors)[:max_pages]
+    return expand_related_pages(text, matched, all_pages, max_pages=max_pages)

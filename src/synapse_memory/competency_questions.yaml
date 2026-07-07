@@ -3,7 +3,7 @@
 - id: CQ01
   question: "swift-concurrency를 uses하는 project는?"
   kind: relational
-  status: xfail
+  status: supported
 - id: CQ02
   question: "특정 company의 status가 target->applied->hired로 언제 바뀌었나?"
   kind: temporal
@@ -43,7 +43,7 @@
 - id: CQ11
   question: "company Z 관련 project·insight·log를 관계 타입별로 묶어 보여줘"
   kind: relational
-  status: xfail
+  status: supported
 - id: CQ12
   question: "log 제외, 지식 노드(concept/insight)만으로 X 검색"
   kind: classification
