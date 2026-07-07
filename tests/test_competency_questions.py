@@ -12,7 +12,13 @@ import pytest
 import yaml
 
 import synapse_memory.wiki.query as wiki_query
-from synapse_memory.model import Entity, RELATION_FIELDS, fields_for
+from synapse_memory.model import (
+    RELATION_FIELDS,
+    Entity,
+    fields_for,
+    load_schema,
+    supersedes_history,
+)
 from synapse_memory.wiki.metrics import calculate_relation_metrics
 from synapse_memory.wiki.retrieval import find_related_pages
 
@@ -125,18 +131,26 @@ def test_supported_cq15_orphan_pages_are_measurable() -> None:
         pytest.param("CQ07", marks=pytest.mark.xfail(reason="supersedes recall 배선은 Step 5 대상", strict=True)),
         pytest.param("CQ08", marks=pytest.mark.xfail(reason="same_as entity-resolution은 Step 7 대상", strict=True)),
         pytest.param("CQ09", marks=pytest.mark.xfail(reason="concept.kind 분류는 Step 6 대상", strict=True)),
-        pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 온톨로지 확장 대상", strict=True)),
+        pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 provenance 확장 대상", strict=True)),
         pytest.param("CQ11", marks=pytest.mark.xfail(reason="관계 타입별 grouping retrieval은 Step 3 대상", strict=True)),
         pytest.param("CQ12", marks=pytest.mark.xfail(reason="episodic/semantic 분리 검색은 후속 retrieval 대상", strict=True)),
         pytest.param("CQ13", marks=pytest.mark.xfail(reason="supersedes 감사 조회는 Step 5 대상", strict=True)),
-        pytest.param("CQ14", marks=pytest.mark.xfail(reason="log 패턴 승격은 후속 semantic promotion 대상", strict=True)),
+        pytest.param("CQ14", marks=pytest.mark.xfail(reason="반복 log 승격은 후속 semantic promotion 대상", strict=True)),
     ],
 )
-def test_xfail_competency_questions_are_tracked(cq_id: str) -> None:
-    _assert_future_competency_question(cq_id)
+def test_xfail_competency_questions_are_tracked(
+    cq_id: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _assert_future_competency_question(cq_id, tmp_path, monkeypatch)
 
 
-def _assert_future_competency_question(cq_id: str) -> None:
+def _assert_future_competency_question(
+    cq_id: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     if cq_id == "CQ01":
         pages = [
             Entity(type="project", slug="async-project", title="Async Project", uses=("swift-concurrency",)),
@@ -149,6 +163,25 @@ def _assert_future_competency_question(cq_id: str) -> None:
             pages=pages,
         )
         assert "async-project" in {page.slug for page in hits}
+    elif cq_id == "CQ02":
+        assert "t_invalid" in fields_for("company")
+        target = Entity(
+            type="company",
+            slug="acme-target",
+            title="Acme target",
+            status="target",
+            attrs={"t_invalid": "2026-07-07"},
+        )
+        hired = Entity(
+            type="company",
+            slug="acme-hired",
+            title="Acme hired",
+            status="hired",
+            supersedes=("company:acme-target",),
+        )
+        history = supersedes_history([target, hired], "company:acme-hired")
+        assert [company.status for company in history] == ["hired", "target"]
+        assert history[1].t_invalid == "2026-07-07"
     elif cq_id == "CQ04":
         assert "broader" in RELATION_FIELDS
     elif cq_id == "CQ05":
@@ -163,6 +196,42 @@ def _assert_future_competency_question(cq_id: str) -> None:
         pages = [Entity(type="concept", slug="old-fact", title="Old Fact", status="superseded")]
         hits = find_related_pages("Old Fact", max_pages=10, semantic_fn=None, pages=pages)
         assert not hits
+    elif cq_id == "CQ07":
+        from synapse_memory.store import save_page
+
+        old = Entity(
+            type="insight",
+            slug="stance-v1",
+            title="Swift concurrency stance v1",
+            status="superseded",
+            created="2026-01-01T09:00:00+09:00",
+            observed_at="2026-01-01T09:00:00+09:00",
+        )
+        current = Entity(
+            type="insight",
+            slug="stance-v2",
+            title="Swift concurrency stance v2",
+            created="2026-07-01T09:00:00+09:00",
+            observed_at="2026-07-01T09:00:00+09:00",
+            supersedes=("insight:stance-v1",),
+        )
+        save_page(old, vault_path=tmp_path)
+        save_page(current, vault_path=tmp_path)
+
+        def fake_retrieve_items(*args: object, **kwargs: object) -> list[Entity]:
+            all_pages = args[1]
+            return [page for page in all_pages if page.slug == "stance-v2"]
+
+        def fake_complete(prompt: str, *args: object, **kwargs: object) -> str:
+            if "[[stance-v1]]" in prompt:
+                return "초기 입장은 v1입니다 [[stance-v1]] 현재 입장은 v2입니다 [[stance-v2]]"
+            return "현재 입장은 v2입니다 [[stance-v2]]"
+
+        monkeypatch.setattr(wiki_query, "retrieve_items", fake_retrieve_items)
+        monkeypatch.setattr(wiki_query.ai_api, "complete", fake_complete)
+
+        answer = wiki_query.ask_wiki("Swift concurrency stance 시간순 변화", vault_path=tmp_path)
+        assert answer.sources == ["stance-v1", "stance-v2"]
     elif cq_id == "CQ08":
         pages = [
             Entity(type="concept", slug="swift-concurrency-alias", title="swift concurrency alias", same_as=("swift-concurrency",)),
@@ -172,6 +241,25 @@ def _assert_future_competency_question(cq_id: str) -> None:
         assert "swift-concurrency-alias" in {page.slug for page in hits}
     elif cq_id == "CQ09":
         assert "kind" in fields_for("concept")
+    elif cq_id == "CQ10":
+        uses_spec = load_schema()["relations"]["uses"]
+        assert "provenance" in uses_spec
+    elif cq_id == "CQ11":
+        from synapse_memory.wiki.links import typed_neighbors
+
+        page = Entity(
+            type="project",
+            slug="synapse-memory",
+            title="Synapse Memory",
+            related=("[[legacy-rag]]",),
+            uses=("rag",),
+            part_of=("memory-tools",),
+        )
+        neighbors = typed_neighbors(page)
+        assert neighbors == {
+            "uses": ("rag",),
+            "part_of": ("memory-tools",),
+        }
     elif cq_id == "CQ12":
         pages = [
             Entity(type="log", slug="rag-log", title="RAG"),
@@ -179,5 +267,43 @@ def _assert_future_competency_question(cq_id: str) -> None:
         ]
         hits = find_related_pages("RAG", max_pages=10, semantic_fn=None, pages=pages)
         assert {page.type for page in hits} <= {"concept", "insight"}
+    elif cq_id == "CQ13":
+        from synapse_memory.store import load_page, save_page
+        from synapse_memory.wiki.apply import apply_ops
+        from synapse_memory.wiki.integration import PageOp
+
+        save_page(
+            Entity(type="company", slug="acme-v1", title="Acme", status="target"),
+            vault_path=tmp_path,
+        )
+        apply_ops(
+            [
+                PageOp(
+                    op="create",
+                    page=Entity(
+                        type="company",
+                        slug="acme-v2",
+                        title="Acme",
+                        status="hired",
+                        supersedes=("company:acme-v1",),
+                    ),
+                )
+            ],
+            vault_path=tmp_path,
+            today="2026-07-07",
+        )
+
+        invalidated = load_page("company", "acme-v1", vault_path=tmp_path)
+        assert invalidated.status == "superseded"
+        assert invalidated.t_invalid == "2026-07-07"
+    elif cq_id == "CQ14":
+        from synapse_memory.wiki.promotion import promotion_candidates_from_logs
+
+        logs = [
+            Entity(type="log", slug="log-1", title="Pytest flake", body="pytest flake repeated"),
+            Entity(type="log", slug="log-2", title="Pytest flake", body="pytest flake repeated"),
+        ]
+        candidates = promotion_candidates_from_logs(logs, min_count=2)
+        assert any(candidate.type == "insight" and "pytest" in candidate.body for candidate in candidates)
     else:
-        raise AssertionError(f"{cq_id} is not supported by the current Step 1 measurement layer")
+        raise AssertionError(f"unknown CQ: {cq_id}")
