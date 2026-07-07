@@ -55,6 +55,7 @@ class ModelTasksConfig:
 class ProviderModelOverrideConfig:
     """provider별 task 모델 override. None이면 task 기본값 사용."""
 
+    default: str | None = None  # task 기본값도 None일 때 쓸 provider 기본 모델
     classify: str | None = None
     card_generate: str | None = None
     ask: str | None = None
@@ -69,12 +70,19 @@ class ProviderModelOverrideConfig:
 class ProviderModelOverridesConfig:
     claude: ProviderModelOverrideConfig = field(
         default_factory=lambda: ProviderModelOverrideConfig(
+            default="sonnet",
             classify="haiku",
             card_generate="sonnet",
             relevance="haiku",
         )
     )
-    codex: ProviderModelOverrideConfig = field(default_factory=ProviderModelOverrideConfig)
+    codex: ProviderModelOverrideConfig = field(
+        default_factory=lambda: ProviderModelOverrideConfig(default="gpt-5.5")
+    )
+
+
+# provider별 기본 모델 안전망 (config가 provider default 미지정 시).
+_PROVIDER_FALLBACK_MODEL: dict[str, str] = {"codex": "gpt-5.5", "claude": "sonnet"}
 
 
 @dataclass
@@ -91,10 +99,18 @@ class ModelsConfig:
             return None
         base = getattr(self.tasks, task)
         provider_overrides = getattr(self.overrides, provider, None)
-        if provider_overrides is None or not hasattr(provider_overrides, task):
-            return base
-        override = getattr(provider_overrides, task)
-        return base if override is None else override
+        override = (
+            getattr(provider_overrides, task, None)
+            if provider_overrides is not None
+            else None
+        )
+        resolved = override if override is not None else base
+        if resolved is not None:
+            return resolved
+        # task 기본값도 None → provider 기본 모델로 폴백 (codex=gpt-5.5, claude=sonnet).
+        # config가 provider default를 지정하지 않았을 때의 안전망.
+        provider_default = getattr(provider_overrides, "default", None)
+        return provider_default or _PROVIDER_FALLBACK_MODEL.get(provider)
 
 
 @dataclass
