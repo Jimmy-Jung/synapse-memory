@@ -1,14 +1,13 @@
-"""Daily CLI resilience tests.
+"""Daily CLI tests.
 
-저자: Synapse Memory Maintainers
-작성일: 2026-05-12
+저자: JunyoungJung
+작성일: 2026-07-06
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -23,14 +22,7 @@ def _args(**overrides: object) -> argparse.Namespace:
         "only": None,
         "skip": None,
         "resume_from": None,
-        "classify_model": "haiku",
-        "generate_model": "sonnet",
-        "profile_model": "sonnet",
-        "profile_sample_lines": 200,
-        "profile_facts_only": False,
-        "quick": False,
-        "quick_days": 7,
-        "quick_max_clusters": 10,
+        "model": None,
         "watch_status": False,
         "status_interval": 2.0,
         "dry_run": False,
@@ -42,10 +34,19 @@ def _args(**overrides: object) -> argparse.Namespace:
 def test_parser_has_daily_resume_from() -> None:
     parser = cli_mod.build_parser()
 
-    args = parser.parse_args(["daily", "--resume-from", "classify"])
+    args = parser.parse_args(["daily", "--resume-from", "ingest"])
 
     assert args.func is cmd_daily
-    assert args.resume_from == "classify"
+    assert args.resume_from == "ingest"
+
+
+def test_parser_has_daily_model() -> None:
+    parser = cli_mod.build_parser()
+
+    args = parser.parse_args(["daily", "--model", "gpt-5.5"])
+
+    assert args.func is cmd_daily
+    assert args.model == "gpt-5.5"
 
 
 def test_parser_has_daily_watch_status() -> None:
@@ -60,21 +61,34 @@ def test_parser_has_daily_watch_status() -> None:
     assert args.status_interval == 0.75
 
 
-def test_resolve_model_prefers_runtime_provider(
+def test_resolve_model_prefers_config_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """모델은 스폰되는 provider(config) 기준 — runtime 세션 감지가 이기면
+    실행 provider와 모델이 어긋난다(예: codex에 sonnet 전달 → 400).
+    runtime 감지는 config가 auto일 때만 사용한다."""
     monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
     monkeypatch.setenv("CODEX_THREAD_ID", "thread-1")
-    config = SimpleNamespace(
+    config = argparse.Namespace(
         ai_provider="claude",
-        models=SimpleNamespace(
-            claude=SimpleNamespace(classify="haiku"),
-            codex=SimpleNamespace(classify="gpt-5.5"),
+        models=argparse.Namespace(
+            claude=argparse.Namespace(ask="claude-default"),
+            codex=argparse.Namespace(ask="codex-default"),
         ),
     )
 
     with patch("synapse_memory.config.get_config", return_value=config):
-        assert cli_mod._resolve_model(None, "classify") == "gpt-5.5"
+        assert cli_mod._resolve_model(None, "ask") == "claude-default"
+
+    auto_config = argparse.Namespace(
+        ai_provider="auto",
+        models=argparse.Namespace(
+            claude=argparse.Namespace(ask="claude-default"),
+            codex=argparse.Namespace(ask="codex-default"),
+        ),
+    )
+    with patch("synapse_memory.config.get_config", return_value=auto_config):
+        assert cli_mod._resolve_model(None, "ask") == "codex-default"
 
 
 def test_cmd_daily_prints_failed_and_skipped_summary(
@@ -84,8 +98,8 @@ def test_cmd_daily_prints_failed_and_skipped_summary(
     result = DailyResult(
         steps=[
             StepResult.success("collect_claude_code", 0.1, "mirrored=0"),
-            StepResult.failed("classify", 1.0, "AI provider 미설치"),
-            StepResult.skipped("generate", "requires classify"),
+            StepResult.failed("ingest", 1.0, "AI provider 미설치"),
+            StepResult.skipped("lint", "requires ingest"),
         ],
         total_elapsed=1.1,
     )
@@ -98,7 +112,7 @@ def test_cmd_daily_prints_failed_and_skipped_summary(
     assert "실패: 1" in out
     assert "경고: 0" in out
     assert "건너뜀: 1" in out
-    assert "requires classify" in out
+    assert "requires ingest" in out
 
 
 def test_format_daily_status_line_with_stage_and_item() -> None:
@@ -108,17 +122,17 @@ def test_format_daily_status_line_with_stage_and_item() -> None:
         pid=42,
         started_at="2026-05-18T00:00:00+00:00",
         updated_at="2026-05-18T00:00:01+00:00",
-        current_stage="generate",
-        current_stage_index=19,
-        total_stages=22,
-        current_item="project-a",
-        current_item_index=3,
-        current_item_total=10,
+        current_stage="ingest",
+        current_stage_index=3,
+        total_stages=4,
+        current_item="codex",
+        current_item_index=2,
+        current_item_total=2,
     )
 
     assert (
         cli_mod._format_daily_status_line(status)
-        == "[daily-status] generate (19/22) — project-a [3/10, 30%]"
+        == "[daily-status] ingest (3/4) — codex [2/2, 100%]"
     )
 
 
@@ -129,7 +143,7 @@ def test_cmd_daily_unknown_resume_returns_2(
     def fail(**_kwargs):
         raise ValueError(
             "unknown daily stage: nope\n"
-            "valid stages: collect_claude_code, collect_obsidian, classify"
+            "valid stages: collect_claude_code, collect_codex, ingest, lint"
         )
 
     monkeypatch.setattr(cli_mod, "run_daily", fail)
@@ -153,15 +167,17 @@ def test_cmd_daily_strips_comma_separated_stage_names(
 
     rc = cmd_daily(
         _args(
-            only="collect_claude_code, report",
-            skip="collect_cursor, collect_obsidian",
+            only="collect_claude_code, ingest",
+            skip="collect_codex, lint",
             dry_run=True,
+            model="gpt-5.5",
         )
     )
 
     assert rc == 0
-    assert captured["only"] == {"collect_claude_code", "report"}
-    assert captured["skip"] == {"collect_cursor", "collect_obsidian"}
+    assert captured["only"] == {"collect_claude_code", "ingest"}
+    assert captured["skip"] == {"collect_codex", "lint"}
+    assert captured["ingest_model"] == "gpt-5.5"
 
 
 def test_cmd_daily_unknown_only_returns_2(

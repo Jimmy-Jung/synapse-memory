@@ -13,8 +13,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
+from synapse_memory.model import parse_frontmatter
 from synapse_memory.recipes.recipe import (
     GenerationRecipe,
     InputRequirement,
@@ -24,10 +23,6 @@ from synapse_memory.recipes.recipe import (
 
 SYSTEM_PROMPT_BYTE_CAP = 32_768  # FR-016 / Q4
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-_FRONTMATTER_RE = re.compile(
-    r"^---\s*\n(?P<yaml>.*?)\n---\s*\n?(?P<body>.*)$",
-    re.DOTALL,
-)
 
 
 class RecipeValidationError(ValueError):
@@ -121,13 +116,9 @@ def parse_recipe(path: Path, *, source: RecipeSource) -> GenerationRecipe:
     except OSError as exc:
         raise RecipeValidationError(f"cannot read recipe file {path}: {exc}") from exc
 
-    m = _FRONTMATTER_RE.match(text)
-    if not m:
-        raise RecipeValidationError(f"recipe missing frontmatter (--- ... ---): {path}")
-
     try:
-        meta = yaml.safe_load(m.group("yaml")) or {}
-    except yaml.YAMLError as exc:
+        meta, system_prompt = parse_frontmatter(text)
+    except ValueError as exc:
         raise RecipeValidationError(f"frontmatter YAML parse failed in {path}: {exc}") from exc
 
     if not isinstance(meta, dict):
@@ -166,7 +157,7 @@ def parse_recipe(path: Path, *, source: RecipeSource) -> GenerationRecipe:
     timeout = _coerce_int(meta, "timeout", 120, lo=1, hi=600)
     model = str(meta.get("model", "sonnet"))
 
-    system_prompt = m.group("body") or ""
+    system_prompt = system_prompt or ""
     if len(system_prompt.encode("utf-8")) > SYSTEM_PROMPT_BYTE_CAP:
         raise RecipeValidationError(
             f"recipe '{name}' system_prompt exceeds 32KB cap"

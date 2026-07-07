@@ -179,15 +179,21 @@ def test_run_daily_writes_status_via_default_sink(tmp_path, monkeypatch):
     from synapse_memory.daily import run_daily
 
     status_path = tmp_path / "daily.status.json"
+    lock_path = tmp_path / "daily.lock"
     monkeypatch.setattr(status_mod, "STATUS_FILE", status_path)
+    monkeypatch.setattr(status_mod, "LOCK_FILE", lock_path)
 
     result = run_daily(
-        only={"report"},
+        only={"collect_claude_code", "collect_codex", "ingest"},
         on_log=lambda _line: None,
-        stage_actions={"report": lambda: "ok"},
+        stage_actions={
+            "collect_claude_code": lambda: "ok",
+            "collect_codex": lambda: "ok",
+            "ingest": lambda: "ok",
+        },
     )
     assert result.errors == 0
 
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["state"] == "done"
-    assert "report" in payload["completed_stages"]
+    assert "ingest" in payload["completed_stages"]

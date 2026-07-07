@@ -9,17 +9,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from synapse_memory.model import Entity
 from synapse_memory.wiki import ingest as ingest_mod, llm_retrieval as lr
 from synapse_memory.wiki.ingest import ingest_source
-from synapse_memory.wiki.page import WikiPage
 from synapse_memory.wiki.page_index import PageIndex, build_page_index
 
 # ---------- page_index ----------
 
 def test_build_page_index_sorts_and_summarizes() -> None:
     pages = [
-        WikiPage(type="concept", slug="zeta", title="Zeta", body="z" * 500),
-        WikiPage(type="concept", slug="alpha", title="Alpha", body="짧은 본문"),
+        Entity(type="concept", slug="zeta", title="Zeta", body="z" * 500),
+        Entity(type="concept", slug="alpha", title="Alpha", body="짧은 본문"),
     ]
     idx = build_page_index(pages, summary_chars=50)
     assert [e.slug for e in idx.entries] == ["alpha", "zeta"]  # slug 정렬
@@ -30,7 +30,7 @@ def test_build_page_index_sorts_and_summarizes() -> None:
 
 def test_page_index_render_lines() -> None:
     idx = build_page_index(
-        [WikiPage(type="concept", slug="rag", title="RAG", body="검색 증강")]
+        [Entity(type="concept", slug="rag", title="RAG", body="검색 증강")]
     )
     rendered = idx.render()
     assert rendered == "[rag] RAG — 검색 증강"
@@ -47,8 +47,8 @@ def _fake_structured(returns):
 
 def test_select_related_filters_to_valid_slugs(monkeypatch) -> None:
     idx = build_page_index([
-        WikiPage(type="concept", slug="rag", title="RAG", body="b"),
-        WikiPage(type="concept", slug="mcp", title="MCP", body="b"),
+        Entity(type="concept", slug="rag", title="RAG", body="b"),
+        Entity(type="concept", slug="mcp", title="MCP", body="b"),
     ])
     # provider가 환각 slug("ghost") 섞어 반환 → 인덱스 존재분만 통과.
     monkeypatch.setattr(
@@ -75,13 +75,13 @@ def test_select_related_graceful_on_provider_error(monkeypatch) -> None:
     def _boom(*a, **k):
         raise RuntimeError("provider down")
 
-    idx = build_page_index([WikiPage(type="concept", slug="rag", title="RAG", body="b")])
+    idx = build_page_index([Entity(type="concept", slug="rag", title="RAG", body="b")])
     monkeypatch.setattr(lr.ai_api, "complete_structured", _boom)
     assert lr.select_related("문서", idx) == []  # 예외 삼키고 [] (ingest 진행 보존)
 
 
 def test_select_related_respects_max_pages(monkeypatch) -> None:
-    pages = [WikiPage(type="concept", slug=f"c{i}", title=f"C{i}", body="b") for i in range(5)]
+    pages = [Entity(type="concept", slug=f"c{i}", title=f"C{i}", body="b") for i in range(5)]
     idx = build_page_index(pages)
     monkeypatch.setattr(
         lr.ai_api, "complete_structured",

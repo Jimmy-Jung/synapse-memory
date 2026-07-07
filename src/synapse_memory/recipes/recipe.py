@@ -85,4 +85,4 @@ class GenerationResult:
     domain: str = "generic"
     domain_source: DomainSource = "default"
     rag_mode: RecipeRagMode = "dense"
-    last_answer_ref: Any = None  # storage.last_response.LastAnswerReference | None
+    last_answer_ref: Any = None  # feedback.last_response.LastAnswerReference | None

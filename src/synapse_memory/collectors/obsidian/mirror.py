@@ -7,11 +7,6 @@
 - 변경 감지: mtime + size + sha256 3-tier (가장 싼 것부터).
 - 삭제된 파일은 mirror에 그대로 남겨둠 (실수 보호 — W2 후 정책 재검토).
 
-vault 경로
-----------
-``~/Library/Mobile Documents/iCloud~md~obsidian/Documents`` 가 기본.
-``SYNAPSE_OBSIDIAN_VAULT`` 환경변수로 override 가능.
-
 저자: Synapse Memory Maintainers
 작성일: 2026-05-10
 """
@@ -37,10 +32,6 @@ from synapse_memory.storage.l0 import (
     l0_root,
 )
 
-DEFAULT_VAULT_PATH = (
-    Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents"
-)
-ENV_VAR_VAULT = "SYNAPSE_OBSIDIAN_VAULT"
 SUBPATH = Path("raw") / "obsidian"
 META_DIR = ".meta"
 STATES_FILE = "states.json"
@@ -84,19 +75,6 @@ class CollectStats:
             f"unchanged={self.files_unchanged}{cutoff} "
             f"bytes+={self.bytes_added} errors={len(self.errors)}"
         )
-
-
-# ---------------------------------------------------------------------------
-# 유틸
-# ---------------------------------------------------------------------------
-
-
-def get_vault_path() -> Path:
-    """env var 우선, 없으면 기본 iCloud Obsidian 경로."""
-    override = os.environ.get(ENV_VAR_VAULT)
-    if override:
-        return Path(override).expanduser().resolve()
-    return DEFAULT_VAULT_PATH
 
 
 def _normalized_prefix(path: str) -> str:
@@ -158,7 +136,7 @@ def collect_obsidian(
     """Obsidian vault → L0 mirror (incremental).
 
     Args:
-        vault_path: vault 루트 (기본: ``get_vault_path()``).
+        vault_path: vault 루트 (기본: ``synapse_memory.config.get_vault_path()``).
         dst_root: L0 mirror 루트 (기본: ``<l0_root>/raw/obsidian``).
         since_days: cutoff 일수. 지정 시 mtime 이 이 일수 안에 들지 *않는* 파일은
             scan 하되 mirror 안 함 (`files_skipped_by_cutoff` 로 카운트). 단 prev_state 에
@@ -168,6 +146,8 @@ def collect_obsidian(
     Returns:
         CollectStats — 처리 통계.
     """
+    from synapse_memory.config import get_vault_path
+
     vault = (vault_path or get_vault_path()).expanduser().resolve()
     dst = (dst_root or (l0_root() / SUBPATH)).expanduser().resolve()
 

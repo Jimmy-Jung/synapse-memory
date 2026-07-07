@@ -15,16 +15,15 @@ from pathlib import Path
 import pytest
 
 from synapse_memory.collectors.obsidian.mirror import (
-    ENV_VAR_VAULT,
     META_DIR,
     STATES_FILE,
     CollectStats,
     _is_excluded,
     collect_obsidian,
-    get_vault_path,
 )
-from synapse_memory.config import SynapseConfig
+from synapse_memory.config import ENV_VAR_VAULT, SynapseConfig, get_vault_path
 from synapse_memory.storage.l0 import L0_DIR_MODE, L0_FILE_MODE
+from synapse_memory.vault_detector import VaultCandidate, VaultSource
 
 # ---------------------------------------------------------------------------
 # fixtures
@@ -62,10 +61,24 @@ def _write_md(vault: Path, rel: str, content: str) -> Path:
 
 
 class TestGetVaultPath:
-    def test_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        detected = tmp_path / "detected"
         monkeypatch.delenv(ENV_VAR_VAULT, raising=False)
-        result = get_vault_path()
-        assert "iCloud" in str(result) or "obsidian" in str(result).lower()
+        monkeypatch.setattr("synapse_memory.config.get_config", lambda **_: SynapseConfig())
+        monkeypatch.setattr(
+            "synapse_memory.vault_detector.detect_vault_candidates",
+            lambda: [
+                VaultCandidate(
+                    path=detected,
+                    source=VaultSource.DOCUMENTS_OBSIDIAN,
+                    display_name="detected",
+                    has_obsidian_dir=True,
+                    confidence=70,
+                )
+            ],
+        )
+
+        assert get_vault_path() == detected.resolve()
 
     def test_env_override(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

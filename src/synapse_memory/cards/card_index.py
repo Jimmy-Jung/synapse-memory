@@ -3,7 +3,7 @@
 
 로컬 임베딩/벡터스토어를 provider LLM-as-retriever로 대체하기 위한 토대.
 Project/Company/Insight 카드를 열거해 id/title/summary + 타임라인 메타를 담는다.
-``wiki.llm_retrieval.select_related``와 호환되도록 ``entries``/``render()``/``slugs``를
+``retrieval.index.select_related``와 호환되도록 ``entries``/``render()``/``slugs``를
 노출 — 같은 provider 선별 헬퍼를 카드에도 재사용한다.
 
 저자: Synapse Memory Maintainers
@@ -40,7 +40,7 @@ class CardIndex:
     """프롬프트에 통째로 들어가는 카드 인덱스. select_related 호환.
 
     ``slugs``/``entries``/``render()``를 노출하므로
-    ``wiki.llm_retrieval.select_related(query, card_index, ...)``를 그대로 쓸 수 있다.
+    ``retrieval.index.select_related(query, card_index, ...)``를 그대로 쓸 수 있다.
     """
 
     entries: tuple[CardEntry, ...]
@@ -87,6 +87,8 @@ def build_card_index(
 
     if "project" in kinds:
         for project in list_project_cards(vault_path=vault_path):
+            if not project.is_current:
+                continue
             entries.append(
                 CardEntry(
                     card_id=project.project_id,
@@ -98,7 +100,7 @@ def build_card_index(
                         "display_name": project.display_name,
                         "status": project.status,
                         "period_end": project.period_end or "",
-                        "created": project.created,
+                        "created": project.created or "",
                         "last_reviewed": project.last_reviewed,
                     },
                 )
@@ -106,6 +108,8 @@ def build_card_index(
 
     if "company" in kinds:
         for company in list_company_cards(vault_path=vault_path):
+            if not company.is_current:
+                continue
             entries.append(
                 CardEntry(
                     card_id=company.company_id,
@@ -116,7 +120,7 @@ def build_card_index(
                         "source_kind": "card_company",
                         "display_name": company.display_name,
                         "status": company.status,
-                        "created": company.created,
+                        "created": company.created or "",
                         "last_reviewed": company.last_reviewed,
                     },
                 )
@@ -124,6 +128,8 @@ def build_card_index(
 
     if "insight" in kinds:
         for insight in list_insight_cards(vault_path=vault_path):
+            if not insight.is_current:
+                continue
             entries.append(
                 CardEntry(
                     card_id=insight.insight_id,
@@ -133,7 +139,8 @@ def build_card_index(
                     meta={
                         "source_kind": "card_insight",
                         "display_name": insight.question,
-                        "created": insight.created,
+                        "status": insight.status,
+                        "created": insight.created or "",
                     },
                 )
             )

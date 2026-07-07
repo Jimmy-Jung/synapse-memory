@@ -50,7 +50,7 @@ def test_card_list_json_outputs_project_and_company_cards(monkeypatch, capsys) -
 
 
 def test_cleanup_scan_accepts_dry_run_alias(tmp_path, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(cli, "_resolve_vault_or_fail", lambda: tmp_path)
+    monkeypatch.setattr(cli, "_resolve_vault", lambda *a, **kw: tmp_path)
 
     rc = cli.main(["cleanup", "scan", "--dry-run", "--json"])
 
@@ -60,7 +60,7 @@ def test_cleanup_scan_accepts_dry_run_alias(tmp_path, monkeypatch, capsys) -> No
 
 
 def test_cleanup_apply_accepts_explicit_dry_run(tmp_path, monkeypatch, capsys) -> None:
-    monkeypatch.setattr(cli, "_resolve_vault_or_fail", lambda: tmp_path)
+    monkeypatch.setattr(cli, "_resolve_vault", lambda *a, **kw: tmp_path)
 
     rc = cli.main(["cleanup", "apply", "--dry-run"])
 

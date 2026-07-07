@@ -14,8 +14,8 @@ from synapse_memory.vault_detector import (
     creation_vault_candidates,
     default_vault_path,
     detect_vault_candidates,
-    installer_vault_choices,
     select_default_candidate,
+    setup_vault_choices,
 )
 
 
@@ -145,7 +145,7 @@ def test_select_default_candidate_requires_gui_when_multiple_real_vaults(tmp_pat
     assert select_default_candidate(candidates) is None
 
 
-def test_installer_choices_include_existing_vaults_and_creation_options(
+def test_setup_choices_include_existing_vaults_and_creation_options(
     tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
@@ -153,7 +153,7 @@ def test_installer_choices_include_existing_vaults_and_creation_options(
     icloud_root = home / "Library/Mobile Documents/iCloud~md~obsidian/Documents"
     icloud_root.mkdir(parents=True)
 
-    choices = installer_vault_choices(home=home)
+    choices = setup_vault_choices(home=home)
     paths = [choice.path for choice in choices]
 
     assert existing.resolve() in paths
@@ -161,13 +161,13 @@ def test_installer_choices_include_existing_vaults_and_creation_options(
     assert (home / "Documents" / "SynapseVault").resolve() in paths
 
 
-def test_installer_choices_do_not_duplicate_existing_creation_path(
+def test_setup_choices_do_not_duplicate_existing_creation_path(
     tmp_path: Path,
 ) -> None:
     home = tmp_path / "home"
     existing_default = _vault(home / "Documents" / "SynapseVault")
 
-    choices = installer_vault_choices(home=home)
+    choices = setup_vault_choices(home=home)
     matching = [choice for choice in choices if choice.path == existing_default.resolve()]
 
     assert len(matching) == 1

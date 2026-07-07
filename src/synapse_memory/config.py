@@ -29,27 +29,16 @@ from typing import Any, TypeVar, cast
 import yaml
 
 DEFAULT_CONFIG_PATH = Path.home() / ".synapse" / "config.yaml"
+DEFAULT_VAULT_PATH = (
+    Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents"
+)
+ENV_VAR_VAULT = "SYNAPSE_OBSIDIAN_VAULT"
 T = TypeVar("T")
 
 
 @dataclass
-class ClaudeModelsConfig:
-    """Claude 모델 이름 — haiku / sonnet / opus 체계."""
-
-    classify: str = "haiku"
-    card_generate: str = "sonnet"
-    ask: str | None = None  # None = provider default (sonnet)
-    decide: str | None = None
-    resume: str | None = None
-    recall: str | None = None
-    update_profile: str | None = None
-    # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
-    relevance: str = "haiku"
-
-
-@dataclass
-class CodexModelsConfig:
-    """Codex 모델 이름 — gpt-5.5 등 OpenAI 체계."""
+class ModelTasksConfig:
+    """task별 기본 모델 이름."""
 
     classify: str = "gpt-5.5"
     card_generate: str = "gpt-5.5"
@@ -63,15 +52,67 @@ class CodexModelsConfig:
 
 
 @dataclass
+class ProviderModelOverrideConfig:
+    """provider별 task 모델 override. None이면 task 기본값 사용."""
+
+    default: str | None = None  # task 기본값도 None일 때 쓸 provider 기본 모델
+    classify: str | None = None
+    card_generate: str | None = None
+    ask: str | None = None
+    decide: str | None = None
+    resume: str | None = None
+    recall: str | None = None
+    update_profile: str | None = None
+    relevance: str | None = None
+
+
+@dataclass
+class ProviderModelOverridesConfig:
+    claude: ProviderModelOverrideConfig = field(
+        default_factory=lambda: ProviderModelOverrideConfig(
+            default="sonnet",
+            classify="haiku",
+            card_generate="sonnet",
+            relevance="haiku",
+        )
+    )
+    codex: ProviderModelOverrideConfig = field(
+        default_factory=lambda: ProviderModelOverrideConfig(default="gpt-5.5")
+    )
+
+
+# provider별 기본 모델 안전망 (config가 provider default 미지정 시).
+_PROVIDER_FALLBACK_MODEL: dict[str, str] = {"codex": "gpt-5.5", "claude": "sonnet"}
+
+
+@dataclass
 class ModelsConfig:
-    """task별 모델 — provider 분리.
+    """task별 기본 모델 + provider override."""
 
-    ``ai_provider`` 값에 따라 ``models.claude.*`` 또는 ``models.codex.*``가 사용됨.
-    ``ai_provider: auto``일 때는 detect_ai_environment가 자체 default로 폴백.
-    """
+    tasks: ModelTasksConfig = field(default_factory=ModelTasksConfig)
+    overrides: ProviderModelOverridesConfig = field(
+        default_factory=ProviderModelOverridesConfig
+    )
 
-    claude: ClaudeModelsConfig = field(default_factory=ClaudeModelsConfig)
-    codex: CodexModelsConfig = field(default_factory=CodexModelsConfig)
+    def model_for_task(self, provider: str, task: str) -> str | None:
+        if not hasattr(self.tasks, task):
+            return None
+        base: str | None = getattr(self.tasks, task)
+        provider_overrides: ProviderModelOverrideConfig | None = getattr(
+            self.overrides, provider, None
+        )
+        override = (
+            getattr(provider_overrides, task, None)
+            if provider_overrides is not None
+            else None
+        )
+        resolved = override if override is not None else base
+        if resolved is not None:
+            return resolved
+        # task 기본값도 None → provider 기본 모델로 폴백 (codex=gpt-5.5, claude=sonnet).
+        # config가 provider default를 지정하지 않았을 때의 안전망.
+        provider_default = getattr(provider_overrides, "default", None)
+        return provider_default or _PROVIDER_FALLBACK_MODEL.get(provider)
 
 
 @dataclass
@@ -89,14 +130,6 @@ class CleanupConfig:
     old_resume_days: int = 90
     stale_memory_inbox_days: int = 60
     old_daily_reports_days: int = 90
-
-
-@dataclass
-class VaultReferenceFoldersConfig:
-    root: str = "20_Reference"
-    projects: str = "20_Reference/Projects"
-    companies: str = "20_Reference/Companies"
-    insights: str = "20_Reference/Insights"
 
 
 @dataclass
@@ -148,7 +181,6 @@ class VaultFoldersConfig:
 
     inbox: str = "00_Inbox"
     active: str = "10_Active"
-    reference: VaultReferenceFoldersConfig = field(default_factory=VaultReferenceFoldersConfig)
     creative: VaultCreativeFoldersConfig = field(default_factory=VaultCreativeFoldersConfig)
     life: str = "40_Life"
     archive: str = "40_Archive"
@@ -338,6 +370,20 @@ def _normalize_config_raw(raw: dict[str, Any]) -> dict[str, Any]:
     ``vault_folders``로 옮긴다.
     """
     normalized = dict(raw)
+    models_value = normalized.get("models")
+    if isinstance(models_value, dict):
+        legacy_providers = {
+            key: value
+            for key, value in models_value.items()
+            if key in {"claude", "codex"} and isinstance(value, dict)
+        }
+        if legacy_providers and "tasks" not in models_value and "overrides" not in models_value:
+            codex_defaults = legacy_providers.get("codex", {})
+            normalized["models"] = {
+                "tasks": codex_defaults,
+                "overrides": legacy_providers,
+            }
+
     vault_value = normalized.get("vault")
     if not isinstance(vault_value, dict):
         return normalized
@@ -653,6 +699,29 @@ def get_config(*, refresh: bool = False) -> SynapseConfig:
         _cached = load_config(path)
         _cached_mtime = current_mtime
     return _cached
+
+
+def get_vault_path(*, cfg: SynapseConfig | None = None, refresh_config: bool = False) -> Path:
+    """vault 경로 SSOT.
+
+    해석 순서: ``SYNAPSE_OBSIDIAN_VAULT`` env → config.vault → vault detector.
+    """
+    raw_env = os.environ.get(ENV_VAR_VAULT)
+    if raw_env and raw_env.strip():
+        return Path(raw_env).expanduser().resolve()
+
+    active_cfg = cfg if cfg is not None else get_config(refresh=refresh_config)
+    if active_cfg.vault and active_cfg.vault.strip():
+        return Path(active_cfg.vault).expanduser().resolve()
+
+    from synapse_memory.vault_detector import (
+        detect_vault_candidates,
+        select_default_candidate,
+    )
+
+    candidates = detect_vault_candidates()
+    candidate = select_default_candidate(candidates) or candidates[0]
+    return candidate.path.expanduser().resolve()
 
 
 def clear_cache() -> None:

@@ -6,7 +6,7 @@
 - 디렉토리 권한: 0700 (소유자 전용)
 - 파일 권한: 0600
 - 로컬 격리: iCloud sync 제외, 0700/0600. v2는 raw를 클라우드 CLI(Claude Code/Codex)에
-  직접 전달하는 것을 신뢰 전제로 한다 (별도 redaction 레이어 없음).
+  직접 전달하는 것을 신뢰 전제로 한다 (별도 마스킹 레이어 없음).
 - vault CLAUDE.md 원칙: "raw conversations, transcripts, API keys, tokens를
   90_System/AI 또는 iCloud-synced Vault 노트에 쓰지 않습니다"
 

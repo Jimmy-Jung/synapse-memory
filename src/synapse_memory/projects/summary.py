@@ -6,6 +6,10 @@ import json
 import os
 from pathlib import Path
 
+from synapse_memory.profile.dedupe import (
+    parse_decision_pattern_triggers,
+    parse_profile_facts,
+)
 from synapse_memory.storage.l0 import secure_write_text
 
 __all__ = [
@@ -48,8 +52,12 @@ def generate_marker_body(
         patterns_path.read_text(encoding="utf-8") if patterns_path.is_file() else ""
     )
 
-    facts = _extract_bullets(profile_text, fact_top_n)
-    patterns = _extract_bullets(patterns_text, pattern_top_m)
+    facts = parse_profile_facts(profile_path)[:fact_top_n]
+    patterns = parse_decision_pattern_triggers(patterns_path)[:pattern_top_m]
+    if not facts:
+        facts = _extract_bullets(profile_text, fact_top_n)
+    if not patterns:
+        patterns = _extract_bullets(patterns_text, pattern_top_m)
 
     lines: list[str] = [
         "## Second Brain (Synapse Memory)",

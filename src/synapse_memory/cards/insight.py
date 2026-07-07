@@ -1,51 +1,62 @@
-"""Insight Card — ask 답변의 영속화.
+"""Insight entity compatibility helpers.
 
 좋은 답변은 채팅에서 증발하지 않고 vault에 쌓인다.
 
-저장 위치: ``<vault>/20_Reference/Insights/<yyyy>/<mm>/<insight_id>.md``
-
-저자: JunyoungJung
-작성일: 2026-06-11
+저장 위치: ``<vault>/Insights/<yyyy>/<mm>/<insight_id>.md``
 """
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
+from synapse_memory.cards.project import slugify
+from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.model import Entity, parse_frontmatter, serialize_entity
 
-from synapse_memory.cards.project import FRONTMATTER_DELIMITER, slugify
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+DEFAULT_INSIGHTS_SUBPATH = Path("Insights")
+INSIGHT_DEFAULT_ATTRS: dict[str, Any] = {
+    "question": "",
+    "command": "",
+    "related": [],
+    "keywords": [],
+    "confidence": 0.7,
+}
 
-DEFAULT_INSIGHTS_SUBPATH = Path("20_Reference") / "Insights"
-_FRONTMATTER_RE = re.compile(
-    r"^---\s*\n(?P<yaml>.*?)\n---\s*\n?(?P<body>.*)$",
-    re.DOTALL,
-)
 
-
-@dataclass
-class InsightCard:
-    """저장된 답변 1건."""
-
-    insight_id: str
-    question: str
-    command: str
-    created: str
-    related: list[str] = field(default_factory=list)
-    keywords: list[str] = field(default_factory=list)
-    status: str = "draft"
-    confidence: float = 0.7
-    body: str = ""
-
-    @property
-    def filename(self) -> str:
-        return f"{self.insight_id}.md"
+def InsightCard(
+    insight_id: str,
+    question: str,
+    command: str,
+    created: str | None = None,
+    related: list[str] | None = None,
+    keywords: list[str] | None = None,
+    status: str = "draft",
+    confidence: float = 0.7,
+    observed_at: str | None = None,
+    supersedes: list[str] | None = None,
+    body: str = "",
+) -> Entity:
+    """Compatibility constructor returning the single Entity model."""
+    attrs = _insight_attrs(
+        question=question,
+        command=command,
+        related=list(related or []),
+        keywords=list(keywords or []),
+        confidence=confidence,
+    )
+    return Entity(
+        slug=insight_id,
+        title=question,
+        type="insight",
+        status=status,
+        created=created,
+        observed_at=observed_at,
+        body=body,
+        attrs=attrs,
+        supersedes=tuple(supersedes or ()),
+    )
 
 
 def new_insight_id(question: str, *, now: datetime | None = None) -> str:
@@ -57,40 +68,30 @@ def new_insight_id(question: str, *, now: datetime | None = None) -> str:
 def insights_dir(created: str, *, vault_path: Path | None = None) -> Path:
     """InsightCard 년/월 저장 디렉토리."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    root = vault / get_config().vault_folders.reference.insights
+    root = vault / get_config().vault_folders.wiki.insights
     yyyy = created[:4]
     mm = created[5:7]
     return root / yyyy / mm
 
 
-def serialize_insight_card(card: InsightCard) -> str:
+def serialize_insight_card(card: Entity) -> str:
     """InsightCard → markdown 문자열."""
-    fm = _frontmatter_dict(card)
-    yaml_text = yaml.safe_dump(
-        fm,
-        sort_keys=False,
-        allow_unicode=True,
-        default_flow_style=False,
-    ).rstrip()
-    body = card.body.lstrip("\n")
-    return f"{FRONTMATTER_DELIMITER}\n{yaml_text}\n{FRONTMATTER_DELIMITER}\n\n{body}"
+    return serialize_entity(card)
 
 
-def parse_insight_card(text: str) -> InsightCard:
+def parse_insight_card(text: str) -> Entity:
     """markdown 문자열 → InsightCard."""
-    match = _FRONTMATTER_RE.match(text)
-    if not match:
-        raise ValueError("frontmatter (--- ... ---) 없음")
-
-    try:
-        meta = yaml.safe_load(match.group("yaml")) or {}
-    except yaml.YAMLError as exc:
-        raise ValueError(f"frontmatter yaml 파싱 실패: {exc}") from exc
-
-    if not isinstance(meta, dict):
-        raise ValueError(f"frontmatter가 dict 아님: {type(meta).__name__}")
-
-    insight_id = meta.get("insight_id")
+    meta, body = parse_frontmatter(text)
+    if "type" not in meta:
+        meta = {
+            **meta,
+            "type": "insight",
+            "slug": meta.get("insight_id"),
+            "title": meta.get("question"),
+        }
+    if meta.get("type") != "insight":
+        raise ValueError(f"알 수 없는 insight type: {meta.get('type')!r}")
+    insight_id = meta.get("slug")
     question = meta.get("question")
     command = meta.get("command")
     created = meta.get("created")
@@ -106,15 +107,17 @@ def parse_insight_card(text: str) -> InsightCard:
         keywords=list(meta.get("keywords") or []),
         status=str(meta.get("status", "draft")),
         confidence=float(meta.get("confidence", 0.7)),
-        body=match.group("body").strip(),
+        observed_at=str(meta.get("observed_at", "")),
+        supersedes=_relation_list(meta.get("supersedes")),
+        body=body.strip(),
     )
 
 
 def save_insight_card(
-    card: InsightCard, *, vault_path: Path | None = None
+    card: Entity, *, vault_path: Path | None = None
 ) -> Path:
     """InsightCard를 vault에 저장한다."""
-    directory = insights_dir(card.created, vault_path=vault_path)
+    directory = insights_dir(card.created or "", vault_path=vault_path)
     path = _unique_insight_path(directory, card.insight_id)
     if path.stem != card.insight_id:
         card.insight_id = path.stem
@@ -128,7 +131,7 @@ def load_insight_card(
     created: str,
     *,
     vault_path: Path | None = None,
-) -> InsightCard:
+) -> Entity:
     """ID와 created timestamp로 InsightCard를 로드한다."""
     path = insights_dir(created, vault_path=vault_path) / f"{insight_id}.md"
     if not path.is_file():
@@ -136,37 +139,20 @@ def load_insight_card(
     return parse_insight_card(path.read_text(encoding="utf-8"))
 
 
-def list_insight_cards(*, vault_path: Path | None = None) -> list[InsightCard]:
+def list_insight_cards(*, vault_path: Path | None = None) -> list[Entity]:
     """vault 안 모든 Insight Card 로드. parse 실패 파일은 skip."""
     vault = (vault_path or get_vault_path()).expanduser().resolve()
-    root = vault / get_config().vault_folders.reference.insights
+    root = vault / get_config().vault_folders.wiki.insights
     if not root.is_dir():
         return []
 
-    cards: list[InsightCard] = []
+    cards: list[Entity] = []
     for path in sorted(root.glob("**/*.md")):
         try:
             cards.append(parse_insight_card(path.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             continue
     return sorted(cards, key=lambda card: (card.created, card.insight_id))
-
-
-def _frontmatter_dict(card: InsightCard) -> dict[str, Any]:
-    d: dict[str, Any] = {
-        "insight_id": card.insight_id,
-        "question": card.question,
-        "command": card.command,
-        "created": card.created,
-        "status": card.status,
-        "confidence": card.confidence,
-        "tags": ["node/insight"],
-    }
-    if card.related:
-        d["related"] = card.related
-    if card.keywords:
-        d["keywords"] = card.keywords
-    return d
 
 
 def _unique_insight_path(directory: Path, insight_id: str) -> Path:
@@ -181,3 +167,15 @@ def _unique_insight_path(directory: Path, insight_id: str) -> Path:
         if not candidate.exists():
             return candidate
         suffix += 1
+
+
+def _insight_attrs(**values: Any) -> dict[str, Any]:
+    return {**INSIGHT_DEFAULT_ATTRS, **values}
+
+
+def _relation_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return [str(item) for item in value]

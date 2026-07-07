@@ -1,10 +1,8 @@
 """파일 변경 감지용 공통 state 헬퍼.
 
-여러 컬렉터(obsidian, continue_dev, cursor 등)가 모두 같은 패턴 —
+파일 기반 컬렉터가 쓰는 패턴 —
 ``mtime``+``size``+``sha256`` prefix 로 파일 변경을 감지하고 ``states.json`` 에
 원자적으로 저장 — 을 쓴다. 본 모듈에 통합한다.
-
-``_sqlite_mirror`` 는 sqlite snapshot 로직을 더해 본 헬퍼를 re-export 한다.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-06-22

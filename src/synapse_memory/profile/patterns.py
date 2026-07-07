@@ -1,4 +1,4 @@
-"""DecisionPatterns.md read helpers."""
+"""Decision pattern read helpers from the wiki profile page."""
 
 from __future__ import annotations
 
@@ -7,10 +7,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
+from synapse_memory.profile.similarity import normalize
+from synapse_memory.profile.wiki import profile_page_path
 
 _FIELD_RE = re.compile(r"^\s*(?:[-*]\s*)?(trigger|action|rationale|confidence):\s*(.+?)\s*$")
+_H2_RE = re.compile(r"^##\s+(.+?)\s*$")
+_H3_RE = re.compile(r"^###\s+(.+?)\s*$")
+_ACTION_RE = re.compile(r"^\s*[-*]\s+행동:\s*(.+?)\s*$")
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,7 @@ def list_decision_patterns(*, vault_path: Path | None = None) -> list[DecisionPa
                 display_name=f"{trigger} -> {action}",
             )
         )
+    patterns.extend(_parse_wiki_decision_patterns(text))
     return patterns
 
 
@@ -70,5 +74,44 @@ def _pattern_id(trigger: str, action: str) -> str:
 
 
 def _patterns_path(vault_path: Path | None) -> Path:
-    vault = (vault_path or get_vault_path()).expanduser().resolve()
-    return vault / get_config().vault_folders.system.ai.decision_patterns
+    return profile_page_path(vault_path)
+
+
+def _parse_wiki_decision_patterns(text: str) -> list[DecisionPatternReference]:
+    patterns: list[DecisionPatternReference] = []
+    in_decision = False
+    trigger = ""
+    action = ""
+
+    def flush() -> None:
+        if trigger and action:
+            patterns.append(
+                DecisionPatternReference(
+                    pattern_id=_pattern_id(trigger, action),
+                    trigger=trigger,
+                    action=action,
+                    display_name=f"{trigger} -> {action}",
+                )
+            )
+
+    for line in text.splitlines():
+        h2 = _H2_RE.match(line)
+        if h2:
+            flush()
+            trigger = ""
+            action = ""
+            in_decision = normalize(h2.group(1)).startswith("decision patterns")
+            continue
+        if not in_decision:
+            continue
+        h3 = _H3_RE.match(line)
+        if h3:
+            flush()
+            trigger = h3.group(1).strip()
+            action = ""
+            continue
+        match = _ACTION_RE.match(line)
+        if match:
+            action = match.group(1).strip()
+    flush()
+    return patterns

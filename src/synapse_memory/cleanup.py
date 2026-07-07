@@ -120,6 +120,7 @@ def _is_protected(rel_path: Path, folders: VaultFoldersConfig) -> bool:
         folders.system.ai.decision_patterns,
     }
     protected_dirs = {
+        "Profile",
         folders.system.ai.recipes,
     }
     if rel in protected_files:
@@ -312,8 +313,8 @@ def _scan_empty_cards(
 ) -> list[CleanupCandidate]:
     out: list[CleanupCandidate] = []
     card_dirs = (
-        ("vault_folders.reference.projects", folders.reference.projects),
-        ("vault_folders.reference.companies", folders.reference.companies),
+        ("vault_folders.wiki.projects", folders.wiki.projects),
+        ("vault_folders.wiki.companies", folders.wiki.companies),
     )
     for key, sub in card_dirs:
         d = _vault_path(vault, sub, key=key)
@@ -377,8 +378,11 @@ def _scan_empty_folders(vault: Path, *, folders: VaultFoldersConfig) -> list[Cle
     out: list[CleanupCandidate] = []
     skip_top = {
         _relative_config_path(folders.archive, key="vault_folders.archive").parts[0],
-        _relative_config_path(folders.reference.root, key="vault_folders.reference.root").parts[0],
         _relative_config_path(folders.system.root, key="vault_folders.system.root").parts[0],
+        _relative_config_path(folders.wiki.projects, key="vault_folders.wiki.projects").parts[0],
+        _relative_config_path(folders.wiki.concepts, key="vault_folders.wiki.concepts").parts[0],
+        _relative_config_path(folders.wiki.profile, key="vault_folders.wiki.profile").parts[0],
+        _relative_config_path(folders.wiki.insights, key="vault_folders.wiki.insights").parts[0],
     }
     for top in vault.iterdir():
         if not top.is_dir() or top.name.startswith(".") or top.name in skip_top:

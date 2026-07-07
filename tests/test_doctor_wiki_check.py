@@ -1,4 +1,4 @@
-"""Unit tests for v2 wiki doctor checks (diagnose_wiki_pages / diagnose_wiki_maintenance)."""
+"""Unit tests for v2 Entity doctor checks."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def test_wiki_pages_ok_when_pages_present(tmp_path: Path) -> None:
     result = diagnose_wiki_pages(tmp_path)
 
     assert result.status == DiagnosticStatus.OK
-    assert "페이지" in result.message
+    assert "Entity" in result.message
 
 
 def test_wiki_maintenance_warn_when_daemon_absent(tmp_path: Path) -> None:

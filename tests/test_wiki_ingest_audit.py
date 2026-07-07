@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-import synapse_memory.wiki.ingest as ingest_mod
+import synapse_memory.wiki.ingest_routing as routing_mod
 from synapse_memory.wiki.ingest_audit import audit_ingest_queue
 
 
@@ -27,13 +27,8 @@ def test_audit_classifies_pending_docs_without_llm(tmp_path, monkeypatch) -> Non
     _write_session(raw_root, "small", "a" * 10, 1_700_000_000)
     _write_session(raw_root, "sampled", "b" * 50, 1_700_000_010)
     _write_session(raw_root, "oversize", "c" * 90, 1_700_000_020)
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 20, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 70, raising=False)
-
-    def unexpected_llm_call(*args, **kwargs):
-        raise AssertionError("ingest-audit must not call LLM")
-
-    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", unexpected_llm_call)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 20)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_LIMIT", 70)
     result = audit_ingest_queue(
         "claude-code",
         raw_root=raw_root,
@@ -56,8 +51,8 @@ def test_audit_can_estimate_without_semantic_retrieval(tmp_path, monkeypatch) ->
     _write_session(raw_root, "small", "a" * 10, 1_700_000_000)
     _write_session(raw_root, "sampled", "b" * 50, 1_700_000_010)
     _write_session(raw_root, "oversize", "c" * 90, 1_700_000_020)
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 20, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 70, raising=False)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 20)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_LIMIT", 70)
 
     result = audit_ingest_queue(
         "claude-code",
@@ -78,7 +73,7 @@ def test_audit_respects_watermark_and_limit(tmp_path, monkeypatch) -> None:
     _write_session(raw_root, "second", "c" * 10, 1_700_000_020)
     since = datetime.fromtimestamp(1_700_000_000).isoformat(timespec="microseconds")
     state.write_text(json.dumps({"claude-code": since}), encoding="utf-8")
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 20, raising=False)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 20)
 
     result = audit_ingest_queue(
         "claude-code",

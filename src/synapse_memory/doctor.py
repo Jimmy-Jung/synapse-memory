@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -48,12 +47,13 @@ class FixAction:
 
 
 def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
-    """v2 wiki 페이지 존재 점검 — entity/concept/profile/insight 합산 카운트."""
-    from synapse_memory.wiki.page import VALID_TYPES, list_pages
+    """v2 Entity 존재 점검 — entity/concept/profile/insight 합산 카운트."""
+    from synapse_memory.model import ENTITY_TYPES
+    from synapse_memory.store import list_pages
 
     vault_root = Path(vault).expanduser()
     total = 0
-    for page_type in VALID_TYPES:
+    for page_type in ENTITY_TYPES:
         total += len(list_pages(page_type, vault_path=vault_root))
 
     if total == 0:
@@ -61,17 +61,27 @@ def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
             check_id="wiki_pages",
             status=DiagnosticStatus.WARN,
             message=(
-                "v2 wiki 페이지 0개 — 아직 생성되지 않음. "
-                "`synapse-memory daily` 또는 `/sm:daily`로 wiki를 구축하세요."
+                "v2 Entity 0개 — 아직 생성되지 않음. "
+                "`synapse-memory daily` 또는 `/sm:daily`로 온톨로지를 구축하세요."
             ),
             target=vault_root,
         )
     return DiagnosticResult(
         check_id="wiki_pages",
         status=DiagnosticStatus.OK,
-        message=f"v2 wiki 페이지 {total}개",
+        message=f"v2 Entity {total}개",
         target=vault_root,
     )
+
+
+def relation_metrics_lines(vault: Path | str) -> tuple[str, ...]:
+    """Return relation coverage lines for doctor output."""
+    from synapse_memory.wiki.metrics import (
+        calculate_relation_metrics_for_vault,
+        format_relation_metrics_lines,
+    )
+
+    return format_relation_metrics_lines(calculate_relation_metrics_for_vault(vault))
 
 
 def _parse_watermark(value: str) -> datetime | None:
@@ -167,64 +177,6 @@ def diagnose_wiki_maintenance(
     )
 
 
-def diagnose_dataview_plugin(vault: Path | str) -> DiagnosticResult:
-    """vault `.obsidian/community-plugins.json`에서 Dataview 플러그인 활성 여부 검사."""
-    vault_root = Path(vault).expanduser()
-    obsidian = vault_root / ".obsidian"
-    plugins_file = obsidian / "community-plugins.json"
-
-    if not obsidian.is_dir():
-        return DiagnosticResult(
-            check_id="dataview_plugin",
-            status=DiagnosticStatus.WARN,
-            message=(
-                f"{obsidian} 없음 — Obsidian이 이 vault에 한 번도 열린 적 없을 가능성. "
-                "vault를 한 번 열고 다시 시도하세요."
-            ),
-            target=obsidian,
-        )
-
-    if not plugins_file.is_file():
-        return DiagnosticResult(
-            check_id="dataview_plugin",
-            status=DiagnosticStatus.WARN,
-            message=(
-                f"{plugins_file} 없음 — Obsidian Community plugin 미설치 가능성. "
-                "Dataview는 MOC 동적 인덱스에 필요합니다."
-            ),
-            target=plugins_file,
-        )
-
-    try:
-        data = json.loads(plugins_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return DiagnosticResult(
-            check_id="dataview_plugin",
-            status=DiagnosticStatus.FAIL,
-            message=f"{plugins_file} 파싱 실패: {exc}",
-            target=plugins_file,
-        )
-
-    plugins = data if isinstance(data, list) else []
-    if "dataview" in plugins:
-        return DiagnosticResult(
-            check_id="dataview_plugin",
-            status=DiagnosticStatus.OK,
-            message="Dataview 플러그인 활성화됨",
-            target=plugins_file,
-        )
-
-    return DiagnosticResult(
-        check_id="dataview_plugin",
-        status=DiagnosticStatus.WARN,
-        message=(
-            "Dataview 플러그인 미설치 — MOC.md의 동적 인덱스가 동작하지 않습니다. "
-            "Obsidian → Settings → Community plugins → 'Dataview' 검색 후 설치·활성화."
-        ),
-        target=plugins_file,
-    )
-
-
 def diagnose_runtime_shim(shim_path: Path) -> DiagnosticResult:
     path = shim_path.expanduser()
     if not path.is_file():
@@ -279,7 +231,7 @@ def _runtime_rerun_guidance(target: Path) -> FixResult:
     return FixResult(
         action_id="recreate_runtime_shim",
         status="manual_required",
-        summary=f"{target} 재생성은 installer 또는 scripts/bootstrap_runtime.sh 재실행 필요",
+        summary=f"{target} 재생성은 scripts/bootstrap_runtime.sh 재실행 필요",
     )
 
 
@@ -326,7 +278,7 @@ def diagnose_vault_config_consistency(
             status=DiagnosticStatus.WARN,
             message=(
                 "config.yaml vault 미설정 + 자동 감지 실패. "
-                "installer 또는 수동 설정 필요."
+                "수동 설정 필요."
             ),
             fixable=False,
         )

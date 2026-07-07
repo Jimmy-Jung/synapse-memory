@@ -106,7 +106,7 @@ def ingest_files(
         private_path = _make_private_path(root, sha, path.name)
         secure_write_text(private_path, raw_text)
 
-        # D4: raw 텍스트를 그대로 사용 (cloud 도구 신뢰 — redaction 제거)
+        # D4: raw 텍스트를 그대로 사용 (cloud 도구 신뢰)
         text = raw_text
         if not text.strip():
             results.append(

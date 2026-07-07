@@ -1,0 +1,205 @@
+# Author: JunyoungJung
+# Created: 2026-07-06
+version: 1
+
+types:
+  project:
+    folder: Entities/Projects
+    statuses: [active, draft, completed, archived, superseded]
+    fields:
+      role:
+        type: string
+      period_start:
+        type: string
+      period_end:
+        type: string
+      domains:
+        type: list
+        items: string
+      stack:
+        type: list
+        items: string
+      keywords:
+        type: list
+        items: string
+      metrics:
+        type: list
+        items:
+          type: object
+          fields:
+            name:
+              type: string
+              required: true
+            before:
+              type: string
+            after:
+              type: string
+            value:
+              type: string
+      confidence:
+        type: number
+      created:
+        type: string
+      t_invalid:
+        type: string
+      last_reviewed:
+        type: string
+
+  company:
+    folder: Entities/Companies
+    statuses: [target, applied, interviewing, offered, rejected, hired, archived, superseded]
+    fields:
+      country:
+        type: string
+      size:
+        type: enum
+        values: [startup, small, medium, large, mega]
+      website:
+        type: string
+      resume_language:
+        type: enum
+        values: [ko, en, ja, zh, 한국어, English]
+      positions:
+        type: list
+        items:
+          type: object
+          fields:
+            title:
+              type: string
+              required: true
+            seniority:
+              type: string
+            keywords:
+              type: list
+              items: string
+            jd_url:
+              type: string
+      notes:
+        type: string
+      confidence:
+        type: number
+      created:
+        type: string
+      t_invalid:
+        type: string
+      last_reviewed:
+        type: string
+
+  concept:
+    folder: Concepts
+    statuses: [active, draft, archived, superseded]
+    fields:
+      aliases:
+        type: list
+        items: string
+      keywords:
+        type: list
+        items: string
+      kind:
+        type: enum
+        values: [technology, tool, algorithm, methodology]
+      created:
+        type: string
+      t_invalid:
+        type: string
+
+  insight:
+    folder: Insights
+    year_month: true
+    statuses: [draft, active, archived, superseded]
+    fields:
+      question:
+        type: string
+      command:
+        type: string
+      created:
+        type: string
+      observed_at:
+        type: string
+      t_invalid:
+        type: string
+      related:
+        type: list
+        items: string
+      keywords:
+        type: list
+        items: string
+      confidence:
+        type: number
+
+  log:
+    folder: Logs
+    year_month: true
+    statuses: [active, archived, superseded]
+    fields:
+      command:
+        type: string
+      summary:
+        type: string
+      created:
+        type: string
+      observed_at:
+        type: string
+      t_invalid:
+        type: string
+      related:
+        type: list
+        items: string
+      keywords:
+        type: list
+        items: string
+
+  profile:
+    folder: Profile
+    statuses: [active, draft, archived, superseded]
+    fields:
+      scope:
+        type: string
+      confidence:
+        type: number
+      created:
+        type: string
+      t_invalid:
+        type: string
+
+relations:
+  uses:
+    domain: [project, company, concept, insight, log, profile]
+    range: [concept]
+    cardinality: many
+  part_of:
+    domain: [project, company, concept, insight, log, profile]
+    range: [project, company, concept, insight, log, profile]
+    cardinality: many
+    axioms:
+      transitive: true
+      inverse: has_part
+  broader:
+    domain: [concept]
+    range: [concept]
+    cardinality: many
+    axioms:
+      transitive: true
+      inverse: narrower
+  decided_in:
+    domain: [project, company, concept, insight, log, profile]
+    range: [insight, log]
+    cardinality: many
+  supersedes:
+    # 보류: Step 5(supersedes) 메커니즘 배선 전까지 emit 유도 안 함.
+    domain: [project, company, concept, insight, log, profile]
+    range: [project, company, concept, insight, log, profile]
+    cardinality: many
+  same_as:
+    # 보류: Step 7(same_as) 메커니즘 배선 전까지 emit 유도 안 함.
+    domain: [project, company, concept, insight, log, profile]
+    range: [project, company, concept, insight, log, profile]
+    cardinality: many
+
+legacy_mappings:
+  domain:
+    maps_to: concept
+    reason: v1 domain은 기술/주제 분류였고 v2 concept가 같은 지식 노드 역할을 한다.
+  life:
+    maps_to: skip
+    reason: v1 life는 개인 생활 폴더 분류였고 typed entity로 소비된 인스턴스가 없어 Step 6a에서는 엔티티로 승격하지 않는다.

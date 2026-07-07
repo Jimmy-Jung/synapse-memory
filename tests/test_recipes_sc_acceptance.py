@@ -95,7 +95,8 @@ def test_sc_002_builtin_recipes_produce_markdown(vault: Path) -> None:
 def test_sc_003_english_resume_zero_korean_headers(vault: Path) -> None:
     """SC-003 — Profile.preferred_lang=en 이면 system prompt 가 영어 placeholder 와 함께 렌더."""
     src = vault / "profile_en_design" / "90_System" / "AI" / "Profile.md"
-    dst = vault / "90_System" / "AI" / "Profile.md"
+    dst = vault / "Profile" / "user-profile.md"
+    dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
     captured: dict[str, str] = {}
@@ -181,13 +182,13 @@ def test_sc_008_timeline_does_not_call_recipe_pipeline() -> None:
     상세 byte-identical 검증은 test_endpoints_persona_timeline.py 가 담당.
     """
     import synapse_memory.endpoints.persona as me_mod
-    from synapse_memory.cards.card_index import CardIndex
     from synapse_memory.endpoints.persona import what_did_i_think
+    from synapse_memory.recipes.pipeline import EntityIndex
 
     with mock.patch(
         "synapse_memory.recipes.pipeline.ai_api_complete"
     ) as mock_pipe, mock.patch.object(
-        me_mod, "build_card_index", return_value=CardIndex(entries=())
+        me_mod, "build_entity_index", return_value=EntityIndex(entries=())
     ):
         what_did_i_think("x", by="time")
     assert mock_pipe.call_count == 0

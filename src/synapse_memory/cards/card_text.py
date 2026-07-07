@@ -13,16 +13,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from synapse_memory.cards.company import CompanyCard
-from synapse_memory.cards.insight import InsightCard
-from synapse_memory.cards.project import ProjectCard
+from synapse_memory.model import Entity
 
 
 def _join_strings(values: Sequence[object]) -> str:
     return ", ".join(str(value) for value in values)
 
 
-def project_card_to_text(card: ProjectCard) -> str:
+def project_card_to_text(card: Entity) -> str:
     """ProjectCard → 단일 텍스트 (yaml 메타 + body 통합)."""
     lines: list[str] = [f"# {card.display_name}"]
     if card.role:
@@ -53,7 +51,7 @@ def project_card_to_text(card: ProjectCard) -> str:
     return "\n".join(lines)
 
 
-def company_card_to_text(card: CompanyCard) -> str:
+def company_card_to_text(card: Entity) -> str:
     """CompanyCard → 단일 텍스트."""
     lines: list[str] = [f"# {card.display_name}"]
     if card.country:
@@ -80,7 +78,7 @@ def company_card_to_text(card: CompanyCard) -> str:
     return "\n".join(lines)
 
 
-def insight_card_to_text(card: InsightCard) -> str:
+def insight_card_to_text(card: Entity) -> str:
     """InsightCard → 단일 텍스트."""
     lines: list[str] = [
         f"# {card.question}",

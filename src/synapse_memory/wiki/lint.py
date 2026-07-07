@@ -1,10 +1,10 @@
-"""wiki lint — 구조 자동 수정 + 사람 검토 큐 (전부 순수 Python, LLM 불필요).
+"""Entity lint — schema.yaml 검증 + 구조 자동 수정 (순수 Python, LLM 불필요).
 
 R3 원칙: "구조는 자동, 진실은 사람".
-- 구조 결함(끊긴 역링크, 죽은 링크, 고아)은 자동 수정.
-- 진위 판단이 필요한 것(낡음 의심, 병합 후보)은 index.md 검토 큐에 나열만.
+- 구조 결함(끊긴 역링크, 죽은 링크)은 자동 수정.
+- schema.yaml 위반은 plain report로만 보고.
 
-분석기(find_*)는 list[WikiPage] 입력의 순수 함수 — 결정적, 디스크 불필요.
+분석기(find_*)는 list[Entity] 입력의 순수 함수 — 결정적, 디스크 불필요.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-06-15
@@ -12,63 +12,46 @@ R3 원칙: "구조는 자동, 진실은 사람".
 from __future__ import annotations
 
 import dataclasses
-import difflib
-from dataclasses import dataclass, field
-from datetime import date, timedelta
+import re
+from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from synapse_memory.wiki.index_md import ReviewItem, write_index
+from synapse_memory.config import get_vault_path
+from synapse_memory.model import (
+    Entity,
+    folder_for,
+    load_schema,
+    parse_frontmatter,
+    relation_fields,
+    uses_year_month_folder,
+)
+from synapse_memory.retrieval.pages import _all_pages
+from synapse_memory.store import save_page
+from synapse_memory.wiki.links import link_target
 from synapse_memory.wiki.log import append_log
-from synapse_memory.wiki.page import (
-    VALID_TYPES,
-    WikiPage,
-    extract_wikilinks,
-    list_pages,
-    save_page,
-    with_related,
+
+COMMON_REQUIRED_FIELDS = ("type", "slug", "title", "status")
+CONTINUANT_TYPES = ("project", "company", "concept", "profile")
+INDEX_PATHS = ("index.md", "90_System/AI/index.md")
+INDEX_COUNT_RE = re.compile(
+    r"(?:total[_ -]?pages|pages[_ -]?total|pages checked|총 페이지 수)\s*[:=]\s*(\d+)",
+    re.IGNORECASE,
 )
 
 
-def _targets(page: WikiPage) -> list[str]:
+def _targets(page: Entity) -> list[str]:
     """page.related의 각 링크에서 slug 대상을 추출 (등장순, 중복 제거)."""
     seen: dict[str, None] = {}
     for link in page.related:
-        extracted = extract_wikilinks(link) or [link.strip("[]").strip()]
-        for target in extracted:
-            if target and target not in seen:
-                seen[target] = None
+        target = link_target(link)
+        if target and target not in seen:
+            seen[target] = None
     return list(seen.keys())
 
 
-def _link_target(link: str) -> str:
-    """단일 related 링크 문자열에서 slug 대상 추출."""
-    extracted = extract_wikilinks(link) or [link.strip("[]").strip()]
-    return extracted[0] if extracted else ""
-
-
-def find_broken_backlinks(pages: list[WikiPage]) -> list[tuple[str, str]]:
-    """A가 B를 링크하는데 B가 A를 링크 안 하면 (B, A) — B가 A로의 역링크 필요.
-
-    B가 pages에 존재할 때만 보고한다.
-    """
-    by_slug = {p.slug: p for p in pages}
-    targets_of = {p.slug: set(_targets(p)) for p in pages}
-    broken: list[tuple[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for page in pages:
-        a = page.slug
-        for b in _targets(page):
-            if b not in by_slug:
-                continue  # 죽은 링크는 find_dead_links 담당
-            if a not in targets_of[b]:
-                pair = (b, a)
-                if pair not in seen:
-                    seen.add(pair)
-                    broken.append(pair)
-    return broken
-
-
-def find_dead_links(pages: list[WikiPage]) -> list[tuple[str, str]]:
+def find_dead_links(pages: list[Entity]) -> list[tuple[str, str]]:
     """A의 링크 대상이 pages에 없으면 (A, target)."""
     existing = {p.slug for p in pages}
     dead: list[tuple[str, str]] = []
@@ -83,57 +66,64 @@ def find_dead_links(pages: list[WikiPage]) -> list[tuple[str, str]]:
     return dead
 
 
-def find_orphans(pages: list[WikiPage]) -> list[str]:
-    """들어오는 링크 0 & 나가는 링크 0인 완전 고립 slug."""
-    existing = {p.slug for p in pages}
-    has_outbound: set[str] = set()
-    has_inbound: set[str] = set()
-    for page in pages:
-        targets = _targets(page)
-        if targets:
-            has_outbound.add(page.slug)
-        for target in targets:
-            if target in existing:
-                has_inbound.add(target)
-    return [
-        p.slug
-        for p in pages
-        if p.slug not in has_outbound and p.slug not in has_inbound
-    ]
-
-
 # ---------------------------------------------------------------------------
 # 구조 자동 수정
 # ---------------------------------------------------------------------------
 
 
 @dataclass
+class LintViolation:
+    """schema.yaml validation violation."""
+
+    code: str
+    path: str
+    message: str
+
+
+@dataclass
 class LintReport:
     """lint 1회 실행 결과 요약."""
 
-    backlinks_added: int = 0
     dead_links_removed: int = 0
-    orphans: list[str] = field(default_factory=list)
-    review_items: list[ReviewItem] = field(default_factory=list)
+    pages_checked: int = 0
+    validation_violations: tuple[LintViolation, ...] = ()
+    index_checked: bool = False
+    index_expected_pages: int | None = None
+    index_actual_pages: int | None = None
 
+    @property
+    def violation_count(self) -> int:
+        return len(self.validation_violations)
 
-def _all_pages(*, vault_path: Path | None = None) -> list[WikiPage]:
-    """전 타입 페이지 수집 (slug 알파벳순 — list_pages 보장)."""
-    pages: list[WikiPage] = []
-    for page_type in VALID_TYPES:
-        pages.extend(list_pages(page_type, vault_path=vault_path))
-    return pages
+    @property
+    def has_violations(self) -> bool:
+        return bool(self.validation_violations)
+
+    def render_plain(self) -> str:
+        """Plain terminal/markdown report."""
+        lines = [
+            f"lint (schema.yaml): {self.pages_checked} pages checked",
+            f"dead_links_removed: {self.dead_links_removed}",
+        ]
+        if self.index_checked:
+            lines.append(
+                "index freshness: "
+                f"expected={self.index_expected_pages} actual={self.index_actual_pages}"
+            )
+        else:
+            lines.append("index freshness: no index count found")
+        lines.append(f"validation_violations: {self.violation_count}")
+        for violation in self.validation_violations:
+            lines.append(
+                f"- [{violation.code}] {violation.path}: {violation.message}"
+            )
+        return "\n".join(lines)
 
 
 def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
-    """죽은 링크 제거 + 누락 역링크 보강. 멱등.
-
-    순서: ① 죽은 링크 먼저 제거(곧 삭제할 링크의 역링크를 만들지 않도록),
-    ② 그 다음 누락 역링크 보강.
-    """
+    """죽은 forward 링크 제거. 멱등."""
     report = LintReport()
 
-    # ① 죽은 링크 제거
     pages = _all_pages(vault_path=vault_path)
     dead = set(find_dead_links(pages))
     dead_targets_by_slug: dict[str, set[str]] = {}
@@ -144,83 +134,62 @@ def apply_structural_fixes(*, vault_path: Path | None = None) -> LintReport:
         if not bad:
             continue
         kept = tuple(
-            link for link in source_page.related if _link_target(link) not in bad
+            link for link in source_page.related if link_target(link) not in bad
         )
         removed = len(source_page.related) - len(kept)
         if removed:
             save_page(dataclasses.replace(source_page, related=kept), vault_path=vault_path)
             report.dead_links_removed += removed
 
-    # ② 누락 역링크 보강 (죽은 링크 제거 후 재수집)
-    pages = _all_pages(vault_path=vault_path)
-    by_slug = {p.slug: p for p in pages}
-    broken = find_broken_backlinks(pages)
-    for needs_backlink, link_to in broken:
-        target_page = by_slug.get(needs_backlink)
-        if target_page is None:
-            continue
-        updated = with_related(target_page, f"[[{link_to}]]")
-        if updated is not target_page and updated.related != target_page.related:
-            save_page(updated, vault_path=vault_path)
-            by_slug[needs_backlink] = updated
-            report.backlinks_added += 1
-
     return report
 
 
 # ---------------------------------------------------------------------------
-# 검토 큐 휴리스틱 (자동 수정 안 함 — index.md에 나열만)
+# schema.yaml 검증
 # ---------------------------------------------------------------------------
 
 
-def stale_candidates(
-    pages: list[WikiPage],
-    *,
-    today: str | None = None,
-    max_age_days: int = 180,
-) -> list[str]:
-    """낡음 의심 페이지 slug. type=="insight"는 skip.
+def validate_schema_rules(*, vault_path: Path | None = None) -> LintReport:
+    """schema.yaml 기반 frontmatter/folder/relation/index 검증."""
+    root = _vault_root(vault_path)
+    schema = load_schema()
+    paths = _entity_markdown_paths(root, schema)
+    violations: list[LintViolation] = []
+    page_types_by_slug: dict[str, set[str]] = {}
+    parsed_pages: list[tuple[Path, dict[str, Any]]] = []
 
-    updated 없으면 flag; 있으면 updated < today - max_age_days면 flag.
-    today 미지정 → 오늘.
-    """
-    today_date = date.fromisoformat(today) if today else date.today()
-    cutoff = today_date - timedelta(days=max_age_days)
-    flagged: list[str] = []
-    for page in pages:
-        if page.type == "insight":
-            continue
-        if not page.updated:
-            flagged.append(page.slug)
-            continue
+    for path in paths:
+        rel_path = _rel(path, root)
         try:
-            updated_date = date.fromisoformat(page.updated)
-        except ValueError:
-            flagged.append(page.slug)
+            meta, _body = parse_frontmatter(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            violations.append(
+                LintViolation(
+                    "frontmatter_parse",
+                    rel_path,
+                    f"frontmatter를 읽을 수 없습니다: {exc}",
+                )
+            )
             continue
-        if updated_date < cutoff:
-            flagged.append(page.slug)
-    return flagged
 
+        parsed_pages.append((path, meta))
+        page_type = meta.get("type")
+        slug = meta.get("slug")
+        if isinstance(page_type, str) and isinstance(slug, str) and slug:
+            page_types_by_slug.setdefault(slug, set()).add(page_type)
 
-def merge_candidates(
-    pages: list[WikiPage],
-    *,
-    threshold: float = 0.9,
-) -> list[tuple[str, str]]:
-    """같은 type 페이지쌍 중 제목 유사도 >= threshold인 (slug1, slug2)."""
-    pairs: list[tuple[str, str]] = []
-    for i in range(len(pages)):
-        for j in range(i + 1, len(pages)):
-            p1, p2 = pages[i], pages[j]
-            if p1.type != p2.type:
-                continue
-            ratio = difflib.SequenceMatcher(
-                None, p1.title.lower(), p2.title.lower()
-            ).ratio()
-            if ratio >= threshold:
-                pairs.append((p1.slug, p2.slug))
-    return pairs
+    for path, meta in parsed_pages:
+        violations.extend(_validate_page(path, meta, root, schema, page_types_by_slug))
+
+    expected = _index_expected_pages(root)
+    violations.extend(_validate_index_freshness(root, len(paths), expected))
+    return LintReport(
+        pages_checked=len(parsed_pages),
+        validation_violations=tuple(violations),
+        index_checked=expected is not None,
+        index_expected_pages=expected,
+        index_actual_pages=len(paths) if expected is not None else None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -233,27 +202,337 @@ def run_lint(
     vault_path: Path | None = None,
     today: str | None = None,
 ) -> LintReport:
-    """구조 자동 수정 → 검토 큐 산출 → index.md 갱신 → log 기록."""
-    report = apply_structural_fixes(vault_path=vault_path)
-
-    pages = _all_pages(vault_path=vault_path)
-    orphans = find_orphans(pages)
-    stale = stale_candidates(pages, today=today)
-    merges = merge_candidates(pages)
-    review_items: list[ReviewItem] = []
-    review_items.extend({"kind": "stale", "slug": s} for s in stale)
-    review_items.extend({"kind": "merge", "slug": a, "other": b} for a, b in merges)
-    report.orphans = orphans
-    report.review_items = review_items
-
-    write_index(
-        pages,
-        orphans=orphans,
-        review_items=review_items,
-        vault_path=vault_path,
+    """구조 자동 수정 → schema 검증 → log 기록."""
+    _ = today
+    fix_report = apply_structural_fixes(vault_path=vault_path)
+    validation_report = validate_schema_rules(vault_path=vault_path)
+    report = dataclasses.replace(
+        validation_report,
+        dead_links_removed=fix_report.dead_links_removed,
     )
-    append_log(
-        f"lint: +{report.backlinks_added} backlinks, "
-        f"-{report.dead_links_removed} dead, {len(review_items)} review",
-    )
+
+    with suppress(OSError):
+        append_log(
+            f"lint: -{report.dead_links_removed} dead, "
+            f"{report.violation_count} schema violations",
+        )
     return report
+
+
+def _vault_root(vault_path: Path | None) -> Path:
+    return (vault_path or get_vault_path()).expanduser().resolve()
+
+
+def _rel(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _entity_markdown_paths(root: Path, schema: dict[str, Any]) -> tuple[Path, ...]:
+    seen: set[Path] = set()
+    paths: list[Path] = []
+    for spec in schema["types"].values():
+        folder = spec.get("folder")
+        if not isinstance(folder, str):
+            continue
+        base = root / folder
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*.md")):
+            resolved = path.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                paths.append(path)
+    return tuple(paths)
+
+
+def _validate_page(
+    path: Path,
+    meta: dict[str, Any],
+    root: Path,
+    schema: dict[str, Any],
+    page_types_by_slug: dict[str, set[str]],
+) -> tuple[LintViolation, ...]:
+    rel_path = _rel(path, root)
+    violations: list[LintViolation] = []
+    types = schema["types"]
+    page_type = meta.get("type")
+
+    for field in COMMON_REQUIRED_FIELDS:
+        if not meta.get(field):
+            violations.append(
+                LintViolation(
+                    "missing_required",
+                    rel_path,
+                    f"필수 frontmatter field 누락: {field}",
+                )
+            )
+
+    if page_type not in types:
+        violations.append(
+            LintViolation(
+                "invalid_type",
+                rel_path,
+                f"type이 schema.yaml enum에 없습니다: {page_type!r}",
+            )
+        )
+        return tuple(violations)
+
+    page_type = str(page_type)
+    slug = str(meta.get("slug") or "")
+    status = meta.get("status")
+    allowed_statuses = types[page_type].get("statuses") or ()
+    if status and status not in allowed_statuses:
+        violations.append(
+            LintViolation(
+                "invalid_enum",
+                rel_path,
+                f"status={status!r}; allowed={list(allowed_statuses)!r}",
+            )
+        )
+    if slug and path.stem != slug:
+        violations.append(
+            LintViolation(
+                "slug_filename_mismatch",
+                rel_path,
+                f"slug={slug!r} filename={path.stem!r}",
+            )
+        )
+    if not _is_in_type_folder(path, root, page_type):
+        violations.append(
+            LintViolation(
+                "type_folder_mismatch",
+                rel_path,
+                f"type={page_type!r}은 {folder_for(page_type)!r} 아래에 있어야 합니다",
+            )
+        )
+
+    violations.extend(_validate_field_values(rel_path, meta, page_type, schema))
+    violations.extend(
+        _validate_relations(rel_path, meta, page_type, schema, page_types_by_slug)
+    )
+    violations.extend(_validate_coverage_gate(rel_path, meta, page_type))
+    return tuple(violations)
+
+
+def _is_in_type_folder(path: Path, root: Path, page_type: str) -> bool:
+    base = root / folder_for(page_type)
+    try:
+        relative = path.resolve().relative_to(base.resolve())
+    except ValueError:
+        return False
+    if uses_year_month_folder(page_type):
+        return len(relative.parts) >= 3
+    return len(relative.parts) == 1
+
+
+def _validate_field_values(
+    rel_path: str,
+    meta: dict[str, Any],
+    page_type: str,
+    schema: dict[str, Any],
+) -> tuple[LintViolation, ...]:
+    fields = schema["types"][page_type].get("fields") or {}
+    violations: list[LintViolation] = []
+    for field_name, field_spec in fields.items():
+        if not isinstance(field_spec, dict):
+            continue
+        value = meta.get(field_name)
+        if field_spec.get("required") and value in (None, "", []):
+            violations.append(
+                LintViolation(
+                    "missing_required",
+                    rel_path,
+                    f"필수 typed field 누락: {field_name}",
+                )
+            )
+        violations.extend(_validate_value(rel_path, field_name, value, field_spec))
+    return tuple(violations)
+
+
+def _validate_value(
+    rel_path: str,
+    field_path: str,
+    value: Any,
+    spec: dict[str, Any],
+) -> tuple[LintViolation, ...]:
+    if value is None:
+        return ()
+    field_type = spec.get("type")
+    if field_type == "enum":
+        allowed = spec.get("values") or ()
+        if value not in allowed:
+            return (
+                LintViolation(
+                    "invalid_enum",
+                    rel_path,
+                    f"{field_path}={value!r}; allowed={list(allowed)!r}",
+                ),
+            )
+        return ()
+    if field_type == "list":
+        items = spec.get("items")
+        if not isinstance(value, list) or not isinstance(items, dict):
+            return ()
+        violations: list[LintViolation] = []
+        for index, item in enumerate(value):
+            violations.extend(
+                _validate_value(rel_path, f"{field_path}[{index}]", item, items)
+            )
+        return tuple(violations)
+    if field_type == "object":
+        fields = spec.get("fields") or {}
+        if not isinstance(value, dict) or not isinstance(fields, dict):
+            return ()
+        violations = []
+        for child_name, child_spec in fields.items():
+            if not isinstance(child_spec, dict):
+                continue
+            child_value = value.get(child_name)
+            child_path = f"{field_path}.{child_name}"
+            if child_spec.get("required") and child_value in (None, "", []):
+                violations.append(
+                    LintViolation(
+                        "missing_required",
+                        rel_path,
+                        f"필수 typed field 누락: {child_path}",
+                    )
+                )
+            violations.extend(
+                _validate_value(rel_path, child_path, child_value, child_spec)
+            )
+        return tuple(violations)
+    return ()
+
+
+def _validate_relations(
+    rel_path: str,
+    meta: dict[str, Any],
+    page_type: str,
+    schema: dict[str, Any],
+    page_types_by_slug: dict[str, set[str]],
+) -> tuple[LintViolation, ...]:
+    violations: list[LintViolation] = []
+    for relation in relation_fields():
+        raw_values = meta.get(relation)
+        if raw_values in (None, ""):
+            continue
+        values = raw_values if isinstance(raw_values, list) else [raw_values]
+        relation_spec = schema["relations"].get(relation) or {}
+        domain = set(relation_spec.get("domain") or ())
+        range_ = set(relation_spec.get("range") or ())
+        if domain and page_type not in domain:
+            violations.append(
+                LintViolation(
+                    "relation_domain",
+                    rel_path,
+                    f"{relation} domain 위반: source type={page_type!r}",
+                )
+            )
+        for value in values:
+            target_ref = link_target(str(value))
+            explicit_type, target_slug = _relation_target(target_ref)
+            target_types = page_types_by_slug.get(target_slug, set())
+            if not target_types:
+                violations.append(
+                    LintViolation(
+                        "relation_target_missing",
+                        rel_path,
+                        f"{relation} 대상 없음: {value!r}",
+                    )
+                )
+                continue
+            if explicit_type:
+                if explicit_type not in target_types:
+                    violations.append(
+                        LintViolation(
+                            "relation_target_missing",
+                            rel_path,
+                            f"{relation} 대상 type 불일치: {value!r}",
+                        )
+                    )
+                    continue
+                target_types = {explicit_type}
+            if len(target_types) > 1:
+                violations.append(
+                    LintViolation(
+                        "relation_target_ambiguous",
+                        rel_path,
+                        f"{relation} 대상 slug가 여러 type에 존재합니다: {target_slug!r}",
+                    )
+                )
+                continue
+            target_type = next(iter(target_types))
+            if range_ and target_type not in range_:
+                violations.append(
+                    LintViolation(
+                        "relation_range",
+                        rel_path,
+                        f"{relation} range 위반: target={target_slug!r} type={target_type!r}",
+                    )
+                )
+    return tuple(violations)
+
+
+def _validate_coverage_gate(
+    rel_path: str,
+    meta: dict[str, Any],
+    page_type: str,
+) -> tuple[LintViolation, ...]:
+    if page_type not in CONTINUANT_TYPES:
+        return ()
+    if not _has_values(meta.get("related")):
+        return ()
+    if any(_has_values(meta.get(relation)) for relation in relation_fields()):
+        return ()
+    return (
+        LintViolation(
+            "legacy_related_residual",
+            rel_path,
+            "WARNING: continuant page has related but no typed relation",
+        ),
+    )
+
+
+def _has_values(value: Any) -> bool:
+    if value in (None, "", []):
+        return False
+    if isinstance(value, list):
+        return any(str(item).strip() for item in value)
+    return bool(str(value).strip())
+
+
+def _relation_target(target: str) -> tuple[str | None, str]:
+    if ":" in target:
+        target_type, slug = target.split(":", 1)
+        return target_type, slug
+    return None, target
+
+
+def _validate_index_freshness(
+    root: Path,
+    actual_pages: int,
+    expected: int | None,
+) -> tuple[LintViolation, ...]:
+    if expected is None or expected == actual_pages:
+        return ()
+    return (
+        LintViolation(
+            "index_stale",
+            "index.md",
+            f"index total pages={expected}, actual pages={actual_pages}",
+        ),
+    )
+
+
+def _index_expected_pages(root: Path) -> int | None:
+    for rel_path in INDEX_PATHS:
+        path = root / rel_path
+        if not path.is_file():
+            continue
+        match = INDEX_COUNT_RE.search(path.read_text(encoding="utf-8"))
+        if match:
+            return int(match.group(1))
+    return None

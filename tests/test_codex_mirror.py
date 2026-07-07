@@ -244,12 +244,8 @@ class TestDailyStageWiring:
         from synapse_memory.daily import _build_stage_actions
 
         actions = _build_stage_actions(
-            classify_model="haiku",
-            generate_model="sonnet",
-            profile_model="sonnet",
-            profile_sample_lines=10,
-            profile_facts_only=True,
             on_log=lambda _msg: None,
+            ingest_model=None,
         )
         assert "collect_codex" in actions
         assert callable(actions["collect_codex"])

@@ -1,7 +1,7 @@
 """me endpoints — draft_resume 테스트 (020 provider-only).
 
-벡터/임베딩 의존 제거. recipes pipeline 이 ``build_card_index`` + ``select_related`` 로
-ProjectCard 를 선별하므로, 실제 ProjectCard 를 vault 에 심고 ``select_related`` +
+벡터/임베딩 의존 제거. recipes pipeline 이 ``build_entity_index`` + ``select_related`` 로
+Project entity 를 선별하므로, 실제 ProjectCard 를 vault 에 심고 ``select_related`` +
 ``ai_api_complete`` 만 monkeypatch 한다.
 
 저자: Synapse Memory Maintainers
@@ -176,7 +176,7 @@ class TestDraftResume:
         from synapse_memory.recipes import pipeline as pipeline_mod
 
         with patch.object(
-            pipeline_mod, "build_card_index", wraps=pipeline_mod.build_card_index
+            pipeline_mod, "build_entity_index", wraps=pipeline_mod.build_entity_index
         ) as mock_build, patch(
             "synapse_memory.recipes.pipeline.select_related",
             return_value=["x"],
@@ -198,7 +198,7 @@ class TestDraftResume:
         with patch(
             "synapse_memory.recipes.pipeline.select_related",
             return_value=[],
-        ), pytest.raises(ValueError, match="ProjectCard"):
+        ), pytest.raises(ValueError, match="Project entity"):
             draft_resume("danggeun", vault_path=vault, ai_env=_ai_env())
 
     def test_top_k_passed_to_select(self, vault: Path) -> None:

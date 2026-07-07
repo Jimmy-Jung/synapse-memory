@@ -5,7 +5,7 @@ Data-model: ``specs/007-persona-recipes/data-model.md`` §3 construction order
 Research: ``specs/007-persona-recipes/research.md`` R-1 (timeout), R-5 (filename), R-6 (last_answer)
 
 Construction order:
-    inputs validate → profile → locale → RAG → domain → render system & user prompt
+    inputs validate → profile → locale → related cards → domain → render system & user prompt
     → invoke LLM (or dry-run) → save markdown → record last_answer → return result.
 
 저자: Synapse Memory Maintainers
@@ -22,17 +22,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from synapse_memory.cards.card_index import CardKind, build_card_index
-from synapse_memory.cards.card_text import (
-    company_card_to_text,
-    insight_card_to_text,
-    project_card_to_text,
+from synapse_memory.config import get_config, get_vault_path
+from synapse_memory.feedback.last_response import (
+    AnswerCitation,
+    LastAnswerReference,
+    new_answer_reference,
+    save_last_answer,
 )
-from synapse_memory.collectors.obsidian.mirror import get_vault_path
-from synapse_memory.config import get_config
-from synapse_memory.endpoints.postprocess import strip_meta_prefix
 from synapse_memory.llm.ai_api import complete as ai_api_complete
+from synapse_memory.model import Entity, supersedes_history
+from synapse_memory.postprocess import strip_meta_prefix
+from synapse_memory.profile.wiki import load_profile_text
 from synapse_memory.recipes.domain import resolve_domain
+from synapse_memory.recipes.kinds import (
+    SOURCE_KIND_TO_CARD_KIND,
+    CardKind as EntityKind,
+)
 from synapse_memory.recipes.loader import SYSTEM_PROMPT_BYTE_CAP
 from synapse_memory.recipes.locale import resolve_locale
 from synapse_memory.recipes.recipe import (
@@ -42,17 +47,12 @@ from synapse_memory.recipes.recipe import (
     RecipeRagMode,
 )
 from synapse_memory.recipes.registry import RecipeRegistry
-from synapse_memory.storage.last_response import (
-    AnswerCitation,
-    LastAnswerReference,
-    new_answer_reference,
-    save_last_answer,
-)
-from synapse_memory.wiki.llm_retrieval import select_related
+from synapse_memory.retrieval.index import select_related
+from synapse_memory.store import list_current_entities, list_entities, load_entity
 
-_PROFILE_FILES = ("Profile.md", "DecisionPatterns.md", "DecisionQualityRegistry.md")
 _BUILTIN_DIR_DEFAULT = Path(__file__).resolve().parent / "builtin"
 _FILENAME_UNSAFE_RE = re.compile(r"[\\/\x00\r\n]")
+DEFAULT_SUMMARY_CHARS = 240
 
 
 class InputValidationError(ValueError):
@@ -65,7 +65,7 @@ class RecipePromptTooLargeError(ValueError):
 
 @dataclass(frozen=True)
 class _CardMatch:
-    """provider 선별된 카드 1건 — 이전 VectorRecord 인터페이스 호환 shape.
+    """provider 선별된 entity 1건 — 이전 VectorRecord 인터페이스 호환 shape.
 
     ``metadata``(card_id/source_kind/display_name 등)·``document``(full text)·``id``를
     노출해 ``_compose_user_prompt``/``_build_last_answer``/domain 추출이 기존 코드 그대로
@@ -77,31 +77,39 @@ class _CardMatch:
     metadata: dict[str, str] = field(default_factory=dict)
 
 
-# rag_filter.source_kind (예 "card_project") → CardIndex kind ("project")
-_SOURCE_KIND_TO_CARD_KIND: dict[str, CardKind] = {
-    "card_project": "project",
-    "card_company": "company",
-    "card_insight": "insight",
-}
+@dataclass(frozen=True)
+class EntityEntry:
+    """provider 선별 + timeline 정렬에 필요한 Entity 인덱스 한 줄."""
+
+    slug: str
+    kind: EntityKind
+    title: str
+    summary: str
+    meta: dict[str, str] = field(default_factory=dict)
 
 
-def _load_profile_text(vault: Path) -> str:
-    """vault Profile/DecisionPatterns/DecisionQualityRegistry 전체 로드.
+@dataclass(frozen=True)
+class EntityIndex:
+    """``retrieval.index.select_related`` 호환 Entity 인덱스."""
 
-    이전: 파일당 5000자 silent truncation 으로 사용자가 알아챌 수 없는 손실 발생.
-    이후 (B2, eng-review 2026-05-13): 전체 로드. 시스템 prompt 32KB cap 이 자동
-    안전망 — Profile 이 너무 크면 ``RecipePromptTooLargeError`` 로 명시적 실패 (silent X).
-    """
-    parts: list[str] = []
-    base = vault / get_config().vault_folders.system.ai.root
-    for fname in _PROFILE_FILES:
-        p = base / fname
-        if p.is_file():
-            try:
-                parts.append(f"--- {fname} ---\n{p.read_text(encoding='utf-8')}")
-            except OSError:
-                continue
-    return "\n\n".join(parts)
+    entries: tuple[EntityEntry, ...]
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    @property
+    def slugs(self) -> frozenset[str]:
+        return frozenset(e.slug for e in self.entries)
+
+    def by_id(self) -> dict[str, EntityEntry]:
+        return {e.slug: e for e in self.entries}
+
+    def render(self) -> str:
+        lines = []
+        for e in self.entries:
+            head = f"[{e.slug}] ({e.kind}) {e.title}"
+            lines.append(f"{head} — {e.summary}" if e.summary else head)
+        return "\n".join(lines)
 
 
 def _safe_filename_component(value: str, *, max_len: int = 80) -> str:
@@ -256,68 +264,205 @@ def _resolve_rag_mode(
     return override or recipe.rag_mode
 
 
-def _kinds_for_recipe(recipe: GenerationRecipe) -> tuple[CardKind, ...]:
-    """recipe.rag_filter.source_kind → CardIndex kinds 제한. 미지정이면 전체."""
-    rag_filter = recipe.rag_filter or {}
+def _kinds_for_recipe(
+    recipe: GenerationRecipe,
+    *,
+    rag_filter_override: dict[str, str] | None = None,
+) -> tuple[EntityKind, ...]:
+    """recipe.rag_filter.source_kind → Entity type 제한. 미지정이면 전체."""
+    rag_filter = (
+        rag_filter_override
+        if rag_filter_override is not None
+        else (recipe.rag_filter or {})
+    )
     source_kind = rag_filter.get("source_kind")
-    if source_kind and source_kind in _SOURCE_KIND_TO_CARD_KIND:
-        return (_SOURCE_KIND_TO_CARD_KIND[source_kind],)
+    if source_kind and source_kind in SOURCE_KIND_TO_CARD_KIND:
+        return (SOURCE_KIND_TO_CARD_KIND[source_kind],)
     return ("project", "company", "insight")
 
 
-def _load_card_match(
-    *, card_id: str, kind: CardKind, vault: Path, created: str = ""
-) -> _CardMatch | None:
-    """선별된 card_id의 full text를 로드해 _CardMatch로 변환. 실패 시 None."""
-    from synapse_memory.cards.company import load_company_card
-    from synapse_memory.cards.insight import load_insight_card
-    from synapse_memory.cards.project import load_project_card
+def _summarize(text: str, *, max_chars: int) -> str:
+    flat = " ".join(text.split())
+    if len(flat) <= max_chars:
+        return flat
+    return flat[:max_chars].rstrip() + "..."
 
+
+def _join_strings(values: list[object] | tuple[object, ...]) -> str:
+    return ", ".join(str(value) for value in values)
+
+
+def entity_to_text(entity: Entity) -> str:
+    """Entity → 검색/프롬프트용 단일 텍스트."""
+    lines: list[str] = [f"# {entity.title}"]
+
+    if entity.type == "project":
+        role = getattr(entity, "role", "")
+        if role:
+            lines.append(f"역할: {role}")
+        period = getattr(entity, "period_start", "") or ""
+        period_end = getattr(entity, "period_end", "") or ""
+        if period_end:
+            period = f"{period} ~ {period_end}".strip(" ~")
+        if period:
+            lines.append(f"기간: {period}")
+        if entity.status:
+            lines.append(f"상태: {entity.status}")
+        for label, key in (
+            ("도메인", "domains"),
+            ("기술 스택", "stack"),
+            ("키워드", "keywords"),
+        ):
+            values = list(getattr(entity, key, []) or [])
+            if values:
+                lines.append(f"{label}: {_join_strings(values)}")
+        metrics = list(getattr(entity, "metrics", []) or [])
+        if metrics:
+            lines.append("지표:")
+            for metric in metrics:
+                name = getattr(metric, "name", "")
+                value = getattr(metric, "value", "")
+                before = getattr(metric, "before", "")
+                after = getattr(metric, "after", "")
+                if value:
+                    lines.append(f"  - {name}: {value}")
+                elif before or after:
+                    lines.append(f"  - {name}: {before or ''} -> {after or ''}")
+
+    elif entity.type == "company":
+        for label, key in (
+            ("국가", "country"),
+            ("규모", "size"),
+            ("상태", "status"),
+            ("웹사이트", "website"),
+            ("이력서 언어", "resume_language"),
+        ):
+            value = entity.status if key == "status" else getattr(entity, key, "")
+            if value:
+                lines.append(f"{label}: {value}")
+        positions = list(getattr(entity, "positions", []) or [])
+        if positions:
+            lines.append("포지션:")
+            for position in positions:
+                extras: list[str] = []
+                seniority = getattr(position, "seniority", "")
+                keywords = list(getattr(position, "keywords", []) or [])
+                if seniority:
+                    extras.append(str(seniority))
+                if keywords:
+                    extras.append(_join_strings(keywords))
+                extras_str = f" ({'; '.join(extras)})" if extras else ""
+                lines.append(f"  - {getattr(position, 'title', '')}{extras_str}")
+        notes = getattr(entity, "notes", "")
+        if notes:
+            lines.append(f"메모: {notes}")
+
+    elif entity.type == "insight":
+        command = getattr(entity, "command", "")
+        if command:
+            lines.append(f"명령: {command}")
+        if entity.status:
+            lines.append(f"상태: {entity.status}")
+        related = list(getattr(entity, "related", []) or [])
+        if related:
+            lines.append(f"관련: {_join_strings(related)}")
+        keywords = list(getattr(entity, "keywords", []) or [])
+        if keywords:
+            lines.append(f"키워드: {_join_strings(keywords)}")
+
+    if entity.body:
+        lines.append("")
+        lines.append(entity.body.strip())
+    return "\n".join(lines)
+
+
+def build_entity_index(
+    *,
+    vault_path: Path | None = None,
+    kinds: tuple[EntityKind, ...] = ("project", "company", "insight"),
+    summary_chars: int = DEFAULT_SUMMARY_CHARS,
+) -> EntityIndex:
+    """vault의 current Entity를 provider 선별용 인덱스로 변환."""
+    entries: list[EntityEntry] = []
+    for kind in kinds:
+        for entity in list_current_entities(kind, vault_path=vault_path):
+            meta = _entity_metadata(entity)
+            entries.append(
+                EntityEntry(
+                    slug=entity.slug,
+                    kind=kind,
+                    title=entity.title,
+                    summary=_summarize(entity_to_text(entity), max_chars=summary_chars),
+                    meta=meta,
+                )
+            )
+    entries.sort(key=lambda e: e.slug)
+    return EntityIndex(entries=tuple(entries))
+
+
+def _entity_metadata(entity: Entity) -> dict[str, str]:
+    source_kind = f"card_{entity.type}"
+    metadata = {
+        "card_id": entity.slug,
+        "source_kind": source_kind,
+        "display_name": entity.title,
+        "status": entity.status,
+        "created": entity.created or "",
+        "last_reviewed": str(getattr(entity, "last_reviewed", "") or ""),
+    }
+    if entity.type == "project":
+        metadata["period_start"] = str(getattr(entity, "period_start", "") or "")
+        metadata["period_end"] = str(getattr(entity, "period_end", "") or "")
+    return metadata
+
+
+def _load_card_match(
+    *, card_id: str, kind: EntityKind, vault: Path, created: str = ""
+) -> _CardMatch | None:
+    """선별된 Entity의 full text를 로드해 _CardMatch로 변환. 실패 시 None."""
+    when = None
+    if created:
+        with contextlib.suppress(ValueError):
+            when = datetime.date.fromisoformat(created[:10])
     try:
-        if kind == "project":
-            card = load_project_card(card_id, vault_path=vault)
-            return _CardMatch(
-                id=card_id,
-                document=project_card_to_text(card),
-                metadata={
-                    "card_id": card.project_id,
-                    "source_kind": "card_project",
-                    "display_name": card.display_name,
-                    "status": card.status,
-                    "period_end": card.period_end or "",
-                    "created": card.created or "",
-                    "last_reviewed": card.last_reviewed or "",
-                },
-            )
-        if kind == "company":
-            company = load_company_card(card_id, vault_path=vault)
-            return _CardMatch(
-                id=card_id,
-                document=company_card_to_text(company),
-                metadata={
-                    "card_id": company.company_id,
-                    "source_kind": "card_company",
-                    "display_name": company.display_name,
-                    "status": company.status,
-                    "created": company.created or "",
-                    "last_reviewed": company.last_reviewed or "",
-                },
-            )
-        if not created:
-            return None
-        insight = load_insight_card(card_id, created, vault_path=vault)
+        entity = load_entity(kind, card_id, vault_path=vault, when=when)
         return _CardMatch(
             id=card_id,
-            document=insight_card_to_text(insight),
-            metadata={
-                "card_id": insight.insight_id,
-                "source_kind": "card_insight",
-                "display_name": insight.question,
-                "created": insight.created or "",
-            },
+            document=entity_to_text(entity),
+            metadata=_entity_metadata(entity),
         )
     except (FileNotFoundError, ValueError, OSError):
         return None
+
+
+def _card_match_from_entity(entity: Entity) -> _CardMatch:
+    return _CardMatch(
+        id=entity.slug,
+        document=entity_to_text(entity),
+        metadata=_entity_metadata(entity),
+    )
+
+
+def _selected_history_entities(
+    selected: list[str],
+    *,
+    by_id: dict[str, EntityEntry],
+    all_entities: list[Entity],
+) -> list[Entity]:
+    entities: list[Entity] = []
+    seen: set[str] = set()
+    for card_id in selected:
+        entry = by_id.get(card_id)
+        if entry is None:
+            continue
+        chain = supersedes_history(all_entities, f"{entry.kind}:{card_id}")
+        for entity in chain:
+            key = f"{entity.type}:{entity.slug}"
+            if key in seen:
+                continue
+            entities.append(entity)
+            seen.add(key)
+    return entities
 
 
 def _retrieve_matches(
@@ -327,19 +472,22 @@ def _retrieve_matches(
     vault: Path,
     store: Any,
     top_k_override: int | None,
+    rag_filter_override: dict[str, str] | None,
+    include_history: bool,
 ) -> list[tuple[Any, float]]:
     """provider 선별로 관련 카드 매칭 (로컬 임베딩 제거, 020).
 
     ``store``가 명시적으로 주입되면 기존 테스트/호환 adapter로 취급해 provider 호출
-    없이 deterministic query 결과를 사용한다. 기본 production path는 CardIndex +
+    없이 deterministic query 결과를 사용한다. 기본 production path는 EntityIndex +
     provider 선별이다.
 
-    CardIndex 구성 → ``select_related`` 로 card_id 선별 → 선택 카드 full text 로드 →
+    EntityIndex 구성 → ``select_related`` 로 entity slug 선별 → 선택 entity full text 로드 →
     ``list[tuple[_CardMatch, 0.0]]`` 반환(거리 의미 없음). 빈 인덱스/선별 0건 → [].
     """
     rag_top_k = top_k_override or recipe.rag_top_k
     rag_query = _build_rag_query(recipe, inputs)
-    rag_filter = dict(recipe.rag_filter) if recipe.rag_filter is not None else None
+    base_filter = rag_filter_override if rag_filter_override is not None else recipe.rag_filter
+    rag_filter = dict(base_filter) if base_filter is not None else None
 
     if store is not None:
         try:
@@ -347,9 +495,9 @@ def _retrieve_matches(
         except TypeError:
             return list(store.query())
 
-    kinds = _kinds_for_recipe(recipe)
+    kinds = _kinds_for_recipe(recipe, rag_filter_override=rag_filter_override)
 
-    index = build_card_index(vault_path=vault, kinds=kinds)
+    index = build_entity_index(vault_path=vault, kinds=kinds)
     if not index.entries:
         return []
 
@@ -358,6 +506,19 @@ def _retrieve_matches(
         return []
 
     by_id = index.by_id()
+    if include_history:
+        all_entities: list[Entity] = []
+        for kind in kinds:
+            all_entities.extend(list_entities(kind, vault_path=vault))
+        return [
+            (_card_match_from_entity(entity), 0.0)
+            for entity in _selected_history_entities(
+                selected,
+                by_id=by_id,
+                all_entities=all_entities,
+            )
+        ]
+
     matches: list[tuple[Any, float]] = []
     for card_id in selected:
         entry = by_id.get(card_id)
@@ -393,7 +554,10 @@ def generate(
     disable_save: bool = False,
     top_k_override: int | None = None,
     require_matched: bool = False,
+    return_empty_on_no_matches: bool = False,
     rag_mode_override: RecipeRagMode | None = None,
+    rag_filter_override: dict[str, str] | None = None,
+    include_history: bool = False,
 ) -> GenerationResult:
     """Recipe 1 회 실행 — orchestrator entry point.
 
@@ -420,7 +584,7 @@ def generate(
         except (FileNotFoundError, ValueError):
             company = None  # 미존재 시 fallback
 
-    profile_text = _load_profile_text(vault) if recipe.use_profile else ""
+    profile_text = load_profile_text(vault) if recipe.use_profile else ""
     profile_used = bool(profile_text)
 
     locale, locale_src = (
@@ -435,6 +599,8 @@ def generate(
         vault=vault,
         store=store,
         top_k_override=top_k_override,
+        rag_filter_override=rag_filter_override,
+        include_history=include_history,
     )
 
     if require_matched and not matched:
@@ -452,6 +618,20 @@ def generate(
         if recipe.domain_aware or cli_domain
         else ("generic", "default")
     )
+
+    if return_empty_on_no_matches and not matched:
+        return GenerationResult(
+            recipe_name=recipe.name,
+            answer_markdown="",
+            saved_path=None,
+            source_ids=[],
+            profile_used=profile_used,
+            locale=locale,
+            locale_source=locale_src,
+            domain=domain,
+            domain_source=domain_src,
+            rag_mode=rag_mode,
+        )
 
     system_rendered = _render_system_prompt(
         recipe,
@@ -527,14 +707,12 @@ def generate(
         )
     )
 
-    last_ref: LastAnswerReference | None = None
+    last_ref = _build_last_answer(recipe=recipe, inputs=inputs, matched=matched)
     if save_last:
-        ref = _build_last_answer(recipe=recipe, inputs=inputs, matched=matched)
         with contextlib.suppress(OSError, ValueError):
-            save_last_answer(ref)
-        last_ref = ref
+            save_last_answer(last_ref)
 
-    source_ids = [c.target_ref for c in (last_ref.citations if last_ref else ())]
+    source_ids = [c.target_ref for c in last_ref.citations]
 
     return GenerationResult(
         recipe_name=recipe.name,

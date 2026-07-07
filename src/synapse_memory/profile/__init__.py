@@ -1,12 +1,12 @@
-"""Profile / DecisionPatterns 자동 갱신 — 진짜 클론 인프라.
+"""Profile wiki page 자동 갱신 — 진짜 클론 인프라.
 
-vault 90_System/AI/Profile.md / DecisionPatterns.md의 후보를 raw에서 추출.
+vault Profile/user-profile.md를 raw에서 추출한 안정 신호로 갱신.
 
 흐름::
 
     L0 raw (Claude Code history) → sample →
     Claude 분석 → ProfileFact / DecisionPattern 리스트 →
-    MemoryInbox에 PR (사용자 승인 후 vault 진실원본)
+    wiki profile page에 반영
 
 저자: Synapse Memory Maintainers
 """

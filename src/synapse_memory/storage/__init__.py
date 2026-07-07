@@ -1,7 +1,7 @@
 """저장 레이어 — L0(raw) / L1(candidate) / L2(validated).
 
 이 패키지는 디스크 위 디렉토리 구조와 권한을 관리한다. 데이터 자체의 의미
-(분류, redaction)는 다른 모듈 책임.
+(분류/마스킹)는 다른 모듈 책임.
 
 저자: Synapse Memory Maintainers
 """

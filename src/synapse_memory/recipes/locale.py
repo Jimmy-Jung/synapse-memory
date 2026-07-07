@@ -14,9 +14,9 @@ precedence:
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from synapse_memory.profile.wiki import parse_profile_frontmatter_field
 from synapse_memory.recipes.recipe import LocaleSource
 
 DEFAULT_LOCALE = "한국어"
@@ -39,15 +39,6 @@ _LOCALE_ALIAS = {
     "pt": "Portuguese",
 }
 
-_FRONTMATTER_RE = re.compile(
-    r"^---\s*\n(?P<yaml>.*?)\n---\s*\n", re.DOTALL | re.MULTILINE
-)
-_FIELD_RE = re.compile(
-    r"^\s*preferred_lang\s*:\s*(?P<v>['\"]?)(?P<value>[^\"'\n]+)(?P=v)\s*$",
-    re.MULTILINE,
-)
-
-
 def _normalize(value: str) -> str:
     v = value.strip()
     if not v:
@@ -56,16 +47,7 @@ def _normalize(value: str) -> str:
 
 
 def _parse_profile_preferred_lang(profile_text: str) -> str | None:
-    if not profile_text:
-        return None
-    m = _FRONTMATTER_RE.search(profile_text)
-    if not m:
-        return None
-    body = m.group("yaml")
-    field = _FIELD_RE.search(body)
-    if not field:
-        return None
-    return field.group("value").strip()
+    return parse_profile_frontmatter_field(profile_text, "preferred_lang")
 
 
 def resolve_locale(

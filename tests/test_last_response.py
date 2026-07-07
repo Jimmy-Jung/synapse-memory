@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from synapse_memory.storage.l0 import L0_ENV_VAR, L0_FILE_MODE
-from synapse_memory.storage.last_response import (
+from synapse_memory.feedback.last_response import (
     AnswerCitation,
     LastAnswerReference,
     load_last_answer,
     save_last_answer,
 )
+from synapse_memory.storage.l0 import L0_ENV_VAR, L0_FILE_MODE
 
 
 def _ref() -> LastAnswerReference:
@@ -66,4 +66,3 @@ def test_missing_last_answer_returns_none(
     monkeypatch.setenv(L0_ENV_VAR, str(tmp_path / "private"))
 
     assert load_last_answer() is None
-

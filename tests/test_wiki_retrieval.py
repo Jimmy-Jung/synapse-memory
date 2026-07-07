@@ -8,13 +8,45 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from synapse_memory.wiki.page import WikiPage, save_page
+import synapse_memory.wiki.query as query_mod
+import synapse_memory.wiki.retrieval as retrieval_mod
+from synapse_memory.model import Entity
+from synapse_memory.wiki.links import reverse_relations, typed_neighbors
+from synapse_memory.wiki.page import save_page
 from synapse_memory.wiki.retrieval import find_related_pages
 
 
+def test_typed_neighbors_groups_targets_by_relation() -> None:
+    page = Entity(
+        type="project",
+        slug="synapse-memory",
+        title="Synapse Memory",
+        related=("[[legacy-rag]]",),
+        uses=("rag",),
+        part_of=("memory-tools",),
+    )
+
+    assert typed_neighbors(page) == {
+        "uses": ("rag",),
+        "part_of": ("memory-tools",),
+    }
+
+
+def test_reverse_relations_indexes_typed_edges_by_target() -> None:
+    pages = [
+        Entity(type="project", slug="async-project", title="Async Project", uses=("swift-concurrency",)),
+        Entity(type="insight", slug="decision-note", title="Decision", decided_in=("daily-log",)),
+    ]
+
+    assert reverse_relations(pages) == {
+        "swift-concurrency": [("uses", "async-project")],
+        "daily-log": [("decided_in", "decision-note")],
+    }
+
+
 def test_name_match_by_title_and_slug(tmp_path: Path) -> None:
-    save_page(WikiPage(type="project", slug="synapse-memory", title="Synapse Memory"), vault_path=tmp_path)
-    save_page(WikiPage(type="company", slug="acme", title="Acme Corp"), vault_path=tmp_path)
+    save_page(Entity(type="project", slug="synapse-memory", title="Synapse Memory"), vault_path=tmp_path)
+    save_page(Entity(type="company", slug="acme", title="Acme Corp"), vault_path=tmp_path)
     hits = find_related_pages("오늘 Synapse Memory 작업했다", vault_path=tmp_path, max_pages=10, semantic_fn=None)
     slugs = {p.slug for p in hits}
     assert "synapse-memory" in slugs
@@ -22,23 +54,206 @@ def test_name_match_by_title_and_slug(tmp_path: Path) -> None:
 
 
 def test_one_hop_link_expansion(tmp_path: Path) -> None:
-    save_page(WikiPage(type="project", slug="synapse-memory", title="Synapse Memory",
+    save_page(Entity(type="project", slug="synapse-memory", title="Synapse Memory",
                        related=("[[rag]]",)), vault_path=tmp_path)
-    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     hits = find_related_pages("Synapse Memory 진행", vault_path=tmp_path, max_pages=10, semantic_fn=None)
     slugs = {p.slug for p in hits}
     assert "synapse-memory" in slugs
     assert "rag" in slugs
 
 
+def test_one_hop_typed_relation_expansion(tmp_path: Path) -> None:
+    save_page(
+        Entity(
+            type="project",
+            slug="synapse-memory",
+            title="Synapse Memory",
+            uses=("rag",),
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    hits = find_related_pages(
+        "Synapse Memory 진행",
+        vault_path=tmp_path,
+        max_pages=10,
+        semantic_fn=None,
+    )
+    slugs = {p.slug for p in hits}
+    assert "synapse-memory" in slugs
+    assert "rag" in slugs
+
+
+def test_reverse_uses_relation_expansion(tmp_path: Path) -> None:
+    save_page(
+        Entity(
+            type="project",
+            slug="async-project",
+            title="Async Project",
+            uses=("swift-concurrency",),
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(
+        Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency"),
+        vault_path=tmp_path,
+    )
+
+    hits = find_related_pages(
+        "Swift Concurrency를 uses하는 project",
+        vault_path=tmp_path,
+        max_pages=10,
+        semantic_fn=None,
+    )
+
+    assert [page.slug for page in hits] == ["swift-concurrency", "async-project"]
+
+
+def test_reverse_expansion_ignores_uses_substrings_and_skips_reverse_index(
+    monkeypatch,
+) -> None:
+    pages = [
+        Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency"),
+        Entity(type="project", slug="async-project", title="Async Project", uses=("swift-concurrency",)),
+    ]
+
+    def fail_reverse_relations(pages):
+        raise AssertionError("reverse index should be lazy when no relation intent exists")
+
+    monkeypatch.setattr(retrieval_mod, "reverse_relations", fail_reverse_relations)
+
+    hits = find_related_pages(
+        "Swift Concurrency focuses overview",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == ["swift-concurrency"]
+
+
+def test_reverse_expansion_caps_sources_per_relation() -> None:
+    pages = [Entity(type="concept", slug="swift-concurrency", title="Swift Concurrency")]
+    pages.extend(
+        Entity(type="project", slug=f"async-project-{index}", title=f"Async Project {index}", uses=("swift-concurrency",))
+        for index in range(7)
+    )
+
+    hits = find_related_pages(
+        "Swift Concurrency uses project",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == [
+        "swift-concurrency",
+        "async-project-0",
+        "async-project-1",
+        "async-project-2",
+        "async-project-3",
+        "async-project-4",
+    ]
+
+
+def test_typed_neighbors_rank_before_legacy_related(tmp_path: Path) -> None:
+    save_page(
+        Entity(
+            type="project",
+            slug="synapse-memory",
+            title="Synapse Memory",
+            related=("[[legacy-rag]]",),
+            uses=("typed-rag",),
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(Entity(type="concept", slug="typed-rag", title="Typed RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="legacy-rag", title="Legacy RAG"), vault_path=tmp_path)
+
+    hits = find_related_pages(
+        "Synapse Memory",
+        vault_path=tmp_path,
+        max_pages=10,
+        semantic_fn=None,
+    )
+
+    assert [page.slug for page in hits] == ["synapse-memory", "typed-rag", "legacy-rag"]
+
+
 def test_respects_max_pages(tmp_path: Path) -> None:
     for i in range(5):
-        save_page(WikiPage(type="concept", slug=f"c{i}", title=f"Concept{i}"), vault_path=tmp_path)
+        save_page(Entity(type="concept", slug=f"c{i}", title=f"Concept{i}"), vault_path=tmp_path)
     text = " ".join(f"Concept{i}" for i in range(5))
     hits = find_related_pages(text, vault_path=tmp_path, max_pages=2, semantic_fn=None)
     assert len(hits) == 2
 
 
 def test_no_match_returns_empty(tmp_path: Path) -> None:
-    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     assert find_related_pages("관련 없는 내용", vault_path=tmp_path, semantic_fn=None) == []
+
+
+def test_superseded_pages_are_excluded_from_default_retrieval() -> None:
+    pages = [
+        Entity(
+            type="concept",
+            slug="old-fact",
+            title="Old Fact",
+            status="active",
+            t_invalid="2026-07-07",
+        ),
+        Entity(type="concept", slug="new-fact", title="New Fact"),
+    ]
+
+    hits = find_related_pages(
+        "Old Fact New Fact",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == ["new-fact"]
+
+
+def test_retrieve_wiki_include_history_expands_supersedes_chain(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    save_page(
+        Entity(
+            type="insight",
+            slug="stance-v1",
+            title="Swift concurrency stance v1",
+            status="superseded",
+            created="2026-01-01T09:00:00+09:00",
+            observed_at="2026-01-01T09:00:00+09:00",
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(
+        Entity(
+            type="insight",
+            slug="stance-v2",
+            title="Swift concurrency stance v2",
+            created="2026-07-01T09:00:00+09:00",
+            observed_at="2026-07-01T09:00:00+09:00",
+            supersedes=("insight:stance-v1",),
+        ),
+        vault_path=tmp_path,
+    )
+
+    monkeypatch.setattr(
+        query_mod,
+        "retrieve_items",
+        lambda *args, **kwargs: [page for page in args[1] if page.slug == "stance-v2"],
+    )
+
+    hits = query_mod._retrieve_wiki(
+        "Swift concurrency stance 시간순 변화",
+        vault_path=tmp_path,
+        top_k=5,
+        include_history=True,
+    )
+
+    assert [page.slug for page in hits] == ["stance-v2", "stance-v1"]

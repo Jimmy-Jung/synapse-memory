@@ -1,4 +1,4 @@
-"""vault Profile.md / DecisionPatterns.md 기반 후보 dedupe.
+"""wiki profile page 기반 후보 dedupe.
 
 목적
 ----
@@ -26,40 +26,17 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from synapse_memory.profile.schema import DecisionPattern, ProfileFact
+from synapse_memory.profile.schema import PROFILE_CATEGORIES, DecisionPattern, ProfileFact
+from synapse_memory.profile.similarity import (
+    jaccard as _jaccard,
+    normalize as _normalize,
+    token_set as _token_set,
+)
 
-_TRAILING_PUNCT = ".。!?:,;・…"
 _JACCARD_THRESHOLD = 0.75
 
 
 # ---------------------------------------------------------------------------
-# 정규화 / 유사도
-# ---------------------------------------------------------------------------
-
-
-def _normalize(text: str) -> str:
-    """소문자 + whitespace collapse + 양끝 trailing punctuation strip."""
-    s = re.sub(r"\s+", " ", text).strip().lower()
-    while s and s[-1] in _TRAILING_PUNCT:
-        s = s[:-1].rstrip()
-    return s
-
-
-def _token_set(text: str) -> frozenset[str]:
-    normalized = _normalize(text)
-    if not normalized:
-        return frozenset()
-    return frozenset(t for t in normalized.split() if t)
-
-
-def _jaccard(a: frozenset[str], b: frozenset[str]) -> float:
-    if not a or not b:
-        return 0.0
-    inter = len(a & b)
-    union = len(a | b)
-    return inter / union if union else 0.0
-
-
 def _is_duplicate(
     candidate: str,
     existing_norm: set[str],
@@ -82,21 +59,22 @@ def _is_duplicate(
 # vault 파싱
 # ---------------------------------------------------------------------------
 
-_FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
+_PROFILE_FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n.*?\n---\s*\n", re.DOTALL)
 _H2_RE = re.compile(r"^##\s+(.+?)\s*$")
 _H3_RE = re.compile(r"^###\s+(.+?)\s*$")
 _BULLET_RE = re.compile(r"^\s*[-*]\s+(.+?)\s*$")
+_CONFIDENCE_PREFIX_RE = re.compile(r"^\[[0-9.]+\]\s*")
 
 
 def _strip_frontmatter(text: str) -> str:
-    return _FRONTMATTER_RE.sub("", text, count=1)
+    return _PROFILE_FRONTMATTER_PATTERN.sub("", text, count=1)
 
 
 def parse_profile_facts(path: Path) -> list[str]:
-    """Profile.md → 모든 카테고리(``## …``) 아래 bullet statement 평탄화.
+    """wiki profile page → ProfileFact bullet statement 평탄화.
 
-    frontmatter, ``# h1`` 제목은 제외. ``## h2`` 카테고리 헤더 아래의 ``- bullet``
-    본문만 추출. 파일 없거나 빈 파일이면 빈 리스트.
+    legacy flat Profile.md 도 같은 markdown 구조면 파싱된다. Step 8c 이후 호출자는
+    canonical ``Profile/user-profile.md`` 를 넘긴다.
     """
     if not path.is_file():
         return []
@@ -107,27 +85,44 @@ def parse_profile_facts(path: Path) -> list[str]:
     body = _strip_frontmatter(text)
 
     facts: list[str] = []
+    in_decision = False
     in_category = False
     for raw_line in body.splitlines():
-        if _H2_RE.match(raw_line):
-            in_category = True
+        h2 = _H2_RE.match(raw_line)
+        if h2:
+            label = h2.group(1).strip()
+            normalized = _normalize(label)
+            in_decision = normalized.startswith("decision patterns")
+            if normalized.startswith("profile facts"):
+                in_category = False
+                continue
+            in_category = not in_decision
+            continue
+        h3 = _H3_RE.match(raw_line)
+        if h3:
+            label = h3.group(1).strip()
+            in_category = not in_decision and (
+                label in PROFILE_CATEGORIES or in_category
+            )
             continue
         if raw_line.startswith("# "):
             in_category = False
+            in_decision = False
             continue
         if not in_category:
             continue
         m = _BULLET_RE.match(raw_line)
         if m:
-            facts.append(m.group(1).strip())
+            statement = _CONFIDENCE_PREFIX_RE.sub("", m.group(1).strip()).strip()
+            if statement:
+                facts.append(statement)
     return facts
 
 
 def parse_decision_pattern_triggers(path: Path) -> list[str]:
-    """DecisionPatterns.md → ``## Approved Patterns`` 아래 ``### {trigger}`` 목록.
+    """wiki profile page → decision pattern ``### {trigger}`` 목록.
 
-    Pending/draft 섹션은 제외 — 승인된 패턴만 dedupe 기준.
-    파일 없거나 ``## Approved Patterns`` 섹션 자체가 없으면 빈 리스트.
+    legacy flat DecisionPatterns.md 도 ``## Approved Patterns`` 구조면 파싱된다.
     """
     if not path.is_file():
         return []
@@ -142,7 +137,10 @@ def parse_decision_pattern_triggers(path: Path) -> list[str]:
     for raw_line in body.splitlines():
         h2 = _H2_RE.match(raw_line)
         if h2:
-            in_approved = _normalize(h2.group(1)) == _normalize("Approved Patterns")
+            label = _normalize(h2.group(1))
+            in_approved = label == "approved patterns" or label.startswith(
+                "decision patterns"
+            )
             continue
         if not in_approved:
             continue

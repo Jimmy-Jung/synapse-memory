@@ -2,6 +2,51 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [2.0.0] — 2026-07-07
+
+구조 리디자인 (big-bang) + 온톨로지 완성. 계획: `plans/synapse-structural-redesign.md`,
+`plans/synapse-ontology-completion.md`, 설계: `specs/021-unified-model/design.md`,
+검증: `specs/022-ontology-completion/review.md`.
+
+### Added
+
+- **온톨로지 완성 (S1–S7)**: competency-question 스위트(15개 중 14개 supported) +
+  relation coverage 지표(`doctor`: typed_relation_coverage/legacy_related_residual/orphan_ratio).
+- **Ingest Gatekeeper**: continuant(project/company/concept/profile)의 무타입 `related`
+  차단·경고, lint coverage gate — typed 그래프 회귀 방지.
+- **타입 인지 retrieval**: 관계 타입별 이웃(`typed_neighbors`), 역인덱스(`reverse_relations`),
+  질의 의도 기반 역방향 확장, `part_of`/`broader` transitive 확장(depth≤2),
+  `same_as` 대칭 확장, ask 컨텍스트의 관계 타입별 grouping.
+- **시간 무효화**: `supersedes` 발행 시 대상 자동 무효화(`status=superseded` + `t_invalid`),
+  기본 조회는 현재 유효만, recall은 supersedes 이력 확장.
+- **분류**: `concept.kind` enum(technology/tool/algorithm/methodology) + 백필 태거(dry-run),
+  decision은 occurrent(insight/log) 레인으로 유도. `broader`(SKOS) 관계 신설, `about` 삭제.
+- 반복 log → insight 승격 후보(`wiki/promotion.py`), episodic 제외 검색 옵션(`exclude_types`).
+
+### Fixed
+
+- `synapse-memory ask` CLI가 `cli.ask` 서브모듈 이름 충돌로 크래시하던 버그.
+- 기본 모델을 스폰되는 provider(config) 기준으로 해석 — Claude Code 세션 안에서
+  codex 실행 시 sonnet이 전달되던 불일치 제거(runtime 감지는 `auto`일 때만).
+
+### Changed
+
+- **단일 엔티티 모델**: v1 Cards(Project/Company/Insight) + v2 WikiPage → 단일 타입 `Entity` + `schema.yaml`
+  (types: project/company/concept/insight/log/profile; typed relations; created/observed_at/supersedes 시간성).
+- **단일 인제스트 파이프라인**: v1 cluster→classify→generate 제거, per-doc LLM 통합(apply_ops)으로 수렴.
+  daily = collect → ingest → lint.
+- **공유 계층 SSOT**: vault-resolution(config), retrieval 패키지, llm 어댑터, page model/store 분리.
+- `cli.py`(4030L) → `cli/` 패키지(command-noun별 모듈).
+
+### Removed
+
+- Obsidian-UI 표면(moc/·index_md·SCHEMA writer·Dataview doctor·node 태그·spec 015).
+- 죽은 코드: `rag/`·`installer/`·`llm/credentials`·`feedback/apply`, 미사용 collector 5개(cursor/continue/aider/day_one/gmail).
+
+### Notes
+
+- 개발단계 big-bang: 하위호환·마이그레이션 없음. 기존 vault 페이지는 L0 raw 재인제스트로 재생성(`docs/reingest-runbook.md`).
+
 ## [1.20.0] — 2026-07-03
 
 ### Added

@@ -15,12 +15,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 from synapse_memory.storage.l0 import L0_FILE_MODE, ensure_secure_dir
+from synapse_memory.wiki.offsets import load_offsets, save_offsets
 from synapse_memory.wiki.rawdoc import (
     SUPPORTED_SOURCES,
     _extract_text,
     default_source_root,
 )
-from synapse_memory.wiki.watermark import load_offsets, load_watermark, save_offsets
+from synapse_memory.wiki.watermark import load_watermark
 
 SIDECAR_SUFFIX = ".toolio.jsonl.gz"
 _SIDECAR_KIND = "synapse-raw-compact"

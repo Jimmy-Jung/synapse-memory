@@ -133,15 +133,16 @@ def test_weekly_report_end_to_end(fixture_vault: Path) -> None:
 
 
 def _swap_profile(vault: Path, variant: str) -> None:
-    """fixture vault 의 90_System/AI/Profile.md 를 variant 디렉터리 내용으로 교체."""
+    """fixture vault 의 wiki profile page 를 variant 내용으로 교체."""
     src = vault / variant / "90_System" / "AI" / "Profile.md"
-    dst = vault / "90_System" / "AI" / "Profile.md"
+    dst = vault / "Profile" / "user-profile.md"
+    dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def _set_company_resume_language(vault: Path, lang: str) -> None:
     """fixture acme_co.md 의 frontmatter 에 resume_language 를 삽입."""
-    p = vault / "20_Reference" / "Companies" / "acme_co.md"
+    p = vault / "Entities" / "Companies" / "acme_co.md"
     text = p.read_text(encoding="utf-8")
     # frontmatter 끝(--- 단독 줄) 직전에 한 줄 추가
     lines = text.split("\n")

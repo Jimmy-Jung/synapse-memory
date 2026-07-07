@@ -4,7 +4,7 @@
     - Project Card: 내가 한 프로젝트 (역할, 기간, 영향, 기술 스택)
     - Company Card: 지원/관심 회사 (포지션, JD 키워드, 메모)
 
-저장 위치: vault ``20_Reference/Projects/<id>.md``, ``20_Reference/Companies/<id>.md``
+저장 위치: vault ``Entities/Projects/<id>.md``, ``Entities/Companies/<id>.md``
 
 저자: Synapse Memory Maintainers
 """

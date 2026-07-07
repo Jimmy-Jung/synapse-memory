@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import synapse_memory.wiki.ingest as ingest_mod
+import synapse_memory.wiki.ingest_routing as routing_mod
 from synapse_memory.storage.l0 import l0_root
 from synapse_memory.wiki.ingest import ingest_source
 from synapse_memory.wiki.page import load_page
@@ -43,6 +44,46 @@ def test_ingest_creates_page_and_updates_watermark(tmp_path, monkeypatch) -> Non
     again = ingest_source("claude-code", vault_path=tmp_path, raw_root=raw_root,
                           watermark_path=state, ai_env=None, today="2026-06-14")
     assert again.docs_processed == 0
+
+
+def test_ingest_logs_dropped_continuant_related_warning(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "related", "Project update with legacy related")
+    state = tmp_path / "state.json"
+    messages: list[str] = []
+
+    monkeypatch.setattr(
+        ingest_mod.ai_api,
+        "complete_structured",
+        _fake_complete_structured({"operations": [
+            {"op": "create", "type": "project", "slug": "typed-gate",
+             "title": "Typed Gate", "body": "본문", "related": ["[[legacy-link]]"]}]}),
+    )
+    monkeypatch.setattr(
+        ingest_mod,
+        "append_log",
+        lambda message, **kwargs: messages.append(message),
+    )
+
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=state,
+        ai_env=None,
+        today="2026-06-14",
+    )
+
+    assert "typed-gate" in result.pages_written
+    assert any(
+        message
+        == "ingest claude-code: warning project/typed-gate: "
+        "dropped continuant related: [[legacy-link]]"
+        for message in messages
+    )
 
 
 def test_ingest_dry_run_writes_nothing(tmp_path, monkeypatch) -> None:
@@ -138,11 +179,11 @@ def test_large_doc_uses_single_budgeted_sample_call(tmp_path, monkeypatch) -> No
     prompts: list[str] = []
     semantic_args: list[object] = []
     timeouts: list[int] = []
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 500, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_BUDGET", 600, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_EDGE_CHARS", 45, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_SIGNAL_CHARS", 220, raising=False)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 25)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_LIMIT", 500)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_BUDGET", 600)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_EDGE_CHARS", 45)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_SIGNAL_CHARS", 220)
 
     def fake_related(text, *, vault_path=None, pages=None, semantic_fn="default"):
         semantic_args.append(semantic_fn)
@@ -214,9 +255,7 @@ def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypat
     mtime = 1_700_000_000
     os.utime(session_path, (mtime, mtime))
     state = tmp_path / "state.json"
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_TOKENS", 4, raising=False)
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHUNK_OVERLAP", 0, raising=False)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 25)
 
     def timeout(*args, **kwargs):
         raise TimeoutError("timed out")
@@ -244,7 +283,7 @@ def test_large_doc_provider_error_is_sanitized_in_log(tmp_path, monkeypatch) -> 
     raw_root = tmp_path / "raw" / "claude-code"
     _write_session(raw_root, "large", "alpha beta gamma delta epsilon zeta")
     state = tmp_path / "state.json"
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 25)
 
     def provider_error(*args, **kwargs):
         raise RuntimeError(
@@ -307,8 +346,8 @@ def test_oversize_doc_skips_without_llm_and_advances_watermark(tmp_path, monkeyp
     mtime = 1_700_000_100
     os.utime(session_path, (mtime, mtime))
     state = tmp_path / "state.json"
-    monkeypatch.setattr(ingest_mod, "LARGE_DOC_CHAR_THRESHOLD", 25, raising=False)
-    monkeypatch.setattr(ingest_mod, "SAMPLED_DOC_CHAR_LIMIT", 80, raising=False)
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 25)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_LIMIT", 80)
 
     def unexpected_llm_call(*args, **kwargs):
         raise AssertionError("oversize doc must not call LLM")

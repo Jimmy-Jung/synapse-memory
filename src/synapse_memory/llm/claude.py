@@ -3,7 +3,7 @@
 CLI subprocess 패턴. API key 별도 발급 불필요 — 사용자 Claude Code
 OAuth 인증 그대로 사용.
 
-**철칙 1**: D4 — raw 텍스트를 그대로 cloud claude CLI에 전달한다 (redaction 제거).
+**철칙 1**: D4 — raw 텍스트를 그대로 cloud claude CLI에 전달한다.
 **철칙 2**: 비용 절감 — ``--system-prompt``로 default system prompt 대체.
    default 사용 시 CLAUDE.md/memory/plugins가 자동 합쳐져 35K+ cache 만들어짐 ($0.24/call).
    ``--system-prompt`` 명시하면 dynamic sections 자동 제외 → ~$0.001/call.
@@ -21,17 +21,23 @@ import json
 import os
 import shutil
 import subprocess
-import sys
-import time
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Literal, cast
 
-from synapse_memory.cost.events import append_cost_event, build_cost_event
-from synapse_memory.cost.pricing import price_usage
-from synapse_memory.llm._json import (
-    parse_json_with_fallback as _parse_json_base,
+from synapse_memory.cost.events import CostStatus, append_cost_event
+from synapse_memory.llm._runtime import (
+    DEFAULT_STRUCTURED_SYSTEM,
+    CompleteOptions,
+    detect_cli_environment,
+    make_structured_call,
+    make_text_call,
+    model_from_cmd,
+    model_from_envelope,
+    parse_structured_text,
+    record_llm_cost,
+    run_cli_process,
+    with_system,
 )
-from synapse_memory.llm.tokens import estimate_tokens
 
 CLAUDE_BIN = "claude"
 DEFAULT_MODEL = "sonnet"
@@ -44,16 +50,6 @@ def _known_claude_paths() -> tuple[str, ...]:
         "/usr/local/bin/claude",
         "/opt/homebrew/bin/claude",
     )
-
-
-def _resolve_claude_path() -> str | None:
-    path = shutil.which(CLAUDE_BIN)
-    if path:
-        return path
-    for candidate in _known_claude_paths():
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
-            return candidate
-    return None
 
 
 class ClaudeError(RuntimeError):
@@ -71,6 +67,18 @@ class ClaudeEnvironment:
     model: str = DEFAULT_MODEL
 
     @property
+    def provider(self) -> Literal["claude"]:
+        return "claude"
+
+    @property
+    def path(self) -> str | None:
+        return self.claude_path
+
+    @property
+    def version(self) -> str | None:
+        return self.claude_version
+
+    @property
     def ready(self) -> bool:
         return self.claude_path is not None
 
@@ -83,24 +91,24 @@ class ClaudeEnvironment:
 
 
 def detect_claude_environment(model: str = DEFAULT_MODEL) -> ClaudeEnvironment:
-    path = _resolve_claude_path()
-    version = None
-    if path:
-        try:
-            r = subprocess.run(
-                [path, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            if r.returncode == 0:
-                version = r.stdout.strip() or r.stderr.strip() or None
-        except (subprocess.TimeoutExpired, OSError):
-            pass
-    return ClaudeEnvironment(
-        claude_path=path, claude_version=version, model=model
+    return detect_cli_environment(
+        bin_name=CLAUDE_BIN,
+        model=model,
+        make_env=_make_claude_environment,
+        which=shutil.which,
+        run=subprocess.run,
+        known_paths=_known_claude_paths(),
+        is_file=os.path.isfile,
+        is_executable=os.access,
     )
+
+
+def _make_claude_environment(
+    path: str | None,
+    version: str | None,
+    model: str,
+) -> ClaudeEnvironment:
+    return ClaudeEnvironment(claude_path=path, claude_version=version, model=model)
 
 
 def _ensure_ready(env: ClaudeEnvironment) -> None:
@@ -171,62 +179,22 @@ def _run_claude(
     timeout: int,
 ) -> dict[str, Any]:
     """subprocess + envelope JSON 파싱. envelope dict 반환."""
-    started = time.monotonic()
-    model = _model_from_cmd(cmd)
-    try:
-        result = subprocess.run(
-            [*cmd, prompt],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        elapsed = time.monotonic() - started
-        _record_claude_cost(
-            model=model,
-            prompt=prompt,
-            result_text="",
-            status="timeout",
-            elapsed_s=elapsed,
-            error_kind="timeout",
-        )
-        raise ClaudeError(f"claude 호출 타임아웃 ({timeout}s)") from exc
-    except OSError as exc:
-        elapsed = time.monotonic() - started
-        _record_claude_cost(
-            model=model,
-            prompt=prompt,
-            result_text="",
-            status="error",
-            elapsed_s=elapsed,
-            error_kind="os_error",
-        )
-        raise ClaudeError(f"claude 실행 실패: {exc}") from exc
-    elapsed = time.monotonic() - started
-
-    if result.returncode != 0:
-        _record_claude_cost(
-            model=model,
-            prompt=prompt,
-            result_text="",
-            status="error",
-            elapsed_s=elapsed,
-            error_kind="nonzero_exit",
-        )
-        msg = (
-            result.stderr.strip()
-            or result.stdout.strip()[:500]
-            or "(no output)"
-        )
-        raise ClaudeError(
-            f"claude 비정상 종료 exit={result.returncode}: {msg}"
-        )
+    model = model_from_cmd(cmd, default=DEFAULT_MODEL)
+    result, elapsed = run_cli_process(
+        command_name="claude",
+        cmd=[*cmd, prompt],
+        timeout=timeout,
+        run=subprocess.run,
+        error_cls=ClaudeError,
+        prompt_for_cost=prompt,
+        model=model,
+        record=_record_cost,
+    )
 
     try:
         envelope = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
-        _record_claude_cost(
+        _record_cost(
             model=model,
             prompt=prompt,
             result_text="",
@@ -241,8 +209,8 @@ def _run_claude(
     normalized = _normalize_envelope(envelope)
 
     if normalized.get("is_error"):
-        _record_claude_cost(
-            model=_model_from_envelope(normalized, fallback=model),
+        _record_cost(
+            model=model_from_envelope(normalized, fallback=model),
             prompt=prompt,
             result_text=str(normalized.get("result") or ""),
             status="error",
@@ -253,8 +221,8 @@ def _run_claude(
         msg = normalized.get("result") or normalized.get("subtype") or "unknown"
         raise ClaudeError(f"Claude 응답 에러: {msg}")
 
-    _record_claude_cost(
-        model=_model_from_envelope(normalized, fallback=model),
+    _record_cost(
+        model=model_from_envelope(normalized, fallback=model),
         prompt=prompt,
         result_text=str(normalized.get("result") or ""),
         status="success",
@@ -264,97 +232,27 @@ def _run_claude(
     return normalized
 
 
-def _record_claude_cost(
+def _record_cost(
     *,
     model: str,
     prompt: str,
     result_text: str,
-    status: str,
+    status: CostStatus,
     elapsed_s: float,
     envelope: dict[str, Any] | None = None,
     error_kind: str | None = None,
 ) -> None:
-    envelope = envelope or {}
-    input_tokens, output_tokens = _usage_from_envelope(envelope)
-    if input_tokens == 0:
-        input_tokens = estimate_tokens(prompt)
-    if output_tokens == 0 and result_text:
-        output_tokens = estimate_tokens(result_text)
-    provider_usd = _provider_usd(envelope)
-    priced = price_usage(
+    record_llm_cost(
         provider="claude",
         model=model,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        provider_usd=provider_usd,
+        prompt=prompt,
+        result_text=result_text,
+        status=status,
+        elapsed_s=elapsed_s,
+        envelope=envelope,
+        error_kind=error_kind,
+        append=append_cost_event,
     )
-    try:
-        append_cost_event(
-            build_cost_event(
-                provider="claude",
-                model=model,
-                status=status,  # type: ignore[arg-type]
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                usd=priced.usd,
-                pricing_source=priced.pricing_source,
-                elapsed_s=elapsed_s,
-                error_kind=error_kind,
-            )
-        )
-    except Exception as exc:
-        print(f"⚠ cost event 기록 실패: {exc}", file=sys.stderr)
-
-
-def _model_from_cmd(cmd: list[str]) -> str:
-    if "--model" in cmd:
-        idx = cmd.index("--model")
-        if idx + 1 < len(cmd):
-            return cmd[idx + 1]
-    return DEFAULT_MODEL
-
-
-def _model_from_envelope(envelope: dict[str, Any], *, fallback: str) -> str:
-    raw = envelope.get("model") or envelope.get("model_id")
-    return str(raw) if raw else fallback
-
-
-def _usage_from_envelope(envelope: dict[str, Any]) -> tuple[int, int]:
-    usage = envelope.get("usage")
-    if not isinstance(usage, dict):
-        usage = {}
-    input_tokens = _first_int(
-        envelope,
-        usage,
-        keys=("input_tokens", "prompt_tokens"),
-    )
-    output_tokens = _first_int(
-        envelope,
-        usage,
-        keys=("output_tokens", "completion_tokens"),
-    )
-    return input_tokens, output_tokens
-
-
-def _first_int(*sources: dict[str, Any], keys: tuple[str, ...]) -> int:
-    for source in sources:
-        for key in keys:
-            value = source.get(key)
-            if isinstance(value, bool):
-                continue
-            if isinstance(value, int):
-                return max(0, value)
-            if isinstance(value, float) and value.is_integer():
-                return max(0, int(value))
-    return 0
-
-
-def _provider_usd(envelope: dict[str, Any]) -> float | None:
-    for key in ("total_cost_usd", "cost_usd", "usd"):
-        value = envelope.get(key)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return float(value)
-    return None
 
 
 def _normalize_envelope(envelope: Any) -> dict[str, Any]:
@@ -379,63 +277,29 @@ def _normalize_envelope(envelope: Any) -> dict[str, Any]:
 def _complete_envelope(
     prompt: str,
     *,
-    system: str | None,
-    model: str | None,
-    json_schema: dict[str, Any] | None,
-    max_budget_usd: float | None,
-    timeout: int,
-    env: ClaudeEnvironment | None,
+    options: CompleteOptions,
 ) -> dict[str, Any]:
     """공통 준비(env 진단 + cmd 빌드) + CLI 호출 → normalized envelope dict.
 
     ``complete``(텍스트)와 ``complete_structured``(structured_output) 양쪽이
     동일 호출 경로를 공유하도록 추출.
     """
-    env = env or detect_claude_environment(model or DEFAULT_MODEL)
+    env = cast(ClaudeEnvironment | None, options.env)
+    env = env or detect_claude_environment(options.model or DEFAULT_MODEL)
     _ensure_ready(env)
     cmd = _build_cmd(
         env,
-        system=system,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
+        system=options.system,
+        model=options.model,
+        json_schema=options.json_schema,
+        max_budget_usd=options.max_budget_usd,
     )
-    return _run_claude(cmd, prompt=prompt, timeout=timeout)
+    return _run_claude(cmd, prompt=prompt, timeout=options.timeout)
 
 
-def complete(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = DEFAULT_TIMEOUT_SEC,
-    env: ClaudeEnvironment | None = None,
-) -> str:
-    """Claude Code CLI 단일 호출 → 응답 텍스트.
-
-    Args:
-        prompt: 사용자 프롬프트.
-        system: 시스템 프롬프트.
-        model: 모델 alias (sonnet/opus/haiku) 또는 full 이름.
-        json_schema: 응답 JSON schema 강제 (Claude 자체 검증).
-        max_budget_usd: 비용 cap (호출당).
-        timeout: 초 단위.
-        env: 사전 진단 결과.
-
-    Returns:
-        envelope.result 텍스트.
-    """
-    envelope = _complete_envelope(
-        prompt,
-        system=system,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
-    )
+def _complete_text(prompt: str, options: CompleteOptions) -> str:
+    """Claude Code CLI 단일 호출 → 응답 텍스트."""
+    envelope = _complete_envelope(prompt, options=options)
     content = envelope.get("result", "")
     if not isinstance(content, str):
         raise ClaudeError(
@@ -444,16 +308,7 @@ def complete(
     return content
 
 
-def complete_structured(
-    prompt: str,
-    *,
-    system: str | None = None,
-    model: str | None = None,
-    json_schema: dict[str, Any] | None = None,
-    max_budget_usd: float | None = None,
-    timeout: int = DEFAULT_TIMEOUT_SEC,
-    env: ClaudeEnvironment | None = None,
-) -> Any:
+def _complete_structured(prompt: str, options: CompleteOptions) -> Any:
     """JSON 응답 → parse. ``json_schema`` 명시 시 Claude가 직접 검증.
 
     Raises:
@@ -461,12 +316,7 @@ def complete_structured(
     """
     envelope = _complete_envelope(
         prompt,
-        system=system or _DEFAULT_STRUCTURED_SYSTEM,
-        model=model,
-        json_schema=json_schema,
-        max_budget_usd=max_budget_usd,
-        timeout=timeout,
-        env=env,
+        options=with_system(options, options.system or DEFAULT_STRUCTURED_SYSTEM),
     )
     # json_schema 명시 시 CLI가 schema-검증한 객체를 ``structured_output``에 채운다.
     # 모델이 ``result``에 산문으로 답해도(긴/모호한 프롬프트에서 발생) 검증된
@@ -482,12 +332,15 @@ def complete_structured(
     return _parse_json_with_fallback(content)
 
 
-_DEFAULT_STRUCTURED_SYSTEM = (
-    "You output ONLY a single valid JSON value. "
-    "No prose, no markdown code fences, no explanation. "
-    "Korean text inside JSON string values is OK."
-)
-
-
 def _parse_json_with_fallback(content: str) -> Any:
-    return _parse_json_base(content, error_cls=ClaudeError, provider="Claude")
+    return parse_structured_text(content, error_cls=ClaudeError, provider="Claude")
+
+
+complete = make_text_call(_complete_text, default_timeout=DEFAULT_TIMEOUT_SEC)
+complete_structured = make_structured_call(
+    _complete_structured,
+    default_timeout=DEFAULT_TIMEOUT_SEC,
+)
+ProviderError = ClaudeError
+ProviderUnavailableError = ClaudeUnavailableError
+detect_environment = detect_claude_environment

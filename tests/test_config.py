@@ -10,9 +10,11 @@ import pytest
 import yaml
 
 from synapse_memory.config import (
+    ENV_VAR_VAULT,
     SynapseConfig,
     describe_privacy_mode,
     get_value,
+    get_vault_path,
     is_advanced_path,
     is_protected_path,
     load_config,
@@ -21,6 +23,7 @@ from synapse_memory.config import (
     set_value,
     validate_config,
 )
+from synapse_memory.vault_detector import VaultCandidate, VaultSource
 
 
 def test_load_returns_default_when_no_file(tmp_path):
@@ -96,6 +99,40 @@ def test_load_nested_vault_path_and_folders_for_compatibility(tmp_path):
     assert cfg.vault == "/tmp/example-vault"
     assert cfg.vault_folders.archive == "99_Archive"
     assert cfg.vault_folders.system.ai.cleanup_reports == "99_Archive/CleanupReports"
+
+
+def test_get_vault_path_env_takes_priority(tmp_path, monkeypatch):
+    env_vault = tmp_path / "env_vault"
+    cfg_vault = tmp_path / "cfg_vault"
+    monkeypatch.setenv(ENV_VAR_VAULT, str(env_vault))
+
+    assert get_vault_path(cfg=SynapseConfig(vault=str(cfg_vault))) == env_vault.resolve()
+
+
+def test_get_vault_path_falls_back_to_config_vault(tmp_path, monkeypatch):
+    cfg_vault = tmp_path / "cfg_vault"
+    monkeypatch.delenv(ENV_VAR_VAULT, raising=False)
+
+    assert get_vault_path(cfg=SynapseConfig(vault=str(cfg_vault))) == cfg_vault.resolve()
+
+
+def test_get_vault_path_falls_back_to_detector(tmp_path, monkeypatch):
+    detected = tmp_path / "detected"
+    monkeypatch.delenv(ENV_VAR_VAULT, raising=False)
+    monkeypatch.setattr(
+        "synapse_memory.vault_detector.detect_vault_candidates",
+        lambda: [
+            VaultCandidate(
+                path=detected,
+                source=VaultSource.DOCUMENTS_OBSIDIAN,
+                display_name="detected",
+                has_obsidian_dir=True,
+                confidence=70,
+            )
+        ],
+    )
+
+    assert get_vault_path(cfg=SynapseConfig()) == detected.resolve()
 
 
 def test_save_creates_backup_when_existing(tmp_path):

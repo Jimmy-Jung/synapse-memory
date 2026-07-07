@@ -19,13 +19,13 @@ import pytest
 
 
 def _build_vault(tmp_path: Path, *, profile_fm: str = "") -> Path:
-    """minimal vault with Profile.md + 1 ProjectCard."""
+    """minimal vault with wiki profile page."""
     vault = tmp_path / "vault"
-    profile_dir = vault / "90_System" / "AI"
+    profile_dir = vault / "Profile"
     profile_dir.mkdir(parents=True, exist_ok=True)
     profile_body = "이름: 테스트\n강점: 명료한 글쓰기\n"
     profile_text = profile_fm + profile_body if profile_fm else profile_body
-    (profile_dir / "Profile.md").write_text(profile_text, encoding="utf-8")
+    (profile_dir / "user-profile.md").write_text(profile_text, encoding="utf-8")
     return vault
 
 
@@ -197,9 +197,9 @@ def test_pipeline_generate_dry_run_skips_llm_and_save(tmp_path: Path) -> None:
     assert result.rag_mode == "dense"
 
 
-def test_pipeline_provider_select_matches_loaded_as_card_text(tmp_path: Path) -> None:
-    """020 — provider 선별된 card_id → full text 로드 → user prompt 합성."""
-    from synapse_memory.cards.project import ProjectCard, save_project_card
+def test_pipeline_provider_select_matches_loaded_as_entity_text(tmp_path: Path) -> None:
+    """020 — provider 선별된 entity slug → full text 로드 → user prompt 합성."""
+    from synapse_memory.cards.project import ProjectCard, ProjectMetric, save_project_card
     from synapse_memory.recipes.pipeline import generate
 
     vault = _build_vault(tmp_path)
@@ -209,6 +209,9 @@ def test_pipeline_provider_select_matches_loaded_as_card_text(tmp_path: Path) ->
             project_id="hyb",
             display_name="Hybrid Project",
             status="active",
+            period_start="2026-01",
+            period_end="2026-03",
+            metrics=[ProjectMetric(name="latency", before="2s", after="1s")],
             body="provider selected body",
         ),
         vault_path=vault,
@@ -235,7 +238,31 @@ def test_pipeline_provider_select_matches_loaded_as_card_text(tmp_path: Path) ->
     mocked_select.assert_called_once()
     assert mocked_select.call_args.kwargs["max_pages"] == 3
     assert result.source_ids == ["hyb"]
+    assert "기간: 2026-01 ~ 2026-03" in captured["prompt"]
+    assert "latency: 2s -> 1s" in captured["prompt"]
     assert "provider selected body" in captured["prompt"]
+
+
+def test_entity_text_preserves_company_typed_fields() -> None:
+    from synapse_memory.cards.company import CompanyCard, JobPosition
+    from synapse_memory.recipes.pipeline import entity_to_text
+
+    text = entity_to_text(
+        CompanyCard(
+            company_id="acme",
+            display_name="Acme",
+            resume_language="en",
+            positions=[
+                JobPosition(
+                    title="Staff iOS Engineer",
+                    seniority="staff",
+                    keywords=["Swift", "UIKit"],
+                )
+            ],
+        )
+    )
+    assert "이력서 언어: en" in text
+    assert "Staff iOS Engineer (staff; Swift, UIKit)" in text
 
 
 def test_pipeline_provider_zero_selection_yields_no_matches(tmp_path: Path) -> None:
