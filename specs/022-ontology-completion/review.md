@@ -3,7 +3,7 @@
 - 저자: JunyoungJung
 - 작성일: 2026-07-07
 - 성격: **재설계 이후(post-implementation) 감사.** 2026-07-05 리뷰(제거됨 — git 히스토리 참조)가 권고한 경로(①타입 어휘 → ②스키마 코드화 → ③typed relations → ④시간성)가 실제로 shipped된 뒤, 그 결과를 라이브 vault로 검증한다.
-- 배경 지식: [ontology-learning-guide.md](ontology-learning-guide.md)
+- 배경 지식: [learning-guide.md](learning-guide.md)
 - 근거: 코드(`schema.yaml`, `wiki/integration.py`, `model/entity.py`, `wiki/retrieval.py`, `wiki/lint.py`) + 라이브 vault 실측(2026-07-07) + 온톨로지/KG 레퍼런스 11종 재학습
 - 방법: 18-agent workflow (자료 11 학습 → 온톨로지 렌즈 6 리뷰 → 종합). 6개 렌즈가 코드 라인 근거로 독립 수렴.
 

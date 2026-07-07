@@ -2,7 +2,7 @@
 
 작성일: 2026-07-05
 목적: synapse-memory를 온톨로지 관점에서 재검토하기 전에 필요한 배경 지식을 정리한 학습자료.
-같이 읽기: [ontology-architecture-review-2026-07-07.md](ontology-architecture-review-2026-07-07.md) (사후 감사·개선안)
+같이 읽기: [review.md](review.md) (사후 감사·개선안)
 
 ---
 

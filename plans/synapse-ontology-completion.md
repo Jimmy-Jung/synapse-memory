@@ -3,7 +3,7 @@
 - 저자: JunyoungJung
 - 작성일: 2026-07-07
 - 목표: typed-relation 배선(commit `e5fbf49` + `4da5afa`) 이후 남은 온톨로지 격차를 닫는다 — **harmonization 회귀 방지 → 측정 → 소비 → 시간/분류 → (게이트된) 공리/ER**.
-- 근거·배경: [docs/ontology-architecture-review-2026-07-07.md](../docs/ontology-architecture-review-2026-07-07.md)
+- 근거·배경: [specs/022-ontology-completion/review.md](../specs/022-ontology-completion/review.md)
 - 선행 플랜: [plans/synapse-structural-redesign.md](synapse-structural-redesign.md) (Step 10까지 완료, 커밋 `e5fbf49`/`4da5afa`가 후속 step 11)
 - 실행 모드: git + gh 사용 가능(계정 Jimmy-Jung). 각 스텝은 `release/2.0.0`에서 분기 → PR → `release/2.0.0` 병합. 푸시/PR은 사용자 승인 후.
 - 리뷰 게이트: strongest 모델 적대적 리뷰 통과(코드 대조). 지적된 C1(Step 4 `about` 3곳 동시 삭제 — 미반영 시 스키마 로드 크래시), H1(Step 3 역방향 CQ용 역인덱스 Task 추가), M1/M2(Step 7 RapidFuzz 미설치·`broader` 결합, Step 5 라인정정·`current_entities` 재사용) 전부 반영됨.

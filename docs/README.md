@@ -34,12 +34,6 @@
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
    - raw mirror 수동 축소와 원복 (`compact-raw`, v1.20.0)
 
-4. [온톨로지 아키텍처 리뷰](ontology-architecture-review-2026-07-07.md)
-
-   2.0.0 재설계 이후 typed relation 그래프가 실제로 채워지고 검색에 쓰이는지
-   실측으로 검증한 사후 감사입니다. 배경 지식은
-   [온톨로지 학습 가이드](ontology-learning-guide.md)를 함께 읽습니다.
-
 ## 한 문장으로 이해하기
 
 Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 mirror하고 wiki 카드로

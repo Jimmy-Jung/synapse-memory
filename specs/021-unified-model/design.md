@@ -129,6 +129,7 @@ Only these specs are current at the repository top level:
 - `019-llm-wiki-redesign`
 - `020-provider-only-retrieval`
 - `021-unified-model`
+- `022-ontology-completion` (온톨로지 사후 감사 + 학습 가이드)
 
 All earlier specs are archived under `specs/_historical/` and should not be
 used as implementation source of truth unless a future plan explicitly revives

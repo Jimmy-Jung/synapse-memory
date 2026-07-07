@@ -6,7 +6,7 @@ All notable changes to Synapse Memory are documented here.
 
 구조 리디자인 (big-bang) + 온톨로지 완성. 계획: `plans/synapse-structural-redesign.md`,
 `plans/synapse-ontology-completion.md`, 설계: `specs/021-unified-model/design.md`,
-검증: `docs/ontology-architecture-review-2026-07-07.md`.
+검증: `specs/022-ontology-completion/review.md`.
 
 ### Added
 
