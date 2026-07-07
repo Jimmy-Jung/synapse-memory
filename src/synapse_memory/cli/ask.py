@@ -25,7 +25,12 @@ def cmd_ask(args: argparse.Namespace) -> int:
         where = {"source_kind": f"card_{args.kind}"}
 
     try:
-        result = api().ask(
+        # api()=synapse_memory.cli 패키지. cli/ask.py 서브모듈이 패키지의 lazy
+        # __getattr__를 shadow해 api().ask가 이 모듈 자신(callable 아님)을 가리킨다.
+        # endpoints ask 함수를 직접 import해 이름 충돌을 회피한다.
+        from synapse_memory.endpoints.ask import ask as ask_endpoint
+
+        result = ask_endpoint(
             args.query,
             top_k=args.top_k,
             model=args.model,
