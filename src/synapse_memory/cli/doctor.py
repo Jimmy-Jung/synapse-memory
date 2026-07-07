@@ -106,6 +106,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"⚠ {wp_result.message}")
         else:
             print(f"{FAIL} {wp_result.message}")
+        for line in api().relation_metrics_lines(wp_cfg.vault):
+            print(f"{OK} {line}")
     except Exception as exc:
         print(f"⚠ Entity 진단 실패: {exc}")
 

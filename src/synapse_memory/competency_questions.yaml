@@ -1,0 +1,62 @@
+# Author: JunyoungJung
+# Created: 2026-07-07
+- id: CQ01
+  question: "swift-concurrency를 uses하는 project는?"
+  kind: relational
+  status: xfail
+- id: CQ02
+  question: "특정 company의 status가 target->applied->hired로 언제 바뀌었나?"
+  kind: temporal
+  status: xfail
+- id: CQ03
+  question: "이 decision이 decided_in된 log/insight는?"
+  kind: provenance
+  status: supported
+- id: CQ04
+  question: "concept X의 broader는 무엇이고 narrower에는 무엇이 있나?"
+  kind: hierarchical
+  status: xfail
+- id: CQ05
+  question: "project A가 part_of로 속한 모든 상위 맥락(조상 전체)은?"
+  kind: hierarchical
+  status: xfail
+- id: CQ06
+  question: "지금 유효한 사실만 보여줘 — 무효화(t_invalid)된 과거 제외"
+  kind: temporal
+  status: xfail
+- id: CQ07
+  question: "주제 X에 대한 내 입장이 시간순으로 어떻게 바뀌었나?"
+  kind: temporal
+  status: xfail
+- id: CQ08
+  question: "swift-concurrency와 Swift Concurrency는 같은 개체인가? 중복 concept는?"
+  kind: identity
+  status: xfail
+- id: CQ09
+  question: "concept 중 kind가 methodology인 것만 / technology인 것만 나열"
+  kind: classification
+  status: xfail
+- id: CQ10
+  question: "이 typed edge('X uses Y')의 근거가 된 원본 문장/페이지는?"
+  kind: provenance
+  status: xfail
+- id: CQ11
+  question: "company Z 관련 project·insight·log를 관계 타입별로 묶어 보여줘"
+  kind: relational
+  status: xfail
+- id: CQ12
+  question: "log 제외, 지식 노드(concept/insight)만으로 X 검색"
+  kind: classification
+  status: xfail
+- id: CQ13
+  question: "가장 최근에 어떤 사실이 무엇을 supersedes 했나?"
+  kind: temporal
+  status: xfail
+- id: CQ14
+  question: "이 project에서 반복 등장한 log 패턴에서 승격할 insight/decision은?"
+  kind: classification
+  status: xfail
+- id: CQ15
+  question: "관계가 하나도 없는(고아) 페이지는?"
+  kind: coverage
+  status: supported

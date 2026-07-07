@@ -74,6 +74,16 @@ def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
     )
 
 
+def relation_metrics_lines(vault: Path | str) -> tuple[str, ...]:
+    """Return relation coverage lines for doctor output."""
+    from synapse_memory.wiki.metrics import (
+        calculate_relation_metrics_for_vault,
+        format_relation_metrics_lines,
+    )
+
+    return format_relation_metrics_lines(calculate_relation_metrics_for_vault(vault))
+
+
 def _parse_watermark(value: str) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(value)

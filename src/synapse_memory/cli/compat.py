@@ -180,6 +180,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "load_watermark": ("synapse_memory.wiki.watermark", "load_watermark"),
     "planned_fix_actions": ("synapse_memory.doctor", "planned_fix_actions"),
     "projects_dir": ("synapse_memory.cards.project", "projects_dir"),
+    "relation_metrics_lines": ("synapse_memory.doctor", "relation_metrics_lines"),
     "render_summary_json": ("synapse_memory.cost.summary", "render_summary_json"),
     "render_summary_table": ("synapse_memory.cost.summary", "render_summary_table"),
     "resolve_card_target": ("synapse_memory.feedback.targets", "resolve_card_target"),
