@@ -21,6 +21,9 @@ from synapse_memory.wiki.links import link_target, reverse_relations, typed_neig
 
 DEFAULT_MAX_PAGES = 12
 REVERSE_RELATION_SOURCE_LIMIT = 5
+TRANSITIVE_RELATIONS = ("part_of", "broader")
+SYMMETRIC_RELATIONS = ("same_as",)
+TRANSITIVE_DEPTH = 2
 
 # semantic_fn 미지정 vs None(끄기)을 구분하기 위한 sentinel.
 _DEFAULT = object()
@@ -65,28 +68,64 @@ def _append_neighbor(
     return True
 
 
+def _expand_transitive(
+    seed: Entity,
+    all_pages: list[Entity],
+    neighbors: list[Entity],
+    matched_slugs: set[str],
+    *,
+    depth: int,
+) -> None:
+    """part_of/broader를 seed에서 forward로 depth 홉까지 따라가며 append (cycle-safe)."""
+    frontier = [seed]
+    walked = {seed.slug}
+    for _ in range(depth):
+        nxt: list[Entity] = []
+        for page in frontier:
+            grouped = typed_neighbors(page)
+            for relation in TRANSITIVE_RELATIONS:
+                for target in grouped.get(relation, ()):
+                    _append_neighbor(neighbors, matched_slugs, all_pages, target)
+                    if target not in walked:
+                        walked.add(target)
+                        found = _find_page_by_slug(target, all_pages)
+                        if found is not None:
+                            nxt.append(found)
+        frontier = nxt
+
+
 def _expand_neighbors(
     text: str,
     seeds: list[Entity],
     matched_slugs: set[str],
     all_pages: list[Entity],
 ) -> list[Entity]:
-    """seeds의 typed/reverse/related 1-hop 이웃을 가중 순서로 수집."""
+    """seeds의 typed/transitive/symmetric/reverse/related 이웃을 가중 순서로 수집."""
     neighbors: list[Entity] = []
     reverse_filter = _query_relation_filter(text)
-    reverse_index = reverse_relations(all_pages) if reverse_filter else {}
+    # same_as(대칭)가 없고 질의 의도도 없으면 역인덱스 계산을 건너뛴다(lazy).
+    needs_reverse = bool(reverse_filter) or any(
+        getattr(page, "same_as", ()) for page in all_pages
+    )
+    reverse_index = reverse_relations(all_pages) if needs_reverse else {}
     for page in seeds:
         for targets in typed_neighbors(page).values():
             for target in targets:
                 _append_neighbor(neighbors, matched_slugs, all_pages, target)
+        # part_of/broader 이행 폐쇄 (depth<=2, 폭주 방지 캡)
+        _expand_transitive(page, all_pages, neighbors, matched_slugs, depth=TRANSITIVE_DEPTH)
+        # same_as는 대칭(identity) — 역방향도 무조건 확장
+        for relation, source in reverse_index.get(page.slug, ()):
+            if relation in SYMMETRIC_RELATIONS:
+                _append_neighbor(neighbors, matched_slugs, all_pages, source)
+        # 질의 의도(uses/decided_in/part_of)일 때만 역방향 확장, relation별 상한
         if reverse_filter:
             reverse_counts: dict[str, int] = {}
             for relation, source in reverse_index.get(page.slug, ()):
                 if relation in reverse_filter:
                     if reverse_counts.get(relation, 0) >= REVERSE_RELATION_SOURCE_LIMIT:
                         continue
-                    appended = _append_neighbor(neighbors, matched_slugs, all_pages, source)
-                    if appended:
+                    if _append_neighbor(neighbors, matched_slugs, all_pages, source):
                         reverse_counts[relation] = reverse_counts.get(relation, 0) + 1
         for link in getattr(page, "related", ()):
             _append_neighbor(neighbors, matched_slugs, all_pages, link_target(str(link)))

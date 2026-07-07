@@ -171,6 +171,16 @@ relations:
     domain: [project, company, concept, insight, log, profile]
     range: [project, company, concept, insight, log, profile]
     cardinality: many
+    axioms:
+      transitive: true
+      inverse: has_part
+  broader:
+    domain: [concept]
+    range: [concept]
+    cardinality: many
+    axioms:
+      transitive: true
+      inverse: narrower
   decided_in:
     domain: [project, company, concept, insight, log, profile]
     range: [insight, log]

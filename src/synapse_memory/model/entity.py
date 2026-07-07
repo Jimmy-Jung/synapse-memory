@@ -77,6 +77,7 @@ class Entity:
     related: tuple[str, ...] = ()
     uses: tuple[str, ...] = ()
     part_of: tuple[str, ...] = ()
+    broader: tuple[str, ...] = ()
     decided_in: tuple[str, ...] = ()
     supersedes: tuple[str, ...] = ()
     same_as: tuple[str, ...] = ()

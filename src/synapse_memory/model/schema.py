@@ -11,6 +11,7 @@ SCHEMA_RESOURCE = "schema.yaml"
 RELATION_FIELDS: tuple[str, ...] = (
     "uses",
     "part_of",
+    "broader",
     "decided_in",
     "supersedes",
     "same_as",

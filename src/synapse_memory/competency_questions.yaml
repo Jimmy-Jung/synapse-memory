@@ -15,11 +15,11 @@
 - id: CQ04
   question: "concept X의 broader는 무엇이고 narrower에는 무엇이 있나?"
   kind: hierarchical
-  status: xfail
+  status: supported
 - id: CQ05
   question: "project A가 part_of로 속한 모든 상위 맥락(조상 전체)은?"
   kind: hierarchical
-  status: xfail
+  status: supported
 - id: CQ06
   question: "지금 유효한 사실만 보여줘 — 무효화(t_invalid)된 과거 제외"
   kind: temporal
@@ -31,7 +31,7 @@
 - id: CQ08
   question: "swift-concurrency와 Swift Concurrency는 같은 개체인가? 중복 concept는?"
   kind: identity
-  status: xfail
+  status: supported
 - id: CQ09
   question: "concept 중 kind가 methodology인 것만 / technology인 것만 나열"
   kind: classification
