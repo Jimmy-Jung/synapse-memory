@@ -30,7 +30,7 @@ from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.semantic import retrieve_items
 from synapse_memory.store import save_page
-from synapse_memory.wiki.links import extract_wikilinks
+from synapse_memory.wiki.links import extract_wikilinks, reverse_relations
 from synapse_memory.wiki.page import (
     slugify,
 )
@@ -95,6 +95,26 @@ def _build_context(pages: list[Entity]) -> str:
     return "\n\n".join(parts)
 
 
+def _build_relation_context(pages: list[Entity]) -> str:
+    """retrieved 페이지 사이의 typed 엣지를 관계 타입별로 묶은 블록 (CQ11).
+
+    incoming 엣지(source → relation → page)를 페이지별·관계별로 그룹핑해
+    LLM이 '관계 타입별로 묶어' 답할 수 있는 구조적 근거를 제공한다.
+    """
+    type_by_slug = {p.slug: p.type for p in pages}
+    index = reverse_relations(list(pages))
+    lines: list[str] = []
+    for page in pages:
+        grouped: dict[str, list[str]] = {}
+        for relation, source in index.get(page.slug, ()):
+            if source in type_by_slug:
+                grouped.setdefault(relation, []).append(source)
+        for relation, sources in grouped.items():
+            lines.append(f"[[{page.slug}]] ← {relation}:")
+            lines.extend(f"- {type_by_slug[source]}: [[{source}]]" for source in sources)
+    return "\n".join(lines)
+
+
 def _resolve_sources(answer: str, pages: list[Entity]) -> list[str]:
     """인용된 slug 우선, 비면 retrieved slug."""
     cited = extract_wikilinks(answer)
@@ -127,9 +147,14 @@ def ask_wiki(
         return WikiAnswer(query=query, answer=NO_RESULTS_ANSWER, sources=[])
 
     context = _build_context(pages)
+    relation_context = _build_relation_context(pages)
+    relation_block = (
+        f"# 관계 (타입별)\n{relation_context}\n\n" if relation_context else ""
+    )
     user_prompt = (
         f"# 질문\n{query}\n\n"
         f"# 자료\n{context}\n\n"
+        f"{relation_block}"
         f"위 Entity 본문을 근거로 답변하세요. 추측 금지. 각 주장에 [[slug]] 인용."
     )
     answer = ai_api.complete(

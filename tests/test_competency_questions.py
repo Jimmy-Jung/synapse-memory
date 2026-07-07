@@ -47,14 +47,14 @@ EXPECTED_SUPPORTED = {
     "CQ07",
     "CQ08",
     "CQ09",
+    "CQ11",
+    "CQ12",
     "CQ13",
+    "CQ14",
     "CQ15",
 }
 EXPECTED_XFAIL = {
     "CQ10",
-    "CQ11",
-    "CQ12",
-    "CQ14",
 }
 
 
@@ -318,13 +318,99 @@ def test_supported_cq08_same_as_symmetric_surfaces_duplicate() -> None:
     assert "swift-concurrency-alias" in {page.slug for page in hits}
 
 
+def test_supported_cq11_ask_groups_relations_by_type(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from synapse_memory.store import save_page
+
+    company = Entity(type="company", slug="acme", title="Acme")
+    project = Entity(
+        type="project",
+        slug="checkout",
+        title="Checkout Project",
+        part_of=("acme",),
+        body="Checkout project body.",
+    )
+    insight = Entity(
+        type="insight",
+        slug="acme-insight",
+        title="Acme Insight",
+        part_of=("acme",),
+        body="Acme insight body.",
+    )
+    log = Entity(
+        type="log",
+        slug="acme-log",
+        title="Acme Log",
+        part_of=("acme",),
+        body="Acme log body.",
+    )
+    for page in (company, project, insight, log):
+        save_page(page, vault_path=tmp_path)
+
+    def fake_retrieve_items(*args: object, **kwargs: object) -> list[Entity]:
+        all_pages = args[1]
+        return [page for page in all_pages if page.slug == "acme"]
+
+    def fake_complete(prompt: str, *args: object, **kwargs: object) -> str:
+        if "part_of:" in prompt and "project:" in prompt and "insight:" in prompt and "log:" in prompt:
+            return (
+                "part_of:\n"
+                "- project [[checkout]]\n"
+                "- insight [[acme-insight]]\n"
+                "- log [[acme-log]]"
+            )
+        return "flat related answer [[checkout]] [[acme-insight]] [[acme-log]]"
+
+    monkeypatch.setattr(wiki_query, "retrieve_items", fake_retrieve_items)
+    monkeypatch.setattr(wiki_query.ai_api, "complete", fake_complete)
+
+    answer = wiki_query.ask_wiki(
+        "Acme part_of 관계 타입별로 묶어줘",
+        vault_path=tmp_path,
+        top_k=10,
+    )
+    assert "part_of:" in answer.answer
+    assert "- project [[checkout]]" in answer.answer
+    assert "- insight [[acme-insight]]" in answer.answer
+    assert "- log [[acme-log]]" in answer.answer
+
+
+def test_supported_cq12_semantic_search_can_exclude_logs() -> None:
+    pages = [
+        Entity(type="log", slug="rag-log", title="RAG"),
+        Entity(type="concept", slug="rag-concept", title="RAG"),
+    ]
+    hits = find_related_pages(
+        "RAG", max_pages=10, semantic_fn=None, pages=pages, exclude_types=("log",)
+    )
+    assert [page.slug for page in hits] == ["rag-concept"]
+    # 기본은 불변 — ingest가 log 갱신 대상을 계속 찾아야 한다.
+    default_hits = find_related_pages("RAG", max_pages=10, semantic_fn=None, pages=pages)
+    assert {page.type for page in default_hits} == {"log", "concept"}
+
+
+def test_supported_cq14_repeated_logs_promote_to_insight_candidate() -> None:
+    from synapse_memory.wiki.promotion import promotion_candidates_from_logs
+
+    logs = [
+        Entity(type="log", slug="log-1", title="Pytest flake", body="pytest flake repeated"),
+        Entity(type="log", slug="log-2", title="Pytest flake", body="pytest flake repeated"),
+    ]
+    candidates = promotion_candidates_from_logs(logs, min_count=2)
+    assert any(
+        candidate.type == "insight" and "pytest" in candidate.body
+        for candidate in candidates
+    )
+    # 승격 후보는 근거 로그를 decided_in으로 가리킨다.
+    assert candidates[0].decided_in == ("log-1", "log-2")
+
+
 @pytest.mark.parametrize(
     "cq_id",
     [
         pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 provenance 확장 대상", strict=True)),
-        pytest.param("CQ11", marks=pytest.mark.xfail(reason="ask 경로의 관계 타입별 grouping 미구현 — 후속 retrieval 대상", strict=True)),
-        pytest.param("CQ12", marks=pytest.mark.xfail(reason="episodic/semantic 분리 검색은 후속 retrieval 대상", strict=True)),
-        pytest.param("CQ14", marks=pytest.mark.xfail(reason="반복 log 승격은 후속 semantic promotion 대상", strict=True)),
     ],
 )
 def test_xfail_competency_questions_are_tracked(
@@ -405,67 +491,6 @@ def _assert_future_competency_question(
     elif cq_id == "CQ10":
         uses_spec = load_schema()["relations"]["uses"]
         assert "provenance" in uses_spec
-    elif cq_id == "CQ11":
-        from synapse_memory.store import save_page
-
-        company = Entity(type="company", slug="acme", title="Acme")
-        project = Entity(
-            type="project",
-            slug="checkout",
-            title="Checkout Project",
-            part_of=("acme",),
-            body="Checkout project body.",
-        )
-        insight = Entity(
-            type="insight",
-            slug="acme-insight",
-            title="Acme Insight",
-            part_of=("acme",),
-            body="Acme insight body.",
-        )
-        log = Entity(
-            type="log",
-            slug="acme-log",
-            title="Acme Log",
-            part_of=("acme",),
-            body="Acme log body.",
-        )
-        for page in (company, project, insight, log):
-            save_page(page, vault_path=tmp_path)
-
-        def fake_retrieve_items(*args: object, **kwargs: object) -> list[Entity]:
-            all_pages = args[1]
-            return [page for page in all_pages if page.slug == "acme"]
-
-        def fake_complete(prompt: str, *args: object, **kwargs: object) -> str:
-            if "part_of:" in prompt and "project:" in prompt and "insight:" in prompt and "log:" in prompt:
-                return (
-                    "part_of:\n"
-                    "- project [[checkout]]\n"
-                    "- insight [[acme-insight]]\n"
-                    "- log [[acme-log]]"
-                )
-            return "flat related answer [[checkout]] [[acme-insight]] [[acme-log]]"
-
-        monkeypatch.setattr(wiki_query, "retrieve_items", fake_retrieve_items)
-        monkeypatch.setattr(wiki_query.ai_api, "complete", fake_complete)
-
-        answer = wiki_query.ask_wiki(
-            "Acme part_of 관계 타입별로 묶어줘",
-            vault_path=tmp_path,
-            top_k=10,
-        )
-        assert "part_of:" in answer.answer
-        assert "- project [[checkout]]" in answer.answer
-        assert "- insight [[acme-insight]]" in answer.answer
-        assert "- log [[acme-log]]" in answer.answer
-    elif cq_id == "CQ12":
-        pages = [
-            Entity(type="log", slug="rag-log", title="RAG"),
-            Entity(type="concept", slug="rag-concept", title="RAG"),
-        ]
-        hits = find_related_pages("RAG", max_pages=10, semantic_fn=None, pages=pages)
-        assert {page.type for page in hits} <= {"concept", "insight"}
     elif cq_id == "CQ13":
         from synapse_memory.store import load_page, save_page
         from synapse_memory.wiki.apply import apply_ops
@@ -495,14 +520,5 @@ def _assert_future_competency_question(
         invalidated = load_page("company", "acme-v1", vault_path=tmp_path)
         assert invalidated.status == "superseded"
         assert invalidated.t_invalid == "2026-07-07"
-    elif cq_id == "CQ14":
-        from synapse_memory.wiki.promotion import promotion_candidates_from_logs
-
-        logs = [
-            Entity(type="log", slug="log-1", title="Pytest flake", body="pytest flake repeated"),
-            Entity(type="log", slug="log-2", title="Pytest flake", body="pytest flake repeated"),
-        ]
-        candidates = promotion_candidates_from_logs(logs, min_count=2)
-        assert any(candidate.type == "insight" and "pytest" in candidate.body for candidate in candidates)
     else:
         raise AssertionError(f"unknown CQ: {cq_id}")

@@ -175,8 +175,12 @@ def find_related_pages(
     semantic_fn: SemanticFn | None = _DEFAULT,  # type: ignore[assignment]
     pages: list[Entity] | None = None,
     include_history: bool = False,
+    exclude_types: tuple[str, ...] = (),
 ) -> list[Entity]:
     """본문과 관련된 기존 페이지. 이름(title/slug) 매칭 + 의미 top-k + related 1-hop.
+
+    ``exclude_types``: 제외할 entity type (예: ("log",) — episodic 제외 semantic 검색,
+    CQ12). 기본 빈 튜플 = 전 타입 포함 (ingest가 log 갱신 대상을 찾아야 하므로 불변).
 
     의미검색 토글:
         - ``semantic_fn`` 미지정 → provider 선별 사용 (rag 부재 시 graceful ``[]``).
@@ -194,6 +198,8 @@ def find_related_pages(
     )
     if not include_history:
         all_pages = list(current_entities(all_pages))
+    if exclude_types:
+        all_pages = [p for p in all_pages if p.type not in exclude_types]
 
     matched: list[Entity] = []
     matched_slugs: set[str] = set()
