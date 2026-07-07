@@ -253,6 +253,7 @@ def what_did_i_think(
         top_k_override=top_k,
         disable_save=True,
         return_empty_on_no_matches=True,
+        include_history=True,
     )
     if not result.source_ids:
         return WhatDidIThinkResult(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import synapse_memory.wiki.query as query_mod
 import synapse_memory.wiki.retrieval as retrieval_mod
 from synapse_memory.model import Entity
 from synapse_memory.wiki.links import reverse_relations, typed_neighbors
@@ -191,3 +192,68 @@ def test_respects_max_pages(tmp_path: Path) -> None:
 def test_no_match_returns_empty(tmp_path: Path) -> None:
     save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     assert find_related_pages("관련 없는 내용", vault_path=tmp_path, semantic_fn=None) == []
+
+
+def test_superseded_pages_are_excluded_from_default_retrieval() -> None:
+    pages = [
+        Entity(
+            type="concept",
+            slug="old-fact",
+            title="Old Fact",
+            status="active",
+            t_invalid="2026-07-07",
+        ),
+        Entity(type="concept", slug="new-fact", title="New Fact"),
+    ]
+
+    hits = find_related_pages(
+        "Old Fact New Fact",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == ["new-fact"]
+
+
+def test_retrieve_wiki_include_history_expands_supersedes_chain(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    save_page(
+        Entity(
+            type="insight",
+            slug="stance-v1",
+            title="Swift concurrency stance v1",
+            status="superseded",
+            created="2026-01-01T09:00:00+09:00",
+            observed_at="2026-01-01T09:00:00+09:00",
+        ),
+        vault_path=tmp_path,
+    )
+    save_page(
+        Entity(
+            type="insight",
+            slug="stance-v2",
+            title="Swift concurrency stance v2",
+            created="2026-07-01T09:00:00+09:00",
+            observed_at="2026-07-01T09:00:00+09:00",
+            supersedes=("insight:stance-v1",),
+        ),
+        vault_path=tmp_path,
+    )
+
+    monkeypatch.setattr(
+        query_mod,
+        "retrieve_items",
+        lambda *args, **kwargs: [page for page in args[1] if page.slug == "stance-v2"],
+    )
+
+    hits = query_mod._retrieve_wiki(
+        "Swift concurrency stance 시간순 변화",
+        vault_path=tmp_path,
+        top_k=5,
+        include_history=True,
+    )
+
+    assert [page.slug for page in hits] == ["stance-v2", "stance-v1"]

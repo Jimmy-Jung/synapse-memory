@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from synapse_memory.model import Entity
+from synapse_memory.model.entity import SUPERSEDED_STATUS
 from synapse_memory.wiki.apply import apply_ops
 from synapse_memory.wiki.integration import PageOp
 from synapse_memory.wiki.lint import validate_schema_rules
@@ -246,6 +247,37 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
     assert saved.supersedes == ("old-project",)
     assert saved.same_as == ("tablet-project-alias",)
     assert validate_schema_rules(vault_path=tmp_path).validation_violations == ()
+
+
+def test_apply_supersedes_invalidates_target_page(tmp_path: Path) -> None:
+    save_page(
+        Entity(type="company", slug="acme-v1", title="Acme", status="target"),
+        vault_path=tmp_path,
+    )
+
+    apply_ops(
+        [
+            PageOp(
+                op="create",
+                page=Entity(
+                    type="company",
+                    slug="acme-v2",
+                    title="Acme",
+                    status="hired",
+                    supersedes=("company:acme-v1",),
+                ),
+            )
+        ],
+        vault_path=tmp_path,
+        today="2026-07-07",
+    )
+
+    invalidated = load_page("company", "acme-v1", vault_path=tmp_path)
+    assert invalidated.status == SUPERSEDED_STATUS
+    assert invalidated.t_invalid == "2026-07-07"
+    assert "t_invalid:" in (
+        tmp_path / "Entities/Companies" / "acme-v1.md"
+    ).read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(

@@ -30,7 +30,7 @@ from synapse_memory.feedback.last_response import (
     save_last_answer,
 )
 from synapse_memory.llm.ai_api import complete as ai_api_complete
-from synapse_memory.model import Entity
+from synapse_memory.model import Entity, supersedes_history
 from synapse_memory.postprocess import strip_meta_prefix
 from synapse_memory.profile.wiki import load_profile_text
 from synapse_memory.recipes.domain import resolve_domain
@@ -48,7 +48,7 @@ from synapse_memory.recipes.recipe import (
 )
 from synapse_memory.recipes.registry import RecipeRegistry
 from synapse_memory.retrieval.index import select_related
-from synapse_memory.store import list_current_entities, load_entity
+from synapse_memory.store import list_current_entities, list_entities, load_entity
 
 _BUILTIN_DIR_DEFAULT = Path(__file__).resolve().parent / "builtin"
 _FILENAME_UNSAFE_RE = re.compile(r"[\\/\x00\r\n]")
@@ -435,6 +435,36 @@ def _load_card_match(
         return None
 
 
+def _card_match_from_entity(entity: Entity) -> _CardMatch:
+    return _CardMatch(
+        id=entity.slug,
+        document=entity_to_text(entity),
+        metadata=_entity_metadata(entity),
+    )
+
+
+def _selected_history_entities(
+    selected: list[str],
+    *,
+    by_id: dict[str, EntityEntry],
+    all_entities: list[Entity],
+) -> list[Entity]:
+    entities: list[Entity] = []
+    seen: set[str] = set()
+    for card_id in selected:
+        entry = by_id.get(card_id)
+        if entry is None:
+            continue
+        chain = supersedes_history(all_entities, f"{entry.kind}:{card_id}")
+        for entity in chain:
+            key = f"{entity.type}:{entity.slug}"
+            if key in seen:
+                continue
+            entities.append(entity)
+            seen.add(key)
+    return entities
+
+
 def _retrieve_matches(
     *,
     recipe: GenerationRecipe,
@@ -443,6 +473,7 @@ def _retrieve_matches(
     store: Any,
     top_k_override: int | None,
     rag_filter_override: dict[str, str] | None,
+    include_history: bool,
 ) -> list[tuple[Any, float]]:
     """provider 선별로 관련 카드 매칭 (로컬 임베딩 제거, 020).
 
@@ -475,6 +506,19 @@ def _retrieve_matches(
         return []
 
     by_id = index.by_id()
+    if include_history:
+        all_entities: list[Entity] = []
+        for kind in kinds:
+            all_entities.extend(list_entities(kind, vault_path=vault))
+        return [
+            (_card_match_from_entity(entity), 0.0)
+            for entity in _selected_history_entities(
+                selected,
+                by_id=by_id,
+                all_entities=all_entities,
+            )
+        ]
+
     matches: list[tuple[Any, float]] = []
     for card_id in selected:
         entry = by_id.get(card_id)
@@ -513,6 +557,7 @@ def generate(
     return_empty_on_no_matches: bool = False,
     rag_mode_override: RecipeRagMode | None = None,
     rag_filter_override: dict[str, str] | None = None,
+    include_history: bool = False,
 ) -> GenerationResult:
     """Recipe 1 회 실행 — orchestrator entry point.
 
@@ -555,6 +600,7 @@ def generate(
         store=store,
         top_k_override=top_k_override,
         rag_filter_override=rag_filter_override,
+        include_history=include_history,
     )
 
     if require_matched and not matched:

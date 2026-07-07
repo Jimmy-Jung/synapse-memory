@@ -24,8 +24,10 @@ from synapse_memory.endpoints.persona import (
 )
 from synapse_memory.feedback.last_response import load_last_answer
 from synapse_memory.llm.claude import ClaudeEnvironment
+from synapse_memory.model import Entity
 from synapse_memory.profile.wiki import load_profile_text
 from synapse_memory.storage.l0 import L0_ENV_VAR
+from synapse_memory.store import save_page
 
 
 def _ai_env() -> ClaudeEnvironment:
@@ -72,6 +74,50 @@ class TestWhatDidIThink:
         ):
             what_did_i_think("TCA", ai_env=_ai_env(), vault_path=tmp_path)
         assert mock_select.call_count == 1
+
+    def test_recall_includes_supersedes_history(self, tmp_path: Path) -> None:
+        save_page(
+            Entity(
+                type="insight",
+                slug="stance-v1",
+                title="Swift concurrency stance v1",
+                status="superseded",
+                created="2026-01-01T09:00:00+09:00",
+                observed_at="2026-01-01T09:00:00+09:00",
+            ),
+            vault_path=tmp_path,
+        )
+        save_page(
+            Entity(
+                type="insight",
+                slug="stance-v2",
+                title="Swift concurrency stance v2",
+                created="2026-07-01T09:00:00+09:00",
+                observed_at="2026-07-01T09:00:00+09:00",
+                supersedes=("insight:stance-v1",),
+            ),
+            vault_path=tmp_path,
+        )
+
+        def fake_complete(prompt, **kwargs):
+            assert "stance-v1" in prompt
+            assert "stance-v2" in prompt
+            return "초기 입장과 현재 입장입니다 [stance-v1] [stance-v2]."
+
+        with patch(
+            "synapse_memory.recipes.pipeline.select_related",
+            return_value=["stance-v2"],
+        ), patch(
+            "synapse_memory.recipes.pipeline.ai_api_complete",
+            side_effect=fake_complete,
+        ):
+            result = what_did_i_think(
+                "Swift concurrency stance",
+                ai_env=_ai_env(),
+                vault_path=tmp_path,
+            )
+
+        assert result.source_ids == ["stance-v2", "stance-v1"]
 
     def test_records_last_answer_reference(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

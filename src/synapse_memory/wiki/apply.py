@@ -11,9 +11,14 @@ from datetime import date
 from pathlib import Path
 
 from synapse_memory.model import Entity
-from synapse_memory.model.entity import OBSERVED_AT_TYPES, RELATION_FIELDS
+from synapse_memory.model.entity import (
+    OBSERVED_AT_TYPES,
+    RELATION_FIELDS,
+    SUPERSEDED_STATUS,
+)
 from synapse_memory.store import load_page, save_page
 from synapse_memory.wiki.integration import PageOp
+from synapse_memory.wiki.links import link_target
 
 
 def _merge_tuple(existing: tuple[str, ...], incoming: tuple[str, ...]) -> tuple[str, ...]:
@@ -58,6 +63,40 @@ def _page_for_apply(page: Entity, op: str, *, vault_path: Path | None, stamp: st
     )
 
 
+def _supersedes_target(ref: str, fallback_type: str) -> tuple[str, str]:
+    target = link_target(ref)
+    if ":" not in target:
+        return fallback_type, target
+    target_type, _, slug = target.partition(":")
+    return target_type, slug
+
+
+def _invalidate_superseded_targets(
+    page: Entity,
+    *,
+    vault_path: Path | None,
+    stamp: str,
+) -> None:
+    invalidated_at = page.observed_at or stamp
+    for ref in page.supersedes:
+        target_type, target_slug = _supersedes_target(str(ref), page.type)
+        if not target_slug:
+            continue
+        try:
+            target = load_page(target_type, target_slug, vault_path=vault_path)
+        except (FileNotFoundError, ValueError):
+            continue
+        save_page(
+            replace(
+                target,
+                status=SUPERSEDED_STATUS,
+                t_invalid=invalidated_at,
+                updated=stamp,
+            ),
+            vault_path=vault_path,
+        )
+
+
 def apply_ops(
     ops: list[PageOp],
     *,
@@ -70,5 +109,6 @@ def apply_ops(
     for op in ops:
         page = _page_for_apply(op.page, op.op, vault_path=vault_path, stamp=stamp)
         save_page(page, vault_path=vault_path)
+        _invalidate_superseded_targets(page, vault_path=vault_path, stamp=stamp)
         written.append(page.slug)
     return written

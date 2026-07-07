@@ -34,7 +34,7 @@ from synapse_memory.wiki.links import extract_wikilinks
 from synapse_memory.wiki.page import (
     slugify,
 )
-from synapse_memory.wiki.retrieval import expand_related_pages
+from synapse_memory.wiki.retrieval import expand_related_pages, expand_supersedes_history
 
 AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
 
@@ -66,13 +66,14 @@ def _retrieve_wiki(
     *,
     vault_path: Path | None = None,
     top_k: int = DEFAULT_TOP_K,
+    include_history: bool = False,
 ) -> list[Entity]:
     """provider LLM(claude|codex)로 관련 Entity를 선별·로드 (020).
 
     로컬 임베딩/벡터스토어 제거 — PageIndex를 provider에 넘겨 관련 slug를
     고른 뒤 해당 페이지를 반환한다. 빈 vault/오류 시 ``[]`` (graceful).
     """
-    all_pages = _all_pages(vault_path)
+    all_pages = _all_pages(vault_path, include_history=include_history)
     seeds = retrieve_items(
         query,
         all_pages,
@@ -80,7 +81,10 @@ def _retrieve_wiki(
         item_id=lambda page: page.slug,
         top_k=top_k,
     )
-    return expand_related_pages(query, seeds, all_pages, max_pages=top_k)
+    pages = expand_related_pages(query, seeds, all_pages, max_pages=top_k)
+    if include_history:
+        return expand_supersedes_history(pages, all_pages, max_pages=top_k)
+    return pages
 
 
 def _build_context(pages: list[Entity]) -> str:
@@ -110,9 +114,15 @@ def ask_wiki(
     ai_env: AIEnv = None,
     save: bool = False,
     today: str | None = None,
+    include_history: bool = False,
 ) -> WikiAnswer:
     """Entity-first 질의 → 합성 답변 + 인용. save=True면 insight로 환원."""
-    pages = _retrieve_wiki(query, vault_path=vault_path, top_k=top_k)
+    pages = _retrieve_wiki(
+        query,
+        vault_path=vault_path,
+        top_k=top_k,
+        include_history=include_history,
+    )
     if not pages:
         return WikiAnswer(query=query, answer=NO_RESULTS_ANSWER, sources=[])
 

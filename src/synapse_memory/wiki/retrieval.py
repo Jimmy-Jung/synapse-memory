@@ -13,7 +13,7 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
-from synapse_memory.model import Entity
+from synapse_memory.model import Entity, current_entities, supersedes_history
 from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.semantic import retrieve_items
@@ -106,6 +106,28 @@ def expand_related_pages(
     return (seeds + neighbors)[:max_pages]
 
 
+def expand_supersedes_history(
+    seeds: list[Entity],
+    all_pages: list[Entity],
+    *,
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> list[Entity]:
+    """Append supersedes chains for already-selected current pages."""
+    expanded: list[Entity] = []
+    seen: set[str] = set()
+    for page in seeds:
+        chain = supersedes_history(all_pages, f"{page.type}:{page.slug}") or (page,)
+        for entity in chain:
+            key = f"{entity.type}:{entity.slug}"
+            if key in seen:
+                continue
+            expanded.append(entity)
+            seen.add(key)
+            if len(expanded) >= max_pages:
+                return expanded
+    return expanded
+
+
 def find_related_pages(
     text: str,
     *,
@@ -113,6 +135,7 @@ def find_related_pages(
     max_pages: int = DEFAULT_MAX_PAGES,
     semantic_fn: SemanticFn | None = _DEFAULT,  # type: ignore[assignment]
     pages: list[Entity] | None = None,
+    include_history: bool = False,
 ) -> list[Entity]:
     """본문과 관련된 기존 페이지. 이름(title/slug) 매칭 + 의미 top-k + related 1-hop.
 
@@ -125,7 +148,13 @@ def find_related_pages(
     slug 기준 dedup. max_pages 상한.
     """
     haystack = text.lower()
-    all_pages = pages if pages is not None else _all_pages(vault_path)
+    all_pages = (
+        pages
+        if pages is not None
+        else _all_pages(vault_path, include_history=include_history)
+    )
+    if not include_history:
+        all_pages = list(current_entities(all_pages))
 
     matched: list[Entity] = []
     matched_slugs: set[str] = set()

@@ -40,6 +40,8 @@ types:
         type: number
       created:
         type: string
+      t_invalid:
+        type: string
       last_reviewed:
         type: string
 
@@ -78,6 +80,8 @@ types:
         type: number
       created:
         type: string
+      t_invalid:
+        type: string
       last_reviewed:
         type: string
 
@@ -93,6 +97,8 @@ types:
         items: string
       created:
         type: string
+      t_invalid:
+        type: string
 
   insight:
     folder: Insights
@@ -106,6 +112,8 @@ types:
       created:
         type: string
       observed_at:
+        type: string
+      t_invalid:
         type: string
       related:
         type: list
@@ -129,6 +137,8 @@ types:
         type: string
       observed_at:
         type: string
+      t_invalid:
+        type: string
       related:
         type: list
         items: string
@@ -145,6 +155,8 @@ types:
       confidence:
         type: number
       created:
+        type: string
+      t_invalid:
         type: string
 
 relations:

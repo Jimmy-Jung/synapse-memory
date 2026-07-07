@@ -19,6 +19,9 @@ from synapse_memory.model import (
     load_schema,
     supersedes_history,
 )
+from synapse_memory.store import load_page, save_page
+from synapse_memory.wiki.apply import apply_ops
+from synapse_memory.wiki.integration import PageOp
 from synapse_memory.wiki.metrics import calculate_relation_metrics
 from synapse_memory.wiki.retrieval import find_related_pages
 
@@ -34,19 +37,15 @@ VALID_KINDS = {
     "coverage",
 }
 VALID_STATUSES = {"supported", "xfail"}
-EXPECTED_SUPPORTED = {"CQ01", "CQ03", "CQ15"}
+EXPECTED_SUPPORTED = {"CQ01", "CQ02", "CQ03", "CQ06", "CQ07", "CQ13", "CQ15"}
 EXPECTED_XFAIL = {
-    "CQ02",
     "CQ04",
     "CQ05",
-    "CQ06",
-    "CQ07",
     "CQ08",
     "CQ09",
     "CQ10",
     "CQ11",
     "CQ12",
-    "CQ13",
     "CQ14",
 }
 
@@ -110,7 +109,11 @@ def test_supported_cq03_ask_wiki_can_answer_from_retrieved_evidence(
         Entity(type="insight", slug="provider-only-decision", title="Provider-only decision"),
         Entity(type="log", slug="log-2026-07-07", title="2026-07-07 implementation log"),
     ]
-    monkeypatch.setattr(wiki_query, "_retrieve_wiki", lambda query, *, vault_path, top_k: pages)
+    monkeypatch.setattr(
+        wiki_query,
+        "_retrieve_wiki",
+        lambda query, *, vault_path, top_k, include_history=False: pages,
+    )
     monkeypatch.setattr(
         wiki_query.ai_api,
         "complete",
@@ -135,20 +138,133 @@ def test_supported_cq15_orphan_pages_are_measurable() -> None:
     assert metrics["orphan_ratio"] == pytest.approx(1 / 3)
 
 
+def test_supported_cq02_company_status_history_uses_valid_time() -> None:
+    assert "t_invalid" in fields_for("company")
+    target = Entity(
+        type="company",
+        slug="acme-target",
+        title="Acme target",
+        status="superseded",
+        t_invalid="2026-07-07",
+    )
+    hired = Entity(
+        type="company",
+        slug="acme-hired",
+        title="Acme hired",
+        status="hired",
+        supersedes=("company:acme-target",),
+    )
+
+    history = supersedes_history([target, hired], "company:acme-hired")
+
+    assert [company.status for company in history] == ["hired", "superseded"]
+    assert history[1].t_invalid == "2026-07-07"
+
+
+def test_supported_cq06_default_retrieval_returns_current_only() -> None:
+    pages = [
+        Entity(
+            type="concept",
+            slug="old-fact",
+            title="Old Fact",
+            status="active",
+            t_invalid="2026-07-07",
+        ),
+        Entity(type="concept", slug="new-fact", title="New Fact"),
+    ]
+
+    hits = find_related_pages(
+        "Old Fact New Fact",
+        max_pages=10,
+        semantic_fn=None,
+        pages=pages,
+    )
+
+    assert [page.slug for page in hits] == ["new-fact"]
+
+
+def test_supported_cq07_recall_expands_supersedes_history(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    old = Entity(
+        type="insight",
+        slug="stance-v1",
+        title="Swift concurrency stance v1",
+        status="superseded",
+        created="2026-01-01T09:00:00+09:00",
+        observed_at="2026-01-01T09:00:00+09:00",
+    )
+    current = Entity(
+        type="insight",
+        slug="stance-v2",
+        title="Swift concurrency stance v2",
+        created="2026-07-01T09:00:00+09:00",
+        observed_at="2026-07-01T09:00:00+09:00",
+        supersedes=("insight:stance-v1",),
+    )
+    save_page(old, vault_path=tmp_path)
+    save_page(current, vault_path=tmp_path)
+
+    def fake_retrieve_items(*args: object, **kwargs: object) -> list[Entity]:
+        all_pages = args[1]
+        return [page for page in all_pages if page.slug == "stance-v2"]
+
+    def fake_complete(prompt: str, *args: object, **kwargs: object) -> str:
+        if "[[stance-v1]]" in prompt:
+            return "초기 입장은 v1입니다 [[stance-v1]] 현재 입장은 v2입니다 [[stance-v2]]"
+        return "현재 입장은 v2입니다 [[stance-v2]]"
+
+    monkeypatch.setattr(wiki_query, "retrieve_items", fake_retrieve_items)
+    monkeypatch.setattr(wiki_query.ai_api, "complete", fake_complete)
+
+    answer = wiki_query.ask_wiki(
+        "Swift concurrency stance 시간순 변화",
+        vault_path=tmp_path,
+        include_history=True,
+    )
+
+    assert answer.sources == ["stance-v1", "stance-v2"]
+
+
+def test_supported_cq13_apply_supersedes_invalidates_target(tmp_path: Path) -> None:
+    save_page(
+        Entity(type="company", slug="acme-v1", title="Acme", status="target"),
+        vault_path=tmp_path,
+    )
+
+    apply_ops(
+        [
+            PageOp(
+                op="create",
+                page=Entity(
+                    type="company",
+                    slug="acme-v2",
+                    title="Acme",
+                    status="hired",
+                    supersedes=("company:acme-v1",),
+                ),
+            )
+        ],
+        vault_path=tmp_path,
+        today="2026-07-07",
+    )
+
+    invalidated = load_page("company", "acme-v1", vault_path=tmp_path)
+    assert invalidated.status == "superseded"
+    assert invalidated.t_invalid == "2026-07-07"
+
+
 @pytest.mark.parametrize(
     "cq_id",
     [
-        pytest.param("CQ02", marks=pytest.mark.xfail(reason="company status valid-time 이력은 Step 5 대상", strict=True)),
         pytest.param("CQ04", marks=pytest.mark.xfail(reason="broader/narrower 계층 관계는 Step 7 게이트 대상", strict=True)),
         pytest.param("CQ05", marks=pytest.mark.xfail(reason="part_of transitive closure는 Step 7 대상", strict=True)),
-        pytest.param("CQ06", marks=pytest.mark.xfail(reason="t_invalid active filter는 Step 5 대상", strict=True)),
-        pytest.param("CQ07", marks=pytest.mark.xfail(reason="supersedes recall 배선은 Step 5 대상", strict=True)),
         pytest.param("CQ08", marks=pytest.mark.xfail(reason="same_as entity-resolution은 Step 7 대상", strict=True)),
         pytest.param("CQ09", marks=pytest.mark.xfail(reason="concept.kind 분류는 Step 6 대상", strict=True)),
         pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 provenance 확장 대상", strict=True)),
         pytest.param("CQ11", marks=pytest.mark.xfail(reason="ask 경로의 관계 타입별 grouping 미구현 — 후속 retrieval 대상", strict=True)),
         pytest.param("CQ12", marks=pytest.mark.xfail(reason="episodic/semantic 분리 검색은 후속 retrieval 대상", strict=True)),
-        pytest.param("CQ13", marks=pytest.mark.xfail(reason="supersedes 감사 조회는 Step 5 대상", strict=True)),
         pytest.param("CQ14", marks=pytest.mark.xfail(reason="반복 log 승격은 후속 semantic promotion 대상", strict=True)),
     ],
 )

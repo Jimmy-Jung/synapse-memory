@@ -19,6 +19,7 @@ COMMON_FIELDS: tuple[str, ...] = (
     "status",
     "created",
     "updated",
+    "t_invalid",
     "sources",
     "related",
 )
@@ -69,6 +70,7 @@ class Entity:
     created: str | None = None
     updated: str = ""
     observed_at: str | None = None
+    t_invalid: str = ""
     sources: tuple[Any, ...] = ()
     body: str = ""
     attrs: dict[str, Any] = field(default_factory=dict)
@@ -89,6 +91,7 @@ class Entity:
         attrs = dict(self.attrs or {})
         legacy_created = attrs.pop("created", "")
         legacy_observed_at = attrs.pop("observed_at", "")
+        legacy_t_invalid = attrs.pop("t_invalid", "")
         legacy_related = attrs.pop("related", ())
         if not self.status:
             statuses = statuses_for(self.type)
@@ -108,6 +111,7 @@ class Entity:
                 self.observed_at = str(self.observed_at or "")
         else:
             self.observed_at = ""
+        self.t_invalid = str(self.t_invalid or legacy_t_invalid or "")
         if self.updated:
             try:
                 date.fromisoformat(str(self.updated))
@@ -193,7 +197,7 @@ class Entity:
 
     @property
     def is_current(self) -> bool:
-        return not self.is_superseded
+        return not self.is_superseded and not self.t_invalid
 
 
 def parse_entity(text: str) -> Entity:
@@ -219,6 +223,8 @@ def serialize_entity(entity: Entity) -> str:
         meta["updated"] = entity.updated
     if entity.type in OBSERVED_AT_TYPES and entity.observed_at:
         meta["observed_at"] = entity.observed_at
+    if entity.t_invalid:
+        meta["t_invalid"] = entity.t_invalid
     if entity.sources:
         meta["sources"] = [_plain_value(source) for source in entity.sources]
     if entity.related:
@@ -270,6 +276,7 @@ def entity_from_meta(meta: dict[str, Any], body: str = "") -> Entity:
         created=str(meta.get("created") or ""),
         updated=str(meta.get("updated") or ""),
         observed_at=str(meta.get("observed_at") or ""),
+        t_invalid=str(meta.get("t_invalid") or ""),
         sources=tuple(_as_sequence(meta.get("sources"))),
         body=body,
         attrs=attrs,
