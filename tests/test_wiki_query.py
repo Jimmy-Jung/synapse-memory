@@ -5,11 +5,12 @@ import datetime
 from pathlib import Path  # noqa: F401
 
 import synapse_memory.wiki.query as q
-from synapse_memory.wiki.page import WikiPage, load_page, save_page
+from synapse_memory.model import Entity
+from synapse_memory.wiki.page import load_page, save_page
 
 
 def test_ask_wiki_synthesizes_with_citation(tmp_path, monkeypatch) -> None:
-    save_page(WikiPage(type="concept", slug="rag", title="RAG", body="검색 증강 생성"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG", body="검색 증강 생성"), vault_path=tmp_path)
     monkeypatch.setattr(q, "_retrieve_wiki",
         lambda query, *, vault_path, top_k: [load_page("concept", "rag", vault_path=vault_path)])
     monkeypatch.setattr(q.ai_api, "complete", lambda *a, **k: "RAG는 검색 증강 생성입니다 [[rag]]")
@@ -19,7 +20,7 @@ def test_ask_wiki_synthesizes_with_citation(tmp_path, monkeypatch) -> None:
 
 
 def test_ask_wiki_writeback_creates_insight(tmp_path, monkeypatch) -> None:
-    save_page(WikiPage(type="concept", slug="rag", title="RAG", body="x"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG", body="x"), vault_path=tmp_path)
     monkeypatch.setattr(q, "_retrieve_wiki",
         lambda query, *, vault_path, top_k: [load_page("concept", "rag", vault_path=vault_path)])
     monkeypatch.setattr(q.ai_api, "complete", lambda *a, **k: "답변 본문 [[rag]]")

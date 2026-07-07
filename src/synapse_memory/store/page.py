@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from synapse_memory.config import get_vault_path
 from synapse_memory.folders import year_month_path
@@ -20,9 +19,6 @@ from synapse_memory.model import (
     serialize_entity,
     uses_year_month_folder,
 )
-
-if TYPE_CHECKING:
-    from synapse_memory.wiki.page import WikiPage
 
 
 def _vault_root(vault_path: Path | None = None) -> Path:
@@ -61,19 +57,17 @@ def _dated_folder_when(page: object) -> date:
     return date.today()
 
 
-def page_path(page: WikiPage | Entity, *, vault_path: Path | None = None) -> Path:
+def page_path(page: Entity, *, vault_path: Path | None = None) -> Path:
     """페이지/엔티티의 디스크 경로."""
     when = _dated_folder_when(page) if uses_year_month_folder(page.type) else None
     return page_dir(page.type, vault_path=vault_path, when=when) / page.filename
 
 
-def save_page(page: WikiPage, *, vault_path: Path | None = None) -> Path:
-    """WikiPage -> vault 디스크. 디렉토리 자동 생성. 기존 파일 덮어씀."""
-    from synapse_memory.wiki.page import serialize_page
-
+def save_page(page: Entity, *, vault_path: Path | None = None) -> Path:
+    """Entity -> vault 디스크. 디렉토리 자동 생성. 기존 파일 덮어씀."""
     path = page_path(page, vault_path=vault_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(serialize_page(page), encoding="utf-8")
+    path.write_text(serialize_entity(page), encoding="utf-8")
     return path
 
 
@@ -83,28 +77,24 @@ def load_page(
     *,
     vault_path: Path | None = None,
     when: date | None = None,
-) -> WikiPage:
-    """타입+slug로 WikiPage 로드."""
-    from synapse_memory.wiki.page import parse_page
-
+) -> Entity:
+    """타입+slug로 Entity 로드."""
     path = _entity_file_path(page_type, slug, vault_path=vault_path, when=when)
     if not path.is_file():
-        raise FileNotFoundError(f"wiki 페이지 없음: {path}")
-    return parse_page(path.read_text(encoding="utf-8"))
+        raise FileNotFoundError(f"entity 없음: {path}")
+    return parse_entity(path.read_text(encoding="utf-8"))
 
 
 def list_pages(
     page_type: str,
     *,
     vault_path: Path | None = None,
-) -> list[WikiPage]:
-    """해당 타입 모든 WikiPage 로드. parse 실패는 skip."""
-    from synapse_memory.wiki.page import parse_page
-
-    pages = []
+) -> list[Entity]:
+    """해당 타입 모든 Entity 로드. parse 실패는 skip."""
+    pages: list[Entity] = []
     for path in _iter_markdown_paths(page_type, vault_path=vault_path):
         try:
-            pages.append(parse_page(path.read_text(encoding="utf-8")))
+            pages.append(parse_entity(path.read_text(encoding="utf-8")))
         except (ValueError, OSError):
             continue
     return sorted(pages, key=lambda page: page.slug)

@@ -1,11 +1,11 @@
-"""일일 자동 파이프라인 — raw mirror 수집 후 wiki ingest/lint.
+"""일일 자동 파이프라인 — raw mirror 수집 후 Entity ingest/lint.
 
 Steps (incremental — 이미 처리된 건 자동 skip)::
 
     1.  collect claude-code           (mirror 새 줄만)
     2.  collect codex                 (~/.codex 새 줄만)
-    3.  ingest                        (raw → 단일 Entity/wiki 모델 통합)
-    4.  lint                          (wiki 구조 lint)
+    3.  ingest                        (raw → 단일 Entity 모델 통합)
+    4.  lint                          (Entity 구조 lint)
 
 --only로 일부 단계만 건너뛰기. --dry-run으로 단계만 출력.
 
@@ -46,7 +46,7 @@ class DailyStage:
 DAILY_STAGES = (
     DailyStage("collect_claude_code", "Claude Code 로그 mirror"),
     DailyStage("collect_codex", "Codex CLI 로그 mirror"),
-    DailyStage("ingest", "Raw 대화 wiki 통합", ("collect_claude_code", "collect_codex")),
+    DailyStage("ingest", "Raw 대화 Entity 통합", ("collect_claude_code", "collect_codex")),
     DailyStage("lint", "Wiki 구조 lint", ("ingest",)),
 )
 

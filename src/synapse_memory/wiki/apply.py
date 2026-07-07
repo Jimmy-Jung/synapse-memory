@@ -10,10 +10,10 @@ from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
+from synapse_memory.model import Entity
 from synapse_memory.model.entity import OBSERVED_AT_TYPES, RELATION_FIELDS
 from synapse_memory.store import load_page, save_page
 from synapse_memory.wiki.integration import PageOp
-from synapse_memory.wiki.page import WikiPage
 
 
 def _merge_tuple(existing: tuple[str, ...], incoming: tuple[str, ...]) -> tuple[str, ...]:
@@ -27,7 +27,7 @@ def _merge_tuple(existing: tuple[str, ...], incoming: tuple[str, ...]) -> tuple[
     return tuple(merged)
 
 
-def _stamped_page(page: WikiPage, *, stamp: str, existing: WikiPage | None) -> WikiPage:
+def _stamped_page(page: Entity, *, stamp: str, existing: Entity | None) -> Entity:
     created = (existing.created if existing else "") or page.created or stamp
     observed_at = ""
     if page.type in OBSERVED_AT_TYPES:
@@ -35,7 +35,7 @@ def _stamped_page(page: WikiPage, *, stamp: str, existing: WikiPage | None) -> W
     return replace(page, created=created, updated=stamp, observed_at=observed_at)
 
 
-def _page_for_apply(page: WikiPage, op: str, *, vault_path: Path | None, stamp: str) -> WikiPage:
+def _page_for_apply(page: Entity, op: str, *, vault_path: Path | None, stamp: str) -> Entity:
     if op != "update":
         return _stamped_page(page, stamp=stamp, existing=None)
     try:
@@ -45,6 +45,7 @@ def _page_for_apply(page: WikiPage, op: str, *, vault_path: Path | None, stamp: 
     stamped = _stamped_page(page, stamp=stamp, existing=existing)
     return replace(
         stamped,
+        attrs={**existing.attrs, **stamped.attrs},
         related=_merge_tuple(existing.related, stamped.related),
         sources=_merge_tuple(existing.sources, stamped.sources),
         **{

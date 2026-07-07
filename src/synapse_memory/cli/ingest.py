@@ -266,7 +266,10 @@ def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) ->
     )
     p_obs.set_defaults(func=cmd_collect_obsidian)
 
-    ingest = subparsers.add_parser("ingest", help="wiki ingest 엔진 (raw 대화 → wiki 통합)")
+    ingest = subparsers.add_parser(
+        "ingest",
+        help="Entity ingest 엔진 (raw 대화 → 온톨로지 통합)",
+    )
     ingest.add_argument("--now", action="store_true", help="즉시 1회 ingest")
     ingest.add_argument("--dry-run", action="store_true", help="적용 없이 결과만 표시")
     _add_ingest_args(ingest)

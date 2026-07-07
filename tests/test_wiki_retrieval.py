@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from synapse_memory.wiki.page import WikiPage, save_page
+from synapse_memory.model import Entity
+from synapse_memory.wiki.page import save_page
 from synapse_memory.wiki.retrieval import find_related_pages
 
 
 def test_name_match_by_title_and_slug(tmp_path: Path) -> None:
-    save_page(WikiPage(type="project", slug="synapse-memory", title="Synapse Memory"), vault_path=tmp_path)
-    save_page(WikiPage(type="company", slug="acme", title="Acme Corp"), vault_path=tmp_path)
+    save_page(Entity(type="project", slug="synapse-memory", title="Synapse Memory"), vault_path=tmp_path)
+    save_page(Entity(type="company", slug="acme", title="Acme Corp"), vault_path=tmp_path)
     hits = find_related_pages("오늘 Synapse Memory 작업했다", vault_path=tmp_path, max_pages=10, semantic_fn=None)
     slugs = {p.slug for p in hits}
     assert "synapse-memory" in slugs
@@ -22,9 +23,9 @@ def test_name_match_by_title_and_slug(tmp_path: Path) -> None:
 
 
 def test_one_hop_link_expansion(tmp_path: Path) -> None:
-    save_page(WikiPage(type="project", slug="synapse-memory", title="Synapse Memory",
+    save_page(Entity(type="project", slug="synapse-memory", title="Synapse Memory",
                        related=("[[rag]]",)), vault_path=tmp_path)
-    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     hits = find_related_pages("Synapse Memory 진행", vault_path=tmp_path, max_pages=10, semantic_fn=None)
     slugs = {p.slug for p in hits}
     assert "synapse-memory" in slugs
@@ -33,7 +34,7 @@ def test_one_hop_link_expansion(tmp_path: Path) -> None:
 
 def test_one_hop_typed_relation_expansion(tmp_path: Path) -> None:
     save_page(
-        WikiPage(
+        Entity(
             type="project",
             slug="synapse-memory",
             title="Synapse Memory",
@@ -41,7 +42,7 @@ def test_one_hop_typed_relation_expansion(tmp_path: Path) -> None:
         ),
         vault_path=tmp_path,
     )
-    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     hits = find_related_pages(
         "Synapse Memory 진행",
         vault_path=tmp_path,
@@ -55,12 +56,12 @@ def test_one_hop_typed_relation_expansion(tmp_path: Path) -> None:
 
 def test_respects_max_pages(tmp_path: Path) -> None:
     for i in range(5):
-        save_page(WikiPage(type="concept", slug=f"c{i}", title=f"Concept{i}"), vault_path=tmp_path)
+        save_page(Entity(type="concept", slug=f"c{i}", title=f"Concept{i}"), vault_path=tmp_path)
     text = " ".join(f"Concept{i}" for i in range(5))
     hits = find_related_pages(text, vault_path=tmp_path, max_pages=2, semantic_fn=None)
     assert len(hits) == 2
 
 
 def test_no_match_returns_empty(tmp_path: Path) -> None:
-    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     assert find_related_pages("관련 없는 내용", vault_path=tmp_path, semantic_fn=None) == []

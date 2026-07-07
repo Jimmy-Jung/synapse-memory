@@ -8,7 +8,7 @@ from datetime import date, datetime
 from typing import Any
 
 from synapse_memory.model.frontmatter import parse_frontmatter, serialize_frontmatter
-from synapse_memory.model.schema import entity_types, fields_for, relation_fields
+from synapse_memory.model.schema import entity_types, fields_for, relation_fields, statuses_for
 
 ENTITY_TYPES = entity_types()
 RELATION_FIELDS = relation_fields()
@@ -20,6 +20,7 @@ COMMON_FIELDS: tuple[str, ...] = (
     "created",
     "updated",
     "sources",
+    "related",
 )
 OBSERVED_AT_TYPES: tuple[str, ...] = ("insight", "log")
 SUPERSEDED_STATUS = "superseded"
@@ -64,13 +65,14 @@ class Entity:
     slug: str
     title: str
     type: str
-    status: str = "active"
+    status: str = ""
     created: str | None = None
     updated: str = ""
     observed_at: str | None = None
     sources: tuple[Any, ...] = ()
     body: str = ""
     attrs: dict[str, Any] = field(default_factory=dict)
+    related: tuple[str, ...] = ()
     uses: tuple[str, ...] = ()
     part_of: tuple[str, ...] = ()
     about: tuple[str, ...] = ()
@@ -88,6 +90,10 @@ class Entity:
         attrs = dict(self.attrs or {})
         legacy_created = attrs.pop("created", "")
         legacy_observed_at = attrs.pop("observed_at", "")
+        legacy_related = attrs.pop("related", ())
+        if not self.status:
+            statuses = statuses_for(self.type)
+            self.status = statuses[0] if statuses else "active"
         if self.created is None:
             self.created = str(legacy_created or _now_iso())
         elif not self.created and legacy_created:
@@ -108,7 +114,10 @@ class Entity:
                 date.fromisoformat(str(self.updated))
             except ValueError as exc:
                 raise ValueError(f"updated 형식 오류 (YYYY-MM-DD 필요): {self.updated!r}") from exc
-        self.sources = tuple(_normalize_value(value) for value in (self.sources or ()))
+        self.sources = tuple(_normalize_value(value) for value in _as_sequence(self.sources))
+        self.related = tuple(
+            str(value) for value in _as_sequence(self.related or legacy_related)
+        )
         for key in RELATION_FIELDS:
             setattr(self, key, tuple(str(value) for value in _as_sequence(getattr(self, key))))
         self.attrs = _normalize_attrs(self.type, attrs)
@@ -213,6 +222,8 @@ def serialize_entity(entity: Entity) -> str:
         meta["observed_at"] = entity.observed_at
     if entity.sources:
         meta["sources"] = [_plain_value(source) for source in entity.sources]
+    if entity.related:
+        meta["related"] = list(entity.related)
     for key in RELATION_FIELDS:
         values = tuple(getattr(entity, key) or ())
         if values:
@@ -244,6 +255,7 @@ def entity_from_meta(meta: dict[str, Any], body: str = "") -> Entity:
         if key not in COMMON_FIELDS
         and key not in RELATION_FIELDS
         and key != "observed_at"
+        and key != "related"
         and key in meta
         and meta[key] is not None
     }
@@ -255,13 +267,14 @@ def entity_from_meta(meta: dict[str, Any], body: str = "") -> Entity:
         slug=str(slug),
         title=str(title),
         type=entity_type,
-        status=str(meta.get("status") or "active"),
+        status=str(meta.get("status") or ""),
         created=str(meta.get("created") or ""),
         updated=str(meta.get("updated") or ""),
         observed_at=str(meta.get("observed_at") or ""),
-        sources=tuple(meta.get("sources") or ()),
+        sources=tuple(_as_sequence(meta.get("sources"))),
         body=body,
         attrs=attrs,
+        related=tuple(str(value) for value in _as_sequence(meta.get("related"))),
         **relation_values,
     )
 

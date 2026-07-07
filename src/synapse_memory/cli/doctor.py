@@ -107,7 +107,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         else:
             print(f"{FAIL} {wp_result.message}")
     except Exception as exc:
-        print(f"⚠ wiki 페이지 진단 실패: {exc}")
+        print(f"⚠ Entity 진단 실패: {exc}")
 
     try:
         from synapse_memory.config import describe_privacy_mode, load_config
@@ -118,12 +118,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         else:
             print(f"⚠ {wm_result.message}")
         cfg = load_config()
-        print(f"{OK} wiki maintenance engine: {cfg.maintenance.engine}")
+        print(f"{OK} Entity maintenance engine: {cfg.maintenance.engine}")
         privacy_mode = describe_privacy_mode(cfg)
         print(f"{OK} privacy mode ingest: {privacy_mode.ingest}")
         print(f"{OK} privacy mode query: {privacy_mode.query}")
     except Exception as exc:
-        print(f"⚠ wiki 유지 데몬 진단 실패: {exc}")
+        print(f"⚠ Entity 유지 데몬 진단 실패: {exc}")
 
     try:
         from synapse_memory.hooks.install import diagnose_session_hook

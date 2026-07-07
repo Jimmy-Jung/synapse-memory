@@ -1,8 +1,8 @@
 # src/synapse_memory/wiki/retrieval.py
-"""관련 기존 페이지 선별 (R2 부분구현: 이름매칭 + 1-hop).
+"""관련 기존 Entity 선별 (R2 부분구현: 이름매칭 + 1-hop).
 
 의미유사도 top-k는 P2(rag 재조준)에서 추가. 여기서는 임베딩 없이
-페이지 title/slug의 본문 등장 + 그 페이지의 related 1-hop 이웃만.
+Entity title/slug의 본문 등장 + related/typed relation 1-hop 이웃만.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-06-14
@@ -12,11 +12,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from synapse_memory.model import Entity
 from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.semantic import retrieve_items
 from synapse_memory.wiki.links import extract_wikilinks, neighbor_links
-from synapse_memory.wiki.page import WikiPage
 
 DEFAULT_MAX_PAGES = 12
 
@@ -26,7 +26,7 @@ _DEFAULT = object()
 SemanticFn = Callable[..., list[str]]
 
 
-def _find_page_by_slug(slug: str, pages: list[WikiPage]) -> WikiPage | None:
+def _find_page_by_slug(slug: str, pages: list[Entity]) -> Entity | None:
     for p in pages:
         if p.slug == slug:
             return p
@@ -34,12 +34,12 @@ def _find_page_by_slug(slug: str, pages: list[WikiPage]) -> WikiPage | None:
 
 
 def _expand_neighbors(
-    seeds: list[WikiPage],
+    seeds: list[Entity],
     matched_slugs: set[str],
-    all_pages: list[WikiPage],
-) -> list[WikiPage]:
+    all_pages: list[Entity],
+) -> list[Entity]:
     """seeds의 related/typed relation 1-hop 이웃을 (이미 매칭된 것 제외) 수집."""
-    neighbors: list[WikiPage] = []
+    neighbors: list[Entity] = []
     for p in seeds:
         for link in neighbor_links(p):
             for target in (extract_wikilinks(link) or [link.strip("[]")]):
@@ -58,8 +58,8 @@ def find_related_pages(
     vault_path: Path | None = None,
     max_pages: int = DEFAULT_MAX_PAGES,
     semantic_fn: SemanticFn | None = _DEFAULT,  # type: ignore[assignment]
-    pages: list[WikiPage] | None = None,
-) -> list[WikiPage]:
+    pages: list[Entity] | None = None,
+) -> list[Entity]:
     """본문과 관련된 기존 페이지. 이름(title/slug) 매칭 + 의미 top-k + related 1-hop.
 
     의미검색 토글:
@@ -73,7 +73,7 @@ def find_related_pages(
     haystack = text.lower()
     all_pages = pages if pages is not None else _all_pages(vault_path)
 
-    matched: list[WikiPage] = []
+    matched: list[Entity] = []
     matched_slugs: set[str] = set()
     for p in all_pages:
         if p.slug in matched_slugs:

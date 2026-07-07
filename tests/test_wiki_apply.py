@@ -7,14 +7,18 @@ from pathlib import Path
 
 import pytest
 
+from synapse_memory.model import Entity
 from synapse_memory.wiki.apply import apply_ops
 from synapse_memory.wiki.integration import PageOp
 from synapse_memory.wiki.lint import validate_schema_rules
-from synapse_memory.wiki.page import WikiPage, load_page, save_page
+from synapse_memory.wiki.page import load_page, save_page
 
 
 def test_apply_creates_page_and_stamps_updated(tmp_path: Path) -> None:
-    op = PageOp(op="create", page=WikiPage(type="concept", slug="rag", title="RAG", body="b"))
+    op = PageOp(
+        op="create",
+        page=Entity(type="concept", slug="rag", title="RAG", created="", body="b"),
+    )
     written = apply_ops([op], vault_path=tmp_path, today="2026-06-14")
     assert written == ["rag"]
     saved = load_page("concept", "rag", vault_path=tmp_path)
@@ -24,16 +28,62 @@ def test_apply_creates_page_and_stamps_updated(tmp_path: Path) -> None:
     assert "created:" in (tmp_path / "Concepts" / "rag.md").read_text(encoding="utf-8")
 
 
+def test_apply_project_preserves_typed_attrs_relations_and_created(
+    tmp_path: Path,
+) -> None:
+    save_page(Entity(type="concept", slug="swift", title="Swift"), vault_path=tmp_path)
+    op = PageOp(
+        op="create",
+        page=Entity(
+            type="project",
+            slug="ios-app",
+            title="iOS App",
+            created="",
+            uses=("swift",),
+            attrs={
+                "role": "iOS Lead",
+                "period_start": "2026-01",
+                "period_end": "2026-03",
+                "domains": ["ios", "education"],
+                "stack": ["Swift", "SwiftUI"],
+                "metrics": [
+                    {"name": "launch_time", "before": "2.0s", "after": "1.2s"},
+                    {"name": "retention", "value": "+8pp"},
+                ],
+                "keywords": ["mobile", "learning"],
+            },
+            body="typed attrs",
+        ),
+    )
+
+    apply_ops([op], vault_path=tmp_path, today="2026-07-07")
+
+    path = tmp_path / "Entities/Projects" / "ios-app.md"
+    text = path.read_text(encoding="utf-8")
+    saved = load_page("project", "ios-app", vault_path=tmp_path)
+    assert saved.created == "2026-07-07"
+    assert saved.uses == ("swift",)
+    assert saved.attrs["period_start"] == "2026-01"
+    assert saved.attrs["period_end"] == "2026-03"
+    assert saved.attrs["metrics"][0].name == "launch_time"
+    assert "created:" in text
+    assert "2026-07-07" in text
+    assert "period_start:" in text
+    assert "2026-01" in text
+    assert "metrics:" in text
+    assert "uses:\n- swift\n" in text
+
+
 def test_apply_creates_page_with_dead_related_link(tmp_path: Path) -> None:
-    op = PageOp(op="create", page=WikiPage(type="project", slug="p", title="P",
-                related=("[[ghost]]",), body="b"))
+    op = PageOp(op="create", page=Entity(type="project", slug="p", title="P",
+                created="", related=("[[ghost]]",), body="b"))
     written = apply_ops([op], vault_path=tmp_path, today="2026-06-14")
     assert written == ["p"]
 
 
 def test_apply_update_preserves_existing_sources_and_related(tmp_path: Path) -> None:
     save_page(
-        WikiPage(
+        Entity(
             type="project",
             slug="tablet",
             title="Tablet",
@@ -45,7 +95,7 @@ def test_apply_update_preserves_existing_sources_and_related(tmp_path: Path) -> 
     )
     op = PageOp(
         op="update",
-        page=WikiPage(
+        page=Entity(
             type="project",
             slug="tablet",
             title="Tablet",
@@ -70,7 +120,7 @@ def test_apply_update_preserves_existing_sources_and_related(tmp_path: Path) -> 
 
 def test_apply_update_preserves_existing_created(tmp_path: Path) -> None:
     save_page(
-        WikiPage(
+        Entity(
             type="project",
             slug="tablet",
             title="Tablet",
@@ -81,7 +131,7 @@ def test_apply_update_preserves_existing_created(tmp_path: Path) -> None:
     )
     op = PageOp(
         op="update",
-        page=WikiPage(type="project", slug="tablet", title="Tablet", body="new body"),
+        page=Entity(type="project", slug="tablet", title="Tablet", body="new body"),
     )
 
     apply_ops([op], vault_path=tmp_path, today="2026-06-20")
@@ -94,9 +144,9 @@ def test_apply_update_preserves_existing_created(tmp_path: Path) -> None:
 def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
     tmp_path: Path,
 ) -> None:
-    save_page(WikiPage(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="rag", title="RAG"), vault_path=tmp_path)
     save_page(
-        WikiPage(
+        Entity(
             type="concept",
             slug="provider-retrieval",
             title="Provider Retrieval",
@@ -104,15 +154,15 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
         vault_path=tmp_path,
     )
     save_page(
-        WikiPage(type="project", slug="parent-project", title="Parent Project"),
+        Entity(type="project", slug="parent-project", title="Parent Project"),
         vault_path=tmp_path,
     )
     save_page(
-        WikiPage(type="project", slug="old-project", title="Old Project"),
+        Entity(type="project", slug="old-project", title="Old Project"),
         vault_path=tmp_path,
     )
     save_page(
-        WikiPage(
+        Entity(
             type="project",
             slug="tablet-project-alias",
             title="Tablet Project Alias",
@@ -120,7 +170,7 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
         vault_path=tmp_path,
     )
     save_page(
-        WikiPage(
+        Entity(
             type="insight",
             slug="decision-note",
             title="Decision Note",
@@ -131,7 +181,7 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
         vault_path=tmp_path,
     )
     save_page(
-        WikiPage(
+        Entity(
             type="log",
             slug="daily-log",
             title="Daily Log",
@@ -146,10 +196,11 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
         [
             PageOp(
                 op="create",
-                page=WikiPage(
+                page=Entity(
                     type="project",
                     slug="tablet",
                     title="Tablet",
+                    created="",
                     uses=("rag",),
                     part_of=("parent-project",),
                     about=("provider-retrieval",),
@@ -174,7 +225,7 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
         [
             PageOp(
                 op="update",
-                page=WikiPage(
+                page=Entity(
                     type="project",
                     slug="tablet",
                     title="Tablet",
@@ -211,7 +262,13 @@ def test_apply_create_stamps_observed_at_for_observed_types(
 ) -> None:
     op = PageOp(
         op="create",
-        page=WikiPage(type=page_type, slug="observed", title="Observed", body="b"),
+        page=Entity(
+            type=page_type,
+            slug="observed",
+            title="Observed",
+            created="",
+            body="b",
+        ),
     )
 
     apply_ops([op], vault_path=tmp_path, today="2026-06-14")

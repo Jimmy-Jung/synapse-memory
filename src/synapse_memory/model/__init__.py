@@ -27,6 +27,7 @@ from synapse_memory.model.schema import (
     load_schema,
     relation_fields,
     render_schema_guidance,
+    statuses_for,
     uses_year_month_folder,
 )
 
@@ -51,6 +52,7 @@ __all__ = [
     "render_schema_guidance",
     "serialize_entity",
     "serialize_frontmatter",
+    "statuses_for",
     "supersedes_history",
     "uses_year_month_folder",
 ]

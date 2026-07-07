@@ -1,4 +1,4 @@
-"""wiki and lint commands."""
+"""entity ask and lint commands."""
 
 from __future__ import annotations
 
@@ -26,14 +26,28 @@ def cmd_lint(args: argparse.Namespace) -> int:
     return 1 if result.has_violations else 0
 
 
-def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    wiki = subparsers.add_parser("wiki", help="wiki-first 검색 + 답변 환원")
-    wiki_sub = wiki.add_subparsers(dest="action", required=True, metavar="ACTION")
+def _register_entity_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+    name: str,
+    *,
+    help_text: str | None,
+) -> None:
+    parser = subparsers.add_parser(name, help=help_text)
+    entity_sub = parser.add_subparsers(dest="action", required=True, metavar="ACTION")
 
-    ask = wiki_sub.add_parser("ask", help="wiki 근거 질의 (인용 포함)")
+    ask = entity_sub.add_parser("ask", help="Entity/온톨로지 근거 질의 (인용 포함)")
     ask.add_argument("query", help="자연어 질의")
-    ask.add_argument("--save", action="store_true", help="답변을 insight 페이지로 환원")
+    ask.add_argument("--save", action="store_true", help="답변을 insight Entity로 환원")
     ask.set_defaults(func=cmd_wiki_ask)
+
+
+def register(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    _register_entity_parser(
+        subparsers,
+        "entity",
+        help_text="Entity/온톨로지 검색 + 답변 환원",
+    )
+    _register_entity_parser(subparsers, "wiki", help_text=argparse.SUPPRESS)
 
     lint = subparsers.add_parser("lint", help="schema.yaml 검증 + 죽은 링크 자동수정")
     lint.add_argument("--now", action="store_true", help="즉시 1회 실행")

@@ -1,4 +1,4 @@
-"""WikiPage 모델 round-trip + 검증."""
+"""Entity 모델 round-trip + 검증."""
 from __future__ import annotations
 
 from datetime import date
@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from synapse_memory.model import Entity
 from synapse_memory.wiki.page import (
-    WikiPage,
     extract_wikilinks,
     list_pages,
     load_page,
@@ -21,7 +21,7 @@ from synapse_memory.wiki.page import (
 
 
 def test_serialize_parse_round_trip() -> None:
-    page = WikiPage(
+    page = Entity(
         type="project",
         slug="synapse-memory",
         title="Synapse Memory",
@@ -70,7 +70,7 @@ def test_parse_invalid_date_raises_valueerror() -> None:
 def test_all_valid_types_round_trip() -> None:
     from synapse_memory.wiki.page import VALID_TYPES
     for t in VALID_TYPES:
-        page = WikiPage(type=t, slug="s", title="T", body="b")
+        page = Entity(type=t, slug="s", title="T", body="b")
         assert parse_page(serialize_page(page)) == page
 
 
@@ -101,7 +101,7 @@ def test_page_dir_rejects_unknown_type(tmp_path: Path) -> None:
 
 
 def test_save_load_round_trip(tmp_path: Path) -> None:
-    page = WikiPage(
+    page = Entity(
         type="concept",
         slug="rag",
         title="RAG",
@@ -115,8 +115,8 @@ def test_save_load_round_trip(tmp_path: Path) -> None:
 
 
 def test_list_pages_sorted_and_skips_bad(tmp_path: Path) -> None:
-    save_page(WikiPage(type="concept", slug="zeta", title="Zeta"), vault_path=tmp_path)
-    save_page(WikiPage(type="concept", slug="alpha", title="Alpha"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="zeta", title="Zeta"), vault_path=tmp_path)
+    save_page(Entity(type="concept", slug="alpha", title="Alpha"), vault_path=tmp_path)
     (tmp_path / "Concepts" / "broken.md").write_text("no frontmatter", encoding="utf-8")
     pages = list_pages("concept", vault_path=tmp_path)
     assert [p.slug for p in pages] == ["alpha", "zeta"]
@@ -149,7 +149,7 @@ def test_extract_wikilinks_empty() -> None:
 
 
 def test_with_related_adds_and_dedupes() -> None:
-    page = WikiPage(type="concept", slug="rag", title="RAG", related=("[[obsidian]]",))
+    page = Entity(type="concept", slug="rag", title="RAG", related=("[[obsidian]]",))
     updated = with_related(page, "[[bm25]]")
     assert updated.related == ("[[obsidian]]", "[[bm25]]")
     # 원본 불변 확인
@@ -159,7 +159,7 @@ def test_with_related_adds_and_dedupes() -> None:
 
 
 def test_with_related_dedupes_by_target_ignoring_alias() -> None:
-    page = WikiPage(type="concept", slug="x", title="X", related=("[[a|A Title]]",))
+    page = Entity(type="concept", slug="x", title="X", related=("[[a|A Title]]",))
     # 같은 대상 a를 별칭 없이 추가 시도 → 중복 안 만듦
     assert with_related(page, "[[a]]").related == ("[[a|A Title]]",)
     # 다른 대상은 정상 추가

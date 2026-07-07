@@ -52,6 +52,15 @@ def fields_for(entity_type: str) -> dict[str, Any]:
     return fields
 
 
+def statuses_for(entity_type: str) -> tuple[str, ...]:
+    """Schema-declared status values for an entity type."""
+    types = load_schema()["types"]
+    if entity_type not in types:
+        raise ValueError(f"알 수 없는 type: {entity_type!r}")
+    statuses = types[entity_type].get("statuses") or ()
+    return tuple(str(status) for status in statuses)
+
+
 def folder_for(entity_type: str) -> str:
     """Vault folder declared for an entity type."""
     types = load_schema()["types"]
@@ -85,12 +94,42 @@ def render_schema_guidance() -> str:
         folder = spec.get("folder")
         year_month = " (YYYY/MM 하위 폴더)" if spec.get("year_month") else ""
         lines.append(f"  - {entity_type}: {folder}{year_month}; status={statuses}")
+        fields = spec.get("fields") or {}
+        if fields:
+            rendered = ", ".join(
+                f"{name}={_render_field_spec(field_spec)}"
+                for name, field_spec in fields.items()
+                if isinstance(field_spec, dict)
+            )
+            lines.append(f"    fields: {rendered}")
     lines.append("- typed relation은 domain/range를 지켜야 합니다.")
     for relation, spec in schema["relations"].items():
         domain = ", ".join(spec.get("domain") or ())
         range_ = ", ".join(spec.get("range") or ())
         lines.append(f"  - {relation}: domain={domain}; range={range_}")
     return "\n".join(lines)
+
+
+def _render_field_spec(spec: dict[str, Any]) -> str:
+    field_type = str(spec.get("type") or "any")
+    if field_type == "enum":
+        values = ", ".join(str(value) for value in (spec.get("values") or ()))
+        return f"enum[{values}]"
+    if field_type == "list":
+        items = spec.get("items")
+        if isinstance(items, dict):
+            return f"list<{_render_field_spec(items)}>"
+        return "list"
+    if field_type == "object":
+        fields = spec.get("fields") or {}
+        if isinstance(fields, dict):
+            children = ", ".join(
+                f"{name}:{_render_field_spec(child)}"
+                for name, child in fields.items()
+                if isinstance(child, dict)
+            )
+            return f"object{{{children}}}"
+    return field_type
 
 
 def _validate_schema(schema: dict[str, Any]) -> None:

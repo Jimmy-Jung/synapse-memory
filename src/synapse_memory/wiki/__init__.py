@@ -1,6 +1,7 @@
-"""v2 LLM-maintained wiki 페이지 계층."""
+"""v2 LLM-maintained Entity 계층."""
 from __future__ import annotations
 
+from synapse_memory.model import Entity
 from synapse_memory.store import (
     list_pages,
     load_page,
@@ -28,7 +29,6 @@ from synapse_memory.wiki.lint import (
 from synapse_memory.wiki.lock import FileLock, LockHeldError, default_lock_path
 from synapse_memory.wiki.page import (
     VALID_TYPES,
-    WikiPage,
     parse_page,
     serialize_page,
     slugify,
@@ -40,12 +40,12 @@ __all__ = [
     "VALID_TYPES",
     "BackfillResult",
     "CycleOutcome",
+    "Entity",
     "FileLock",
     "IngestResult",
     "LintReport",
     "LockHeldError",
     "WikiAnswer",
-    "WikiPage",
     "apply_structural_fixes",
     "ask_wiki",
     "build_plist",

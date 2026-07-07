@@ -1,10 +1,10 @@
-"""wiki lint — schema.yaml 검증 + 구조 자동 수정 (순수 Python, LLM 불필요).
+"""Entity lint — schema.yaml 검증 + 구조 자동 수정 (순수 Python, LLM 불필요).
 
 R3 원칙: "구조는 자동, 진실은 사람".
 - 구조 결함(끊긴 역링크, 죽은 링크)은 자동 수정.
 - schema.yaml 위반은 plain report로만 보고.
 
-분석기(find_*)는 list[WikiPage] 입력의 순수 함수 — 결정적, 디스크 불필요.
+분석기(find_*)는 list[Entity] 입력의 순수 함수 — 결정적, 디스크 불필요.
 
 저자: Synapse Memory Maintainers
 작성일: 2026-06-15
@@ -20,6 +20,7 @@ from typing import Any
 
 from synapse_memory.config import get_vault_path
 from synapse_memory.model import (
+    Entity,
     folder_for,
     load_schema,
     parse_frontmatter,
@@ -30,7 +31,6 @@ from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.store import save_page
 from synapse_memory.wiki.links import link_target
 from synapse_memory.wiki.log import append_log
-from synapse_memory.wiki.page import WikiPage
 
 COMMON_REQUIRED_FIELDS = ("type", "slug", "title", "status")
 INDEX_PATHS = ("index.md", "90_System/AI/index.md")
@@ -40,7 +40,7 @@ INDEX_COUNT_RE = re.compile(
 )
 
 
-def _targets(page: WikiPage) -> list[str]:
+def _targets(page: Entity) -> list[str]:
     """page.related의 각 링크에서 slug 대상을 추출 (등장순, 중복 제거)."""
     seen: dict[str, None] = {}
     for link in page.related:
@@ -50,7 +50,7 @@ def _targets(page: WikiPage) -> list[str]:
     return list(seen.keys())
 
 
-def find_dead_links(pages: list[WikiPage]) -> list[tuple[str, str]]:
+def find_dead_links(pages: list[Entity]) -> list[tuple[str, str]]:
     """A의 링크 대상이 pages에 없으면 (A, target)."""
     existing = {p.slug for p in pages}
     dead: list[tuple[str, str]] = []

@@ -47,12 +47,13 @@ class FixAction:
 
 
 def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
-    """v2 wiki 페이지 존재 점검 — entity/concept/profile/insight 합산 카운트."""
-    from synapse_memory.wiki.page import VALID_TYPES, list_pages
+    """v2 Entity 존재 점검 — entity/concept/profile/insight 합산 카운트."""
+    from synapse_memory.model import ENTITY_TYPES
+    from synapse_memory.store import list_pages
 
     vault_root = Path(vault).expanduser()
     total = 0
-    for page_type in VALID_TYPES:
+    for page_type in ENTITY_TYPES:
         total += len(list_pages(page_type, vault_path=vault_root))
 
     if total == 0:
@@ -60,15 +61,15 @@ def diagnose_wiki_pages(vault: Path | str) -> DiagnosticResult:
             check_id="wiki_pages",
             status=DiagnosticStatus.WARN,
             message=(
-                "v2 wiki 페이지 0개 — 아직 생성되지 않음. "
-                "`synapse-memory daily` 또는 `/sm:daily`로 wiki를 구축하세요."
+                "v2 Entity 0개 — 아직 생성되지 않음. "
+                "`synapse-memory daily` 또는 `/sm:daily`로 온톨로지를 구축하세요."
             ),
             target=vault_root,
         )
     return DiagnosticResult(
         check_id="wiki_pages",
         status=DiagnosticStatus.OK,
-        message=f"v2 wiki 페이지 {total}개",
+        message=f"v2 Entity {total}개",
         target=vault_root,
     )
 

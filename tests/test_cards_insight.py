@@ -56,7 +56,7 @@ def test_serialize_parse_round_trip() -> None:
 
     assert parsed.insight_id == card.insight_id
     assert parsed.question == card.question
-    assert parsed.related == ["dansim-ios", "webview-refactor"]
+    assert parsed.related == ("dansim-ios", "webview-refactor")
     assert "답변 본문" in parsed.body
 
 

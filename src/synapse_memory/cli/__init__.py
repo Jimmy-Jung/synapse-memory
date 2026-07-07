@@ -45,7 +45,7 @@ def __getattr__(name: str) -> Any:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="synapse-memory",
-        description="Personal knowledge memory & provider-only wiki layer.",
+        description="Personal knowledge memory & provider-only Entity ontology.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 

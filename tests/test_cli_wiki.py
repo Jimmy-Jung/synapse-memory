@@ -1,13 +1,13 @@
-"""cli wiki ask 서브커맨드 (ask_wiki monkeypatch). reindex 는 020 에서 제거됨."""
+"""cli entity ask 서브커맨드 (ask_wiki monkeypatch)."""
 from __future__ import annotations
 
 import synapse_memory.cli as cli
 from synapse_memory.wiki.query import WikiAnswer
 
 
-def test_cli_wiki_ask(monkeypatch, capsys):
+def test_cli_entity_ask(monkeypatch, capsys):
     monkeypatch.setattr(cli, "ask_wiki",
         lambda query, **kw: WikiAnswer(query=query, answer="답", sources=["rag"]))
-    rc = cli.main(["wiki", "ask", "RAG가 뭐야?"])
+    rc = cli.main(["entity", "ask", "RAG가 뭐야?"])
     assert rc == 0
     assert "답" in capsys.readouterr().out

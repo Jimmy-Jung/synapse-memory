@@ -12,11 +12,56 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from synapse_memory.model import render_schema_guidance
+from synapse_memory.model import Entity, fields_for, load_schema, render_schema_guidance
 from synapse_memory.model.entity import RELATION_FIELDS
-from synapse_memory.wiki.page import VALID_TYPES, WikiPage, serialize_page
+from synapse_memory.wiki.page import VALID_TYPES, serialize_page
 
 VALID_OPS = ("create", "update")
+
+
+def _json_field_schema(field_spec: dict[str, Any]) -> dict[str, Any]:
+    field_type = field_spec.get("type")
+    if field_type == "enum":
+        return {"type": "string", "enum": list(field_spec.get("values") or ())}
+    if field_type == "number":
+        return {"type": "number"}
+    if field_type == "list":
+        items = field_spec.get("items")
+        item_schema = (
+            _json_field_schema(items)
+            if isinstance(items, dict)
+            else {"type": "string"}
+        )
+        return {"type": "array", "items": item_schema}
+    if field_type == "object":
+        fields = field_spec.get("fields") or {}
+        properties = {
+            name: _json_field_schema(child)
+            for name, child in fields.items()
+            if isinstance(child, dict)
+        }
+        required = [
+            name
+            for name, child in fields.items()
+            if isinstance(child, dict) and child.get("required")
+        ]
+        schema: dict[str, Any] = {"type": "object", "properties": properties}
+        if required:
+            schema["required"] = required
+        return schema
+    return {"type": "string"}
+
+
+def _typed_field_properties() -> dict[str, Any]:
+    schema = load_schema()
+    properties: dict[str, Any] = {}
+    for entity_type in schema["types"]:
+        for field_name, field_spec in fields_for(entity_type).items():
+            if not isinstance(field_spec, dict):
+                continue
+            properties.setdefault(field_name, _json_field_schema(field_spec))
+    return properties
+
 
 INTEGRATION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -30,6 +75,10 @@ INTEGRATION_SCHEMA: dict[str, Any] = {
                     "type": {"type": "string", "enum": list(VALID_TYPES)},
                     "slug": {"type": "string"},
                     "title": {"type": "string"},
+                    "status": {"type": "string"},
+                    "created": {"type": "string"},
+                    "updated": {"type": "string"},
+                    "observed_at": {"type": "string"},
                     "body": {"type": "string"},
                     "related": {"type": "array", "items": {"type": "string"}},
                     **{
@@ -37,6 +86,7 @@ INTEGRATION_SCHEMA: dict[str, Any] = {
                         for relation in RELATION_FIELDS
                     },
                     "sources": {"type": "array", "items": {"type": "string"}},
+                    **_typed_field_properties(),
                 },
                 "required": ["op", "type", "slug", "title", "body"],
             },
@@ -52,6 +102,9 @@ INTEGRATION_SYSTEM = f"""당신은 사용자의 개인 wiki를 유지하는 사�
 - 관련된 기존 페이지가 있으면 새로 만들지 말고 그것을 갱신(op=update)하세요.
 - 정말 새로운 엔티티/개념일 때만 op=create.
 - body는 갱신/생성될 페이지의 전체 마크다운 본문(frontmatter 제외)입니다.
+- status는 type별 schema.yaml enum 중 하나를 넣으세요.
+- created/observed_at/supersedes 등 temporal/typed relation 필드는 근거가 있으면 반드시 유지하세요.
+- type별 필드(role, period_start, metrics, resume_language, positions, keywords 등)는 아래 schema.yaml 선언에 맞춰 가능한 만큼 채우세요.
 - 연결은 가능한 한 typed relation 필드로 분류하고, 값은 "slug" 문자열 목록으로 넣으세요.
 - uses: 대상 range는 concept만 허용합니다. 예: project "synapse-memory"가 concept "rag"를 쓰면 uses=["rag"].
 - decided_in: 대상 range는 insight 또는 log만 허용합니다. 예: project "synapse-memory" 결정이 insight "2026-07-provider-only"에 기록되면 decided_in=["2026-07-provider-only"].
@@ -72,11 +125,11 @@ class PageOp:
     """검증된 한 페이지 작업."""
 
     op: str
-    page: WikiPage
+    page: Entity
 
 
 def build_integration_prompt(
-    text: str, related: list[WikiPage], *, source_date: str | None = None
+    text: str, related: list[Entity], *, source_date: str | None = None
 ) -> str:
     """엔진에 보낼 user 프롬프트 (새 내용 + 관련 기존 페이지 전문).
 
@@ -124,16 +177,29 @@ def parse_ops(payload: Any) -> list[PageOp]:
         title = entry.get("title")
         if page_type not in VALID_TYPES or not slug or not title:
             continue
-        page = WikiPage(
+        attrs = {
+            field: entry[field]
+            for field in fields_for(str(page_type))
+            if field not in {"created", "observed_at", "related"}
+            and field not in RELATION_FIELDS
+            and field in entry
+            and entry[field] is not None
+        }
+        page = Entity(
             type=str(page_type),
             slug=str(slug),
             title=str(title),
+            status=str(entry.get("status") or ""),
+            created=str(entry.get("created") or ""),
+            updated=str(entry.get("updated") or ""),
+            observed_at=str(entry.get("observed_at") or ""),
             related=tuple(str(x) for x in (entry.get("related") or [])),
             sources=tuple(str(x) for x in (entry.get("sources") or [])),
             **{
                 relation: tuple(str(x) for x in (entry.get(relation) or []))
                 for relation in RELATION_FIELDS
             },
+            attrs=attrs,
             body=str(entry.get("body", "")),
         )
         ops.append(PageOp(op=op, page=page))

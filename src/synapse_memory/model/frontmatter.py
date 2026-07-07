@@ -21,7 +21,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         raise ValueError("frontmatter (--- ... ---) 없음")
     try:
         meta = yaml.safe_load(match.group("yaml")) or {}
-    except yaml.YAMLError as exc:
+    except (ValueError, yaml.YAMLError) as exc:
         raise ValueError(f"frontmatter yaml 파싱 실패: {exc}") from exc
     if not isinstance(meta, dict):
         raise ValueError(f"frontmatter가 dict 아님: {type(meta).__name__}")
@@ -35,7 +35,7 @@ def extract_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         raise ValueError("frontmatter (--- ... ---) 없음")
     try:
         meta = yaml.safe_load(match.group("yaml")) or {}
-    except yaml.YAMLError as exc:
+    except (ValueError, yaml.YAMLError) as exc:
         raise ValueError(f"frontmatter yaml 파싱 실패: {exc}") from exc
     if not isinstance(meta, dict):
         raise ValueError(f"frontmatter가 dict 아님: {type(meta).__name__}")

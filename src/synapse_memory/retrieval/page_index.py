@@ -1,4 +1,4 @@
-"""PageIndex for provider-only retrieval.
+"""Entity index for provider-only retrieval.
 
 Author: JunyoungJung
 Created: 2026-07-06
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from synapse_memory.wiki.page import WikiPage
+from synapse_memory.model import Entity
 
 DEFAULT_SUMMARY_CHARS = 200
 
@@ -53,9 +53,9 @@ def _summarize(body: str, *, max_chars: int) -> str:
 
 
 def build_page_index(
-    pages: list[WikiPage], *, summary_chars: int = DEFAULT_SUMMARY_CHARS
+    pages: list[Entity], *, summary_chars: int = DEFAULT_SUMMARY_CHARS
 ) -> PageIndex:
-    """WikiPage 목록 → PageIndex. slug 정렬로 결정적 출력."""
+    """Entity 목록 → PageIndex. slug 정렬로 결정적 출력."""
     entries = tuple(
         PageEntry(
             slug=p.slug,
@@ -65,4 +65,3 @@ def build_page_index(
         for p in sorted(pages, key=lambda p: p.slug)
     )
     return PageIndex(entries=entries)
-
