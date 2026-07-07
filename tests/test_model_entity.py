@@ -37,7 +37,6 @@ def test_entity_round_trip_preserves_project_attrs_and_relations() -> None:
         updated="2026-07-06",
         sources=("obsidian:10_Active/단심.md",),
         uses=("concept:swift",),
-        about=("concept:meditation",),
         attrs={
             "role": "iOS Lead",
             "period_start": "2023-09",
@@ -56,7 +55,6 @@ def test_entity_round_trip_preserves_project_attrs_and_relations() -> None:
 
     assert restored.type == "project"
     assert restored.uses == ("concept:swift",)
-    assert restored.about == ("concept:meditation",)
     assert restored.attrs["role"] == "iOS Lead"
     assert restored.attrs["period_start"] == "2023-09"
     assert restored.attrs["period_end"] == "2024-12"

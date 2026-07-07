@@ -203,7 +203,6 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
                     created="",
                     uses=("rag",),
                     part_of=("parent-project",),
-                    about=("provider-retrieval",),
                     decided_in=("decision-note",),
                     supersedes=("old-project",),
                     same_as=("tablet-project-alias",),
@@ -244,7 +243,6 @@ def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(
     assert saved.uses == ("rag", "provider-retrieval")
     assert saved.decided_in == ("decision-note", "daily-log")
     assert saved.part_of == ("parent-project",)
-    assert saved.about == ("provider-retrieval",)
     assert saved.supersedes == ("old-project",)
     assert saved.same_as == ("tablet-project-alias",)
     assert validate_schema_rules(vault_path=tmp_path).validation_violations == ()

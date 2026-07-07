@@ -20,7 +20,6 @@ def test_schema_is_object_with_operations() -> None:
     for relation in (
         "uses",
         "part_of",
-        "about",
         "decided_in",
         "supersedes",
         "same_as",

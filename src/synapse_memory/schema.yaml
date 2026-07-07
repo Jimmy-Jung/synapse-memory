@@ -156,19 +156,17 @@ relations:
     domain: [project, company, concept, insight, log, profile]
     range: [project, company, concept, insight, log, profile]
     cardinality: many
-  about:
-    domain: [project, company, concept, insight, log, profile]
-    range: [project, company, concept, insight, log, profile]
-    cardinality: many
   decided_in:
     domain: [project, company, concept, insight, log, profile]
     range: [insight, log]
     cardinality: many
   supersedes:
+    # 보류: Step 5(supersedes) 메커니즘 배선 전까지 emit 유도 안 함.
     domain: [project, company, concept, insight, log, profile]
     range: [project, company, concept, insight, log, profile]
     cardinality: many
   same_as:
+    # 보류: Step 7(same_as) 메커니즘 배선 전까지 emit 유도 안 함.
     domain: [project, company, concept, insight, log, profile]
     range: [project, company, concept, insight, log, profile]
     cardinality: many
