@@ -69,7 +69,6 @@ Typed relation keys are declared by `schema.yaml`:
 
 - `uses`
 - `part_of`
-- `about`
 - `decided_in`
 - `supersedes`
 - `same_as`
