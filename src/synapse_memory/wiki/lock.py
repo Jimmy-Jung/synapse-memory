@@ -44,9 +44,15 @@ class LockedOutcome:
     reason: str = "locked"
 
 
-def default_lock_path() -> Path:
-    """기본 락 경로 — L0 루트 아래 ``ingest.lock``."""
-    return l0_root() / "ingest.lock"
+def default_lock_path(source: str | None = None) -> Path:
+    """기본 락 경로 — L0 루트 아래 소스별 ``ingest-{source}.lock``.
+
+    소스별로 분리해 한 소스의 장기 backfill이 다른 소스의 watch를 굶기지 않게
+    한다. source가 None이면 legacy 전역 ``ingest.lock``.
+    """
+    if source is None:
+        return l0_root() / "ingest.lock"
+    return l0_root() / f"ingest-{source}.lock"
 
 
 def _pid_alive(pid: int) -> bool:
@@ -126,8 +132,8 @@ def run_with_ingest_lock(
     lock_path: Path | None = None,
     retry_interval_seconds: float = 0.2,
 ) -> T | LockedOutcome:
-    """모든 ingest writer가 공유하는 lock wrapper."""
-    target = lock_path or default_lock_path()
+    """소스별 ingest writer lock wrapper (소스별 락으로 소스 간 굶김 방지)."""
+    target = lock_path or default_lock_path(source)
     while True:
         try:
             with FileLock(target):
