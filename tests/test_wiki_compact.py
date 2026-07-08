@@ -22,7 +22,11 @@ from synapse_memory.wiki.compact import (
     compact_mirror_source,
     rehydrate,
 )
-from synapse_memory.wiki.offsets import load_offsets, offsets_path_for_state, save_offsets
+from synapse_memory.wiki.offsets import (
+    load_offsets,
+    offsets_log_path_for_state,
+    save_offsets,
+)
 from synapse_memory.wiki.rawdoc import iter_new_raw
 from synapse_memory.wiki.watermark import save_watermark
 
@@ -82,7 +86,7 @@ def test_compact_apply_then_collect_tail_then_rehydrate_roundtrip(tmp_path: Path
     assert mirror.stat().st_size < len(original)
     assert mirror.stat().st_mtime_ns == original_mtime_ns
     assert load_offsets(path=state_path)[ref] == mirror.stat().st_size
-    assert offsets_path_for_state(state_path).is_file()
+    assert offsets_log_path_for_state(state_path).is_file()
     assert "__offsets__" not in json.loads(state_path.read_text(encoding="utf-8"))
     assert collector_offset.read_text(encoding="utf-8") == collector_offset_before
     sidecar = mirror.with_name(mirror.name + SIDECAR_SUFFIX)
