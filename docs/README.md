@@ -31,6 +31,11 @@
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
    - raw mirror 수동 축소와 원복 (`compact-raw`)
 
+4. [버전 이력](version-history.md)
+
+   v2.0 이전에 각 기능이 언제 들어왔는지 정리합니다. 현재 기준 설명은 최상위
+   [README](../README.md)에, 전체 변경 내역은 [CHANGELOG](../CHANGELOG.md)에 있습니다.
+
 ## 한 문장으로 이해하기
 
 Synapse Memory는 내 Mac 안에서 새 노트와 AI 작업 기록을 mirror하고 typed relation으로
