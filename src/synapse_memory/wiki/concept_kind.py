@@ -23,20 +23,31 @@ Classifier = Callable[[Entity], "str | None"]
 # 순서 = 우선순위. 더 구체적인 kind(algorithm)를 먼저 검사.
 _KIND_KEYWORDS: dict[str, tuple[str, ...]] = {
     "algorithm": ("알고리즘", "algorithm", "정렬", "sort", "탐색", "search", "heap", "complexity", "빅오", "big-o"),
-    "methodology": ("방법론", "methodology", "원칙", "principle", "패턴", "pattern", "tdd", "solid", "process", "워크플로", "workflow"),
+    # "패턴/pattern"은 제외 — "Redux 패턴"·"옵저버 패턴"처럼 tool/tech를 가리키는
+    # 경우가 많아 methodology 오분류(redux→methodology)를 유발했다.
+    "methodology": ("방법론", "methodology", "원칙", "principle", "tdd", "solid", "process", "워크플로", "workflow"),
     "tool": ("도구", "tool", "cli", "플러그인", "plugin", "sdk", "프레임워크", "framework", "라이브러리", "library", "명령어"),
     "technology": ("기술", "technology", "동시성", "concurrency", "프로토콜", "protocol", "api", "런타임", "runtime"),
 }
 
 
 def heuristic_kind(entity: Entity) -> str | None:
-    """title/keywords/body에서 kind를 추정. 근거 없으면 None."""
+    """title/keywords/body에서 kind를 추정.
+
+    키워드 매칭 수가 가장 많은 kind를 고른다(first-match가 아님 — "Redux 패턴"이
+    tool 신호가 더 많아도 methodology로 새던 문제 완화). 동점이면 _KIND_KEYWORDS
+    선언 순서=구체성 우선(algorithm>methodology>tool>technology). 근거 없으면 None.
+    """
     keywords = entity.attrs.get("keywords") or ()
     text = " ".join([entity.title, *(str(k) for k in keywords), entity.body]).lower()
+    best_kind: str | None = None
+    best_score = 0
     for kind, needles in _KIND_KEYWORDS.items():
-        if any(needle.lower() in text for needle in needles):
-            return kind
-    return None
+        score = sum(1 for needle in needles if needle.lower() in text)
+        if score > best_score:  # strict > → 동점은 앞선(더 구체적) kind 유지
+            best_score = score
+            best_kind = kind
+    return best_kind
 
 
 def propose_kind_updates(

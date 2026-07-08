@@ -45,7 +45,7 @@ def run_watch_cycle(
     if idle_minutes is None:
         idle_minutes = cfg.idle_minutes
     if lock_path is None:
-        lock_path = default_lock_path()
+        lock_path = default_lock_path(source)
     # 020: bounded 단명 사이클 — limit로 메모리 천장, checkpoint_each로 doc별
     # watermark 저장(중단/kill돼도 다음 사이클이 이어서 = 재처리 악순환 차단).
     outcome = run_with_ingest_lock(

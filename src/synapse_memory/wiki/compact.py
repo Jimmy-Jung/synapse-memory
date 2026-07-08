@@ -9,6 +9,7 @@ import base64
 import gzip
 import json
 import os
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -382,12 +383,6 @@ def _rehydrate_file(
     header, dropped = _read_sidecar(sidecar)
     if header.get("kind") != _SIDECAR_KIND or header.get("ref") != ref:
         return CompactFileResult(ref=ref, path=path, status="aborted", reason="sidecar 불일치")
-    kept = path.read_bytes().splitlines(keepends=True)
-    restored = _merge_lines(
-        kept,
-        dropped,
-        line_count=_as_int(header.get("line_count"), 0),
-    )
     if not apply:
         return CompactFileResult(
             ref=ref,
@@ -401,15 +396,19 @@ def _rehydrate_file(
             sidecar_path=sidecar,
         )
 
+    kept = path.read_bytes().splitlines(keepends=True)
+    line_count = _as_int(header.get("line_count"), 0)
     stat_before = path.stat()
     temp = _temp_path(path, ".rehydrate")
     try:
-        _write_bytes_secure(temp, restored)
+        restored_size = _write_lines_secure(
+            temp, _iter_merged_lines(kept, dropped, line_count=line_count)
+        )
         mtime_ns = _as_int(header.get("mtime_ns"), stat_before.st_mtime_ns)
         os.utime(temp, ns=(stat_before.st_atime_ns, mtime_ns))
         os.replace(temp, path)
         sidecar.unlink(missing_ok=True)
-        save_offsets({ref: len(restored)}, path=watermark_path)
+        save_offsets({ref: restored_size}, path=watermark_path)
     finally:
         temp.unlink(missing_ok=True)
 
@@ -417,7 +416,7 @@ def _rehydrate_file(
         ref=ref,
         path=path,
         status="rehydrated",
-        original_size=len(restored),
+        original_size=restored_size,
         kept_size=_as_int(header.get("kept_size"), 0),
         dropped_size=_as_int(header.get("dropped_size"), 0),
         kept_lines=_as_int(header.get("kept_lines"), 0),
@@ -507,18 +506,33 @@ def _read_sidecar(path: Path) -> tuple[dict[str, object], dict[int, bytes]]:
     return header, dropped
 
 
-def _merge_lines(
+def _iter_merged_lines(
     kept_lines: list[bytes],
     dropped: dict[int, bytes],
     *,
     line_count: int,
-) -> bytes:
-    merged: list[bytes] = []
+) -> Iterator[bytes]:
+    """dropped(제거됐던 줄)+kept(보존된 줄)를 원래 line 순서로 재병합해 yield.
+
+    전체 결과를 메모리에 buffer하지 않고 줄 단위로 흘려보낸다 — rehydrate가 원본
+    크기의 추가 복사본(merged 리스트 + join 버퍼)을 들지 않게 한다.
+    """
     kept_iter = iter(kept_lines)
     for line_index in range(line_count):
         if line_index in dropped:
-            merged.append(dropped[line_index])
+            yield dropped[line_index]
         else:
-            merged.append(next(kept_iter))
-    merged.extend(kept_iter)
-    return b"".join(merged)
+            yield next(kept_iter)
+    yield from kept_iter
+
+
+def _write_lines_secure(path: Path, lines: Iterator[bytes]) -> int:
+    """줄 iterator를 안전 권한(0600) 파일로 증분 기록. 총 바이트 수 반환."""
+    ensure_secure_dir(path.parent)
+    total = 0
+    with path.open("wb") as handle:
+        for chunk in lines:
+            handle.write(chunk)
+            total += len(chunk)
+    os.chmod(path, L0_FILE_MODE)
+    return total

@@ -17,6 +17,11 @@ from synapse_memory.llm import ai_api
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.provider import _provider
 from synapse_memory.wiki.apply import apply_ops
+from synapse_memory.wiki.failures import (
+    MAX_INGEST_FAILURES,
+    clear_failure,
+    record_failure,
+)
 from synapse_memory.wiki.integration import (
     INTEGRATION_SCHEMA,
     INTEGRATION_SYSTEM,
@@ -115,6 +120,8 @@ def ingest_source(
         nonlocal max_mtime
         max_mtime = _advance_watermark(max_mtime, doc.mtime_iso)
         consumed[doc.ref] = doc.byte_size
+        if not dry_run:
+            clear_failure(doc.ref, path=watermark_path)
         if checkpoint_each and not dry_run and max_mtime:
             save_watermark(source, max_mtime, path=watermark_path)
             save_offsets({doc.ref: doc.byte_size}, path=watermark_path)
@@ -184,8 +191,20 @@ def ingest_source(
                     )
                 _checkpoint(doc)
                 continue
-            # 실패한 작은 doc은 watermark를 전진시키지 않는다 → 재실행 시 재시도.
+            # 작은 doc 실패 — 재실행 시 재시도하되, MAX_INGEST_FAILURES를 넘기면
+            # dead-letter로 격리(watermark 전진 + skip)해 스칼라 watermark 영구
+            # 동결·무한 재시도를 막는다.
             result.errors.append(f"{doc.ref}: {error_summary}")
+            if dry_run:
+                continue
+            fail_count = record_failure(doc.ref, path=watermark_path)
+            if fail_count >= MAX_INGEST_FAILURES:
+                result.docs_skipped += 1
+                append_log(
+                    f"ingest {source}: dead-lettered {doc.ref} "
+                    f"after {fail_count} failures ({error_summary})",
+                )
+                _checkpoint(doc)
             continue
         # 성공 경로에서만 watermark 후보를 전진시킨다.
         _checkpoint(doc)

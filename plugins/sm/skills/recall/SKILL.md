@@ -10,13 +10,14 @@ description: Use when the user wants to recall how their thinking on a topic evo
 ## 실행
 
 ```bash
-SYNAPSE_FROM_AGENT=1 synapse-memory persona what-did-i-think "<주제>" [--hybrid] [--timeline] [--by time|distance] [--limit N]
+SYNAPSE_FROM_AGENT=1 synapse-memory persona what-did-i-think "<주제>" [--timeline] [--by time|distance] [--limit N]
 ```
 
 - `--timeline`: 날짜순으로 입장 변화 요약
 - `--by`: 정렬 기준 (time / 의미 거리)
+- `--limit`: 출력 카드 최대 수 (기본 20)
 
 ## ask와의 차이
 
-- `ask`: "X가 뭐야?" / "X 찾아줘" — 단발 RAG 질의
+- `ask`: "X가 뭐야?" / "X 찾아줘" — 단발 질의
 - `recall`: "X에 대한 내 생각 변화" — 시간축 기반 자기 회상

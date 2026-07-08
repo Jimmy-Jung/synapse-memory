@@ -12,6 +12,7 @@ from pathlib import Path
 from synapse_memory.model import ENTITY_TYPES, RELATION_FIELDS, Entity
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.store import list_current_entities
+from synapse_memory.wiki.links import reverse_relations
 
 MetricValue = int | float
 
@@ -26,15 +27,26 @@ def concepts_by_kind(entities: Iterable[Entity], kind: str) -> list[Entity]:
 
 
 def calculate_relation_metrics(entities: Iterable[Entity]) -> dict[str, MetricValue]:
-    """Calculate relation coverage metrics from Entity objects."""
+    """Calculate relation coverage metrics from Entity objects.
+
+    typed 관계 참여 여부는 outbound(자기 relation) + inbound(다른 페이지가 이
+    페이지를 가리킴) 둘 다로 판정한다. inbound-only 허브(예: tuist·uikit·mcp)를
+    orphan으로 오집계하던 방향맹을 제거한다.
+    """
     pages = tuple(entities)
     total = len(pages)
-    typed_pages = sum(1 for page in pages if _has_typed_relation(page))
+    # slug → [(relation, source)] : 이 페이지를 가리키는 inbound typed 엣지.
+    inbound = reverse_relations(list(pages))
+
+    def _participates(page: Entity) -> bool:
+        return _has_typed_relation(page) or bool(inbound.get(page.slug))
+
+    typed_pages = sum(1 for page in pages if _participates(page))
     legacy_related_only = sum(
-        1 for page in pages if _has_related(page) and not _has_typed_relation(page)
+        1 for page in pages if _has_related(page) and not _participates(page)
     )
     orphan_pages = sum(
-        1 for page in pages if not _has_related(page) and not _has_typed_relation(page)
+        1 for page in pages if not _has_related(page) and not _participates(page)
     )
 
     return {

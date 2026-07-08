@@ -2,6 +2,20 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [2.0.1] — 2026-07-08
+
+리뷰(종합 2/5)에서 지적된 무인운영 Ship Blocker + 검색·데이터 품질 gap을 코드 레벨로 해소한 패치 릴리즈.
+
+### Fixed
+
+- **무인운영**: 소스별 ingest 락(`ingest-{source}.lock`, PID-liveness stale 재획득) + small-doc dead-letter(연속 실패 격리)로 전역락 굶김·watermark 영구동결·silent loss 제거.
+- **헤드라인 ask 일원화**: `ask`를 Card RAG(`endpoints.ask`) → 온톨로지 경로(`wiki.query.ask_wiki`)로 재배선. typed relation·concept·log가 답변에 도달.
+- **relation 지표 방향맹**: coverage/orphan 계산에 inbound typed 엣지 반영 — inbound-only 허브(tuist·uikit·mcp) orphan 오집계 제거.
+- **버전 정합 게이트**: 정체된 codex 매니페스트 정렬 + `test_version_consistency`로 pyproject 대비 drift CI 차단.
+- **offset 영속화 O(N²)**: append-only JSONL 로그로 전환(checkpoint O(1)); rehydrate 스트리밍 write로 전체버퍼 복사 제거.
+- **분류/회귀 가드**: concept.kind first-match → 스코어링(redux류 methodology 오분류 완화); CLI 디스패치 스모크(`ask` 이름충돌 seam).
+- **문서 정리**: ask/recall 문서가 provider-only 반영(dense+BM25 RRF 문구 제거), specs/021 design의 삭제된 `about` relation 제거.
+
 ## [2.0.0] — 2026-07-07
 
 구조 리디자인 (big-bang) + 온톨로지 완성. 설계: `specs/021-unified-model/design.md`,

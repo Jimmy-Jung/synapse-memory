@@ -1,23 +1,21 @@
 ---
 name: ask
-description: Use when the user asks a natural-language question that should be answered from their Obsidian vault / Card store via local RAG (e.g. "내 vault에서 X 찾아줘", "내가 작성한 X 자료 보여줘"). Synthesizes an answer with citations from Project/Company Cards and raw chunks.
+description: Use when the user asks a natural-language question that should be answered from their Obsidian vault ontology (concepts, projects, logs and the typed relations between them). Synthesizes an answer with `[[slug]]` Entity citations.
 ---
 
-# /sm:ask — vault RAG 질의
+# /sm:ask — vault 온톨로지 질의
 
-사용자가 본인 vault에 저장된 메모·Card·raw 노트에서 무언가를 찾아달라고 하면 이 skill을 호출합니다.
+사용자가 본인 vault에 저장된 개념·프로젝트·로그와 그 관계에서 무언가를 찾아달라고 하면 이 skill을 호출합니다.
 
 ## 실행
 
 ```bash
-SYNAPSE_FROM_AGENT=1 synapse-memory ask "<질의>" [--hybrid] [--kind project|company] [--top-k N]
+SYNAPSE_FROM_AGENT=1 synapse-memory ask "<질의>" [--top-k N]
 ```
 
-- `--hybrid`: dense + BM25 RRF 검색
-- `--kind`: 특정 Card 종류로 제한
-- `--top-k`: 검색 결과 개수
+- `--top-k`: 선별할 Entity 개수
 
-출력은 합성된 답변 + 출처(Card/raw chunk 이름) 인용을 포함합니다. 출처를 그대로 보존해서 사용자에게 전달하세요.
+출력은 합성된 답변 + 출처(`[[slug]]` Entity 인용)를 포함합니다. AI provider가 vault Entity를 선별하고 typed relation을 근거로 답변합니다. 출처를 그대로 보존해서 사용자에게 전달하세요.
 
 ## 언제 쓰면 안 되는가
 

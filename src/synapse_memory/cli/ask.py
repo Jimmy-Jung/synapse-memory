@@ -20,23 +20,22 @@ def cmd_ask(args: argparse.Namespace) -> int:
             print(f"  - {reason}", file=sys.stderr)
         return 2
 
-    where: dict[str, object] | None = None
-    if args.kind:
-        where = {"source_kind": f"card_{args.kind}"}
-
     try:
-        # api()=synapse_memory.cli 패키지. cli/ask.py 서브모듈이 패키지의 lazy
-        # __getattr__를 shadow해 api().ask가 이 모듈 자신(callable 아님)을 가리킨다.
-        # endpoints ask 함수를 직접 import해 이름 충돌을 회피한다.
-        from synapse_memory.endpoints.ask import ask as ask_endpoint
+        # 헤드라인 ask를 2.0.0 온톨로지 경로(ask_wiki)로 일원화한다. typed relation·
+        # reverse edge·concept·log가 전부 Entity 경로에만 있어, 옛 Card RAG(endpoints.
+        # ask)로는 2.0.0의 관계인지 답변에 닿지 못했다.
+        # api()=synapse_memory.cli 패키지이고 cli/ask.py 서브모듈이 lazy __getattr__를
+        # shadow하므로 ask_wiki를 직접 import해 이름 충돌을 회피한다.
+        # --kind/--hybrid는 옛 Card RAG 플래그라 Entity 경로에서는 무시한다.
+        # ponytail: Card 전용(project/company 요약) 질의는 이 경로로 답이 빌 수 있음 —
+        # 필요하면 pages=0일 때 endpoints.ask fallback을 그때 추가.
+        from synapse_memory.wiki.query import ask_wiki
 
-        result = ask_endpoint(
+        result = ask_wiki(
             args.query,
             top_k=args.top_k,
             model=args.model,
             ai_env=ai_env,
-            where=where,
-            hybrid=args.hybrid,
             save=args.save,
         )
     except api().AIError as exc:
@@ -48,11 +47,11 @@ def cmd_ask(args: argparse.Namespace) -> int:
     print()
     print("=" * 60)
     print(f"출처 ({len(result.sources)}):")
-    for source in result.sources:
-        print(f"  {source.source_kind:<14} {source.card_id} — {source.display_name}")
-    if result.saved_path is not None:
+    for slug in result.sources:
+        print(f"  [[{slug}]]")
+    if result.saved_slug is not None:
         print()
-        print(f"저장: {result.saved_path}")
+        print(f"저장: [[{result.saved_slug}]]")
     return 0
 
 
