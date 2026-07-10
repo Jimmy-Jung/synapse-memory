@@ -2,6 +2,26 @@
 
 All notable changes to Synapse Memory are documented here.
 
+## [Unreleased]
+
+## [2.0.2] — 2026-07-10
+
+### Changed
+
+- **GPT-5.6 task routing**: Codex 기본 작업을 Sol(복잡한 답변·결정·이력서),
+  Terra(wiki 통합·회상·Profile·일반 생성), Luna(분류·관련 페이지 선별)로 분리했다.
+  CLI `--model`, recipe frontmatter, 사용자 config override는 기존처럼 우선한다.
+- **provider-aware fallback**: manual/daily/backfill/watch ingest와 직접 Python API,
+  builtin recipe가 `sonnet` 또는 adapter 기본값으로 새지 않고 실제 provider의 task 모델을
+  사용한다.
+
+### Fixed
+
+- **기존 설정 호환성**: v2.0.1이 자동 저장한 Codex GPT-5.5 기본 설정은 GPT-5.6 task
+  배정으로 승격하고, 사용자가 명시한 shared task 모델 pin은 그대로 보존한다.
+- **설계 초안 라우팅**: `persona design-project`가 resume(Sol) 대신 일반 생성(Terra)
+  task 모델을 사용한다.
+
 ## [2.0.1] — 2026-07-08
 
 리뷰(종합 2/5)에서 지적된 무인운영 Ship Blocker + 검색·데이터 품질 gap을 코드 레벨로 해소한 패치 릴리즈.
