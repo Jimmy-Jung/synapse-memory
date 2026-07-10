@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path  # noqa: F401
+from types import SimpleNamespace
 
 import synapse_memory.wiki.query as q
 from synapse_memory.model import Entity
@@ -78,3 +79,40 @@ def test_retrieve_wiki_expands_provider_seed_reverse_uses(tmp_path, monkeypatch)
     )
 
     assert [page.slug for page in hits] == ["swift-concurrency", "async-project"]
+
+
+def test_ask_wiki_uses_injected_environment_for_retrieval_and_ask_model(
+    tmp_path, monkeypatch
+) -> None:
+    page = Entity(type="concept", slug="rag", title="RAG", body="검색 증강 생성")
+    save_page(page, vault_path=tmp_path)
+    env = SimpleNamespace(provider="claude", model="sonnet")
+    captured: dict[str, object] = {}
+
+    def fake_retrieve_items(*_args: object, **kwargs: object) -> list[Entity]:
+        captured["env"] = kwargs.get("env")
+        return [page]
+
+    def fake_resolve_model(task: str, *, provider: str | None = None) -> str:
+        captured["task"] = task
+        captured["provider"] = provider
+        return "claude-opus"
+
+    def fake_complete(*_args: object, model: str | None = None, env: object = None, **_kwargs: object) -> str:
+        captured["model"] = model
+        captured["complete_env"] = env
+        return "답변 [[rag]]"
+
+    monkeypatch.setattr(q, "retrieve_items", fake_retrieve_items)
+    monkeypatch.setattr(q.ai_api, "resolve_model_for_task", fake_resolve_model)
+    monkeypatch.setattr(q.ai_api, "complete", fake_complete)
+
+    q.ask_wiki("RAG가 뭐야?", vault_path=tmp_path, ai_env=env)
+
+    assert captured == {
+        "env": env,
+        "task": "ask",
+        "provider": "claude",
+        "model": "claude-opus",
+        "complete_env": env,
+    }

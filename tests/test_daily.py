@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import synapse_memory.daily as daily_mod
 from synapse_memory.daily import (
     STEPS,
     DailyStage,
@@ -21,6 +22,7 @@ from synapse_memory.daily import (
     run_daily,
     validate_daily_stages,
 )
+from synapse_memory.llm import ai_api
 
 
 def _ok(summary: str):
@@ -172,6 +174,66 @@ def test_build_stage_actions_exposes_single_pipeline_actions() -> None:
 
     assert set(actions) == set(STEPS)
     assert callable(actions["ingest"])
+
+
+def test_run_daily_resolves_card_generate_model_when_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str | None] = {}
+
+    def fake_actions(
+        *,
+        ingest_model: str | None = None,
+        on_log: object,
+        status_sink: object = None,
+        result: object = None,
+    ) -> dict[str, object]:
+        captured["ingest_model"] = ingest_model
+        return {stage: _ok(f"{stage}=ok") for stage in STEPS}
+
+    monkeypatch.setattr(
+        ai_api,
+        "resolve_model_for_task",
+        lambda task: "gpt-5.6-terra" if task == "card_generate" else None,
+    )
+    monkeypatch.setattr(daily_mod, "_build_stage_actions", fake_actions)
+
+    result = run_daily(on_log=lambda _line: None, acquire_lock=False)
+
+    assert result.errors == 0
+    assert captured["ingest_model"] == "gpt-5.6-terra"
+
+
+def test_run_daily_preserves_explicit_ingest_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str | None] = {}
+
+    def fake_actions(
+        *,
+        ingest_model: str | None = None,
+        on_log: object,
+        status_sink: object = None,
+        result: object = None,
+    ) -> dict[str, object]:
+        captured["ingest_model"] = ingest_model
+        return {stage: _ok(f"{stage}=ok") for stage in STEPS}
+
+    monkeypatch.setattr(
+        ai_api,
+        "resolve_model_for_task",
+        lambda _task: pytest.fail("explicit model must not be resolved"),
+    )
+    monkeypatch.setattr(daily_mod, "_build_stage_actions", fake_actions)
+
+    result = run_daily(
+        ingest_model="manual-model",
+        on_log=lambda _line: None,
+        acquire_lock=False,
+    )
+
+    assert result.errors == 0
+    assert captured["ingest_model"] == "manual-model"
 
 
 def test_successful_stage_errors_are_counted_as_warnings() -> None:

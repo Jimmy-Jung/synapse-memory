@@ -41,7 +41,7 @@ class GenerationRecipe:
     locale_aware: bool = True
     domain_aware: bool = False
     timeout: int = 120
-    model: str = "sonnet"
+    model: str | None = None
 
     @property
     def required_inputs(self) -> tuple[str, ...]:

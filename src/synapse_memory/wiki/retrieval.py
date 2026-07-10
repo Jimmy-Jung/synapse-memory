@@ -13,6 +13,7 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
+from synapse_memory.llm import ai_api
 from synapse_memory.model import Entity, current_entities, supersedes_history
 from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
@@ -29,6 +30,7 @@ TRANSITIVE_DEPTH = 2
 _DEFAULT = object()
 
 SemanticFn = Callable[..., list[str]]
+AIEnv = ai_api.AIEnvironment | ai_api.AIProviderEnv | None
 
 
 def _find_page_by_slug(slug: str, pages: list[Entity]) -> Entity | None:
@@ -176,6 +178,7 @@ def find_related_pages(
     pages: list[Entity] | None = None,
     include_history: bool = False,
     exclude_types: tuple[str, ...] = (),
+    ai_env: AIEnv = None,
 ) -> list[Entity]:
     """본문과 관련된 기존 페이지. 이름(title/slug) 매칭 + 의미 top-k + related 1-hop.
 
@@ -220,6 +223,7 @@ def find_related_pages(
                 build_index=build_page_index,
                 item_id=lambda page: page.slug,
                 top_k=max_pages,
+                env=ai_env,
             )
         else:
             semantic_slugs = semantic_fn(text, vault_path=vault_path, top_k=max_pages)

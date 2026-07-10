@@ -100,6 +100,15 @@ def ingest_source(
     watermark를 전진시키지 않으므로 재실행 시 재시도된다. 대형 doc은 청킹 후에도
     실패하면 skipped로 격리하고 watermark를 전진시켜 backfill jam을 막는다.
     """
+    if model is None:
+        injected_model = getattr(ai_env, "model", None)
+        model = ai_api.resolve_model_for_task(
+            "card_generate", provider=getattr(ai_env, "provider", None)
+        ) or (
+            injected_model
+            if isinstance(injected_model, str) and injected_model
+            else None
+        )
     since = load_watermark(source, path=watermark_path)
     offsets = load_offsets(path=watermark_path)
     docs_all = iter_new_raw(
@@ -154,7 +163,10 @@ def ingest_source(
                     )
                 else:
                     related = find_related_pages(
-                        chunk.text, vault_path=vault_path, pages=all_pages
+                        chunk.text,
+                        vault_path=vault_path,
+                        pages=all_pages,
+                        ai_env=ai_env,
                     )
                 prompt = build_integration_prompt(
                     chunk.text, related, source_date=doc_date

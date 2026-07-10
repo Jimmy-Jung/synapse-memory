@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest import mock
 
@@ -128,6 +129,131 @@ def test_weekly_report_end_to_end(fixture_vault: Path) -> None:
     assert "2026-W19" in result.last_answer_ref.query
     assert len(result.last_answer_ref.citations) >= 1
 
+
+def test_builtin_recipe_uses_provider_task_model_when_unspecified(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import synapse_memory.recipes.pipeline as pipeline
+
+    captured: dict[str, str | None] = {}
+
+    def fake_complete(
+        _prompt: str, *, model: str | None = None, **_kwargs: Any
+    ) -> str:
+        captured["model"] = model
+        return "## 이번 주 한 일\n- 완료"
+
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_model_for_task",
+        lambda task, **_kwargs: "gpt-5.6-terra" if task == "generate" else None,
+        raising=False,
+    )
+    monkeypatch.setattr(pipeline, "ai_api_complete", fake_complete)
+
+    generate(
+        "weekly_report",
+        inputs={"period": "2026-W19"},
+        vault_path=fixture_vault,
+        builtin_dir=_BUILTIN_DIR,
+        disable_save=True,
+        save_last=False,
+        ai_env=SimpleNamespace(provider="codex", model="custom-env-model"),
+    )
+
+    assert captured["model"] == "gpt-5.6-terra"
+
+
+def test_recipe_retrieval_forwards_injected_ai_environment(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """recipe RAG 선별과 최종 생성은 동일한 주입 provider 환경을 사용한다."""
+    import synapse_memory.recipes.pipeline as pipeline
+
+    env = SimpleNamespace(provider="claude", model="sonnet")
+    index = pipeline.EntityIndex(
+        entries=(
+            pipeline.EntityEntry(
+                slug="candidate", kind="project", title="Candidate", summary=""
+            ),
+        )
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(pipeline, "build_entity_index", lambda **_kwargs: index)
+
+    def fake_select_related(*_args: object, env: object = None, **_kwargs: object) -> list[str]:
+        captured["env"] = env
+        return []
+
+    monkeypatch.setattr(pipeline, "select_related", fake_select_related)
+
+    result = generate(
+        "weekly_report",
+        inputs={"period": "2026-W19"},
+        vault_path=fixture_vault,
+        builtin_dir=_BUILTIN_DIR,
+        ai_env=env,
+        return_empty_on_no_matches=True,
+        disable_save=True,
+        save_last=False,
+    )
+
+    assert result.answer_markdown == ""
+    assert captured["env"] is env
+
+
+def test_recipe_model_and_cli_override_take_precedence(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI --model > user recipe model > task model > injected env model 순서를 보장한다."""
+    import synapse_memory.recipes.pipeline as pipeline
+
+    user_recipe = fixture_vault / "90_System" / "AI" / "recipes" / "weekly_report.md"
+    user_recipe.parent.mkdir(parents=True, exist_ok=True)
+    user_recipe.write_text(
+        """---
+name: weekly_report
+description: 사용자 모델 우선순위 검증
+input_schema:
+  period: required
+model: recipe-specific-model
+---
+
+사용자 recipe 시스템 프롬프트: {period}
+""",
+        encoding="utf-8",
+    )
+    models: list[str | None] = []
+
+    monkeypatch.setattr(
+        pipeline,
+        "resolve_model_for_task",
+        lambda *_args, **_kwargs: "task-default-model",
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "ai_api_complete",
+        lambda *_args, model=None, **_kwargs: models.append(model) or "# 결과",
+    )
+    env = SimpleNamespace(provider="codex", model="environment-default-model")
+    kwargs = {
+        "inputs": {"period": "2026-W19"},
+        "vault_path": fixture_vault,
+        "builtin_dir": _BUILTIN_DIR,
+        "store": _StoreStub([]),
+        "ai_env": env,
+        "disable_save": True,
+        "save_last": False,
+    }
+
+    generate("weekly_report", **kwargs)
+    generate("weekly_report", model_override="cli-explicit-model", **kwargs)
+
+    assert models == ["recipe-specific-model", "cli-explicit-model"]
 
 # ----- US2: Resume voice·locale·domain (T025-T028) -----------------------------
 

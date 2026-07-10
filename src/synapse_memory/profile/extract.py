@@ -35,7 +35,6 @@ from synapse_memory.profile.wiki import (
 from synapse_memory.storage.l0 import l0_root
 
 DEFAULT_SAMPLE_LINES = 200       # history.jsonl 마지막 N 줄
-DEFAULT_MODEL = "sonnet"
 DEFAULT_TIMEOUT = 240
 MEMORY_INBOX_SUBPATH = Path("90_System") / "AI" / "MemoryInbox"
 
@@ -339,7 +338,7 @@ def _read_codex_sessions_tail(
 def extract_profile_facts(
     *,
     sample_lines: int = DEFAULT_SAMPLE_LINES,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
     ai_env: AIEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
@@ -429,10 +428,13 @@ def extract_profile_facts(
         f"# 지시\n위에서 반복 패턴으로 드러나는 사용자 성향 사실을 JSON으로 추출."
     )
 
+    effective_model = model or ai_api.resolve_model_for_task(
+        "update_profile", provider=getattr(ai_env, "provider", None)
+    ) or getattr(ai_env, "model", None)
     response = ai_api.complete_structured(
         user_prompt,
         system=PROFILE_SYSTEM,
-        model=model,
+        model=effective_model,
         env=ai_env,
         timeout=DEFAULT_TIMEOUT,
     )
@@ -473,7 +475,7 @@ def extract_profile_facts(
 def extract_decision_patterns(
     *,
     sample_lines: int = DEFAULT_SAMPLE_LINES,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
     ai_env: AIEnvironment | None = None,
     history_path: Path | None = None,
     codex_history_path: Path | None = None,
@@ -539,10 +541,13 @@ def extract_decision_patterns(
         f"# 지시\n위에서 의사결정 패턴(트리거→행동→이유)을 JSON으로 추출."
     )
 
+    effective_model = model or ai_api.resolve_model_for_task(
+        "update_profile", provider=getattr(ai_env, "provider", None)
+    ) or getattr(ai_env, "model", None)
     response = ai_api.complete_structured(
         user_prompt,
         system=DECISION_PATTERN_SYSTEM,
-        model=model,
+        model=effective_model,
         env=ai_env,
         timeout=DEFAULT_TIMEOUT,
     )

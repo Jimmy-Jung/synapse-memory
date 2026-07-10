@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -134,6 +135,32 @@ class TestAsk:
         assert result.answer == "단심앱입니다 [dansim]."
         assert mock_generate.call_args.args == ("ask",)
         assert mock_generate.call_args.kwargs["inputs"] == {"query": "뭐 만들었어?"}
+
+    def test_default_model_uses_provider_task_route(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            ask_mod,
+            "resolve_model_for_task",
+            lambda task, **_kwargs: "gpt-5.6-sol" if task == "ask" else None,
+            raising=False,
+        )
+        with patch.object(ask_mod, "recipes_generate", return_value=_result()) as generate:
+            ask("q", ai_env=SimpleNamespace(provider="codex", model="gpt-5.6-terra"))
+
+        assert generate.call_args.kwargs["model_override"] == "gpt-5.6-sol"
+
+    def test_explicit_model_wins_over_provider_task_route(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            ask_mod,
+            "resolve_model_for_task",
+            lambda *_args, **_kwargs: "gpt-5.6-sol",
+            raising=False,
+        )
+        with patch.object(ask_mod, "recipes_generate", return_value=_result()) as generate:
+            ask("q", model="custom-model", ai_env=_ai_env())
+
+        assert generate.call_args.kwargs["model_override"] == "custom-model"
 
     def test_where_filter_restricts_recipe_rag_filter(self) -> None:
         with patch.object(

@@ -12,10 +12,12 @@ monkeypatch 한다. decide out-of-domain 가드는 distance 임계 → "provider
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
+import synapse_memory.endpoints.persona as persona_mod
 from synapse_memory.cards.project import ProjectCard, save_project_card
 from synapse_memory.endpoints.persona import (
     WhatDidIThinkResult,
@@ -169,6 +171,31 @@ class TestWhatDidIThink:
 
 
 class TestDecide:
+    def test_default_model_uses_decide_task_route(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from synapse_memory.recipes.recipe import GenerationResult
+
+        monkeypatch.setattr(
+            persona_mod,
+            "resolve_model_for_task",
+            lambda task, **_kwargs: "gpt-5.6-sol" if task == "decide" else None,
+            raising=False,
+        )
+        result = GenerationResult(
+            recipe_name="decide",
+            answer_markdown="추천",
+            saved_path=None,
+            source_ids=["x"],
+        )
+        with patch("synapse_memory.recipes.generate", return_value=result) as generate:
+            decide(
+                "결정",
+                ai_env=SimpleNamespace(provider="codex", model="gpt-5.6-terra"),
+            )
+
+        assert generate.call_args.kwargs["model_override"] == "gpt-5.6-sol"
+
     def test_without_profile(self, tmp_path: Path) -> None:
         _seed(tmp_path, "x")
         with patch(

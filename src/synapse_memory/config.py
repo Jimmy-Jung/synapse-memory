@@ -22,7 +22,7 @@ import datetime
 import os
 import tempfile
 import typing
-from dataclasses import asdict, dataclass, field, is_dataclass
+from dataclasses import asdict, dataclass, field, is_dataclass, replace
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
@@ -42,11 +42,12 @@ class ModelTasksConfig:
 
     classify: str = "gpt-5.5"
     card_generate: str = "gpt-5.5"
-    ask: str | None = None  # None = provider default (gpt-5.5)
+    ask: str | None = None  # None = provider default
     decide: str | None = None
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
+    generate: str | None = None
     # 020: provider-only 관련 페이지 선별(LLM-as-retriever). 싼 티어.
     relevance: str = "gpt-5.5"
 
@@ -63,6 +64,7 @@ class ProviderModelOverrideConfig:
     resume: str | None = None
     recall: str | None = None
     update_profile: str | None = None
+    generate: str | None = None
     relevance: str | None = None
 
 
@@ -77,12 +79,45 @@ class ProviderModelOverridesConfig:
         )
     )
     codex: ProviderModelOverrideConfig = field(
-        default_factory=lambda: ProviderModelOverrideConfig(default="gpt-5.5")
+        # Sol=복잡한 합성, Terra=일상 통합, Luna=대량 선별.
+        default_factory=lambda: ProviderModelOverrideConfig(
+            default="gpt-5.6-terra",
+            classify="gpt-5.6-luna",
+            card_generate="gpt-5.6-terra",
+            ask="gpt-5.6-sol",
+            decide="gpt-5.6-sol",
+            resume="gpt-5.6-sol",
+            recall="gpt-5.6-terra",
+            update_profile="gpt-5.6-terra",
+            generate="gpt-5.6-terra",
+            relevance="gpt-5.6-luna",
+        )
     )
 
 
 # provider별 기본 모델 안전망 (config가 provider default 미지정 시).
-_PROVIDER_FALLBACK_MODEL: dict[str, str] = {"codex": "gpt-5.5", "claude": "sonnet"}
+_PROVIDER_FALLBACK_MODEL: dict[str, str] = {
+    "codex": "gpt-5.6-terra",
+    "claude": "sonnet",
+}
+
+_V2_0_1_TASK_DEFAULTS: dict[str, str | None] = {
+    "classify": "gpt-5.5",
+    "card_generate": "gpt-5.5",
+    "ask": None,
+    "decide": None,
+    "resume": None,
+    "recall": None,
+    "update_profile": None,
+    "relevance": "gpt-5.5",
+}
+_V2_0_1_CODEX_OVERRIDE_DEFAULTS: dict[str, str | None] = {
+    "default": "gpt-5.5",
+    **{task: None for task in _V2_0_1_TASK_DEFAULTS},
+}
+_V2_0_1_TASK_KEYS = frozenset(_V2_0_1_TASK_DEFAULTS)
+_V2_0_1_CODEX_OVERRIDE_KEYS = frozenset(_V2_0_1_CODEX_OVERRIDE_DEFAULTS)
+_CODEX_TASK_OVERRIDE_KEYS = _V2_0_1_TASK_KEYS | {"generate"}
 
 
 @dataclass
@@ -109,7 +144,7 @@ class ModelsConfig:
         resolved = override if override is not None else base
         if resolved is not None:
             return resolved
-        # task 기본값도 None → provider 기본 모델로 폴백 (codex=gpt-5.5, claude=sonnet).
+        # task 기본값도 None → provider 기본 모델로 폴백 (codex=Terra, claude=sonnet).
         # config가 provider default를 지정하지 않았을 때의 안전망.
         provider_default = getattr(provider_overrides, "default", None)
         return provider_default or _PROVIDER_FALLBACK_MODEL.get(provider)
@@ -342,10 +377,16 @@ def is_protected_path(path: str) -> bool:
     return any(path == p or path.startswith(p + ".") for p in PROTECTED_PREFIXES)
 
 
-def _from_dict(cls: type[T], data: dict[str, Any] | None) -> T:
-    """nested dataclass를 dict에서 만들어줌. 알 수 없는 키는 무시."""
+def _from_dict(
+    cls: type[T],
+    data: dict[str, Any] | None,
+    *,
+    defaults: T | None = None,
+) -> T:
+    """nested dataclass를 dict에서 만들되 부모의 default_factory를 보존한다."""
     if data is None or not isinstance(data, dict):
-        return cls()
+        return defaults if defaults is not None else cls()
+    default_value = defaults if defaults is not None else cls()
     try:
         annotations = typing.get_type_hints(cls)
     except Exception:
@@ -356,10 +397,14 @@ def _from_dict(cls: type[T], data: dict[str, Any] | None) -> T:
             continue
         value = data[field_name]
         if isinstance(value, dict) and is_dataclass(field_type):
-            kwargs[field_name] = _from_dict(cast(type[Any], field_type), value)
+            kwargs[field_name] = _from_dict(
+                cast(type[Any], field_type),
+                value,
+                defaults=getattr(default_value, field_name),
+            )
         else:
             kwargs[field_name] = value
-    return cls(**kwargs)
+    return cast(T, replace(cast(Any, default_value), **kwargs))
 
 
 def _normalize_config_raw(raw: dict[str, Any]) -> dict[str, Any]:
@@ -383,6 +428,53 @@ def _normalize_config_raw(raw: dict[str, Any]) -> dict[str, Any]:
                 "tasks": codex_defaults,
                 "overrides": legacy_providers,
             }
+
+    models_value = normalized.get("models")
+    if isinstance(models_value, dict):
+        overrides = models_value.get("overrides")
+        codex_overrides = overrides.get("codex") if isinstance(overrides, dict) else None
+        raw_tasks = models_value.get("tasks")
+        task_values = raw_tasks if isinstance(raw_tasks, dict) else {}
+        # 전체 v2.0.1 기본 snapshot만 자동 승격한다. 부분 config는 사용자 의도로 보존.
+        if (
+            isinstance(overrides, dict)
+            and isinstance(codex_overrides, dict)
+            and set(task_values) == _V2_0_1_TASK_KEYS
+            and all(task_values[key] == value for key, value in _V2_0_1_TASK_DEFAULTS.items())
+            and set(codex_overrides) == _V2_0_1_CODEX_OVERRIDE_KEYS
+            and all(
+                codex_overrides[key] == value
+                for key, value in _V2_0_1_CODEX_OVERRIDE_DEFAULTS.items()
+            )
+        ):
+            normalized_overrides = dict(overrides)
+            normalized_overrides["codex"] = {}
+            normalized_models = dict(models_value)
+            normalized_models["overrides"] = normalized_overrides
+            normalized["models"] = normalized_models
+        elif "generate" not in task_values and (
+            not isinstance(codex_overrides, dict) or "generate" not in codex_overrides
+        ):
+            # v2.0.1의 부분 설정에는 역할별 Codex override가 없었다. 새 기본값을
+            # 그대로 상속하면 명시한 shared task/default가 가려지므로, 누락값을
+            # 명시적 None으로 보완해 기존 우선순위를 보존한다.
+            normalized_overrides = dict(overrides) if isinstance(overrides, dict) else {}
+            normalized_codex = dict(codex_overrides) if isinstance(codex_overrides, dict) else {}
+            changed = False
+            if "default" in normalized_codex:
+                for task_name in _CODEX_TASK_OVERRIDE_KEYS:
+                    if task_name not in normalized_codex:
+                        normalized_codex[task_name] = None
+                        changed = True
+            for task_name in task_values:
+                if task_name in _CODEX_TASK_OVERRIDE_KEYS and task_name not in normalized_codex:
+                    normalized_codex[task_name] = None
+                    changed = True
+            if changed:
+                normalized_overrides["codex"] = normalized_codex
+                normalized_models = dict(models_value)
+                normalized_models["overrides"] = normalized_overrides
+                normalized["models"] = normalized_models
 
     vault_value = normalized.get("vault")
     if not isinstance(vault_value, dict):

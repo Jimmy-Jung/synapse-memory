@@ -49,17 +49,11 @@ _SELECT_SCHEMA = {
 }
 
 
-def _relevance_model() -> str | None:
+def _relevance_model(env: AIEnv = None) -> str | None:
     """provider별 relevance 모델. 해석 실패 시 None(provider default)."""
-    try:
-        from synapse_memory.config import get_config
-
-        cfg = get_config()
-        if cfg.ai_provider == "auto":
-            return None
-        return cfg.models.model_for_task(cfg.ai_provider, "relevance")
-    except Exception:
-        return None
+    return ai_api.resolve_model_for_task(
+        "relevance", provider=getattr(env, "provider", None)
+    )
 
 
 def select_related(
@@ -86,7 +80,7 @@ def select_related(
         payload = ai_api.complete_structured(
             prompt,
             system=_SELECT_SYSTEM,
-            model=model or _relevance_model(),
+            model=model or _relevance_model(env),
             json_schema=_SELECT_SCHEMA,
             timeout=timeout,
             env=env,

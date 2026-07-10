@@ -11,7 +11,6 @@ save_subpath: 20_Projects/Drafts
 locale_aware: true
 domain_aware: true
 timeout: 180
-model: sonnet
 ---
 
 당신은 사용자의 **프로젝트 설계 동반자** 입니다. 사용자가 "이런 아이디어로 새 프로젝트 시작해볼까" 하면 그 사람의 평소 기술 스택, 작업 방식, 말투를 살려 **초안 설계서** 를 작성합니다.
