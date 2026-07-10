@@ -11,7 +11,6 @@ save_subpath: 10_Journal/Drafts
 locale_aware: true
 domain_aware: false
 timeout: 90
-model: sonnet
 ---
 
 당신은 사용자의 일기 작성 보조입니다.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import synapse_memory.wiki.ingest as ingest_mod
 import synapse_memory.wiki.ingest_routing as routing_mod
@@ -141,6 +142,74 @@ def test_ingest_passes_configured_provider_to_integration(
     assert providers == ["codex"]
 
 
+def test_ingest_uses_card_generate_model_when_omitted(
+    tmp_path: Path, monkeypatch
+) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "model", "task model selection check")
+    models: list[str | None] = []
+    tasks: list[str] = []
+
+    def fake_task_model(task: str, **_kwargs: object) -> str:
+        tasks.append(task)
+        return "gpt-5.6-terra"
+
+    def fake_complete(*_args: object, model: str | None = None, **_kwargs: object) -> dict:
+        models.append(model)
+        return {"operations": []}
+
+    monkeypatch.setattr(ingest_mod.ai_api, "resolve_model_for_task", fake_task_model)
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", fake_complete)
+
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        today="2026-07-10",
+    )
+
+    assert result.docs_processed == 1
+    assert tasks == ["card_generate"]
+    assert models == ["gpt-5.6-terra"]
+
+
+def test_ingest_task_model_wins_over_injected_environment_default(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """사용자 card_generate override가 주입 env의 adapter 기본값보다 우선한다."""
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "model-priority", "task model priority check")
+    models: list[str | None] = []
+    providers: list[str | None] = []
+    env = SimpleNamespace(provider="codex", model="adapter-default-model")
+
+    def fake_task_model(task: str, **kwargs: object) -> str:
+        providers.append(kwargs.get("provider"))
+        assert task == "card_generate"
+        return "configured-card-model"
+
+    def fake_complete(*_args: object, model: str | None = None, **_kwargs: object) -> dict:
+        models.append(model)
+        return {"operations": []}
+
+    monkeypatch.setattr(ingest_mod.ai_api, "resolve_model_for_task", fake_task_model)
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", fake_complete)
+
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        ai_env=env,
+        today="2026-07-10",
+    )
+
+    assert result.docs_processed == 1
+    assert providers == ["codex"]
+    assert models == ["configured-card-model"]
+
+
 def test_ingest_error_isolation(tmp_path, monkeypatch) -> None:
     raw_root = tmp_path / "raw" / "claude-code"
     _write_session(raw_root, "aaa", "first doc")
@@ -243,6 +312,38 @@ def test_small_doc_can_disable_semantic_retrieval(tmp_path, monkeypatch) -> None
 
     assert result.docs_processed == 1
     assert semantic_args == [None]
+
+
+def test_semantic_retrieval_forwards_injected_ai_environment(tmp_path, monkeypatch) -> None:
+    """통합과 semantic related-page 선별은 같은 provider 환경을 사용한다."""
+    raw_root = tmp_path / "raw" / "claude-code"
+    _write_session(raw_root, "semantic", "semantic retrieval provider test")
+    env = SimpleNamespace(provider="claude", model="sonnet")
+    captured: dict[str, object] = {}
+
+    def fake_related(*_args, ai_env=None, **_kwargs):
+        captured["ai_env"] = ai_env
+        return []
+
+    monkeypatch.setattr(ingest_mod, "find_related_pages", fake_related)
+    monkeypatch.setattr(
+        ingest_mod.ai_api,
+        "complete_structured",
+        _fake_complete_structured({"operations": []}),
+    )
+
+    result = ingest_source(
+        "claude-code",
+        vault_path=tmp_path,
+        raw_root=raw_root,
+        watermark_path=tmp_path / "state.json",
+        ai_env=env,
+        today="2026-06-14",
+        semantic_retrieval=True,
+    )
+
+    assert result.docs_processed == 1
+    assert captured["ai_env"] is env
 
 
 def test_large_doc_failure_is_skipped_and_advances_watermark(tmp_path, monkeypatch) -> None:

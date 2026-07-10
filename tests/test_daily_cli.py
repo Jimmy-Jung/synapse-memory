@@ -180,6 +180,26 @@ def test_cmd_daily_strips_comma_separated_stage_names(
     assert captured["ingest_model"] == "gpt-5.5"
 
 
+def test_cmd_daily_resolves_card_generate_model_when_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        cli_mod,
+        "_resolve_model",
+        lambda model, task: "gpt-5.6-terra" if model is None and task == "card_generate" else model,
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "run_daily",
+        lambda **kwargs: captured.update(kwargs) or DailyResult(),
+    )
+
+    assert cmd_daily(_args(dry_run=True)) == 0
+    assert captured["ingest_model"] == "gpt-5.6-terra"
+
+
 def test_cmd_daily_unknown_only_returns_2(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

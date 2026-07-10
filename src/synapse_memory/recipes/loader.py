@@ -155,7 +155,10 @@ def parse_recipe(path: Path, *, source: RecipeSource) -> GenerationRecipe:
     locale_aware = _coerce_bool(meta, "locale_aware", True)
     domain_aware = _coerce_bool(meta, "domain_aware", False)
     timeout = _coerce_int(meta, "timeout", 120, lo=1, hi=600)
-    model = str(meta.get("model", "sonnet"))
+    raw_model = meta.get("model")
+    model = str(raw_model).strip() if raw_model is not None else None
+    if model == "":
+        model = None
 
     system_prompt = system_prompt or ""
     if len(system_prompt.encode("utf-8")) > SYSTEM_PROMPT_BYTE_CAP:

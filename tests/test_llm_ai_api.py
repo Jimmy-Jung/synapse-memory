@@ -10,6 +10,7 @@ from synapse_memory.llm.ai_api import (
     AIEnvironment,
     AIError,
     detect_ai_environment,
+    resolve_model_for_task,
 )
 from synapse_memory.llm.claude import ClaudeEnvironment, ClaudeError
 from synapse_memory.llm.codex import CodexEnvironment
@@ -83,6 +84,22 @@ def test_configured_provider_overrides_runtime_detection(
     assert env.provider == "claude"
 
 
+def test_resolve_model_for_task_uses_effective_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import synapse_memory.config as config_module
+    from synapse_memory.config import SynapseConfig
+
+    monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    monkeypatch.setattr(
+        config_module, "get_config", lambda: SynapseConfig(ai_provider="codex")
+    )
+
+    assert resolve_model_for_task("ask") == "gpt-5.6-sol"
+    assert resolve_model_for_task("relevance") == "gpt-5.6-luna"
+    assert resolve_model_for_task("ask", provider="claude") == "sonnet"
+
+
 def test_complete_dispatches_to_codex() -> None:
     from synapse_memory.llm import ai_api
 
@@ -94,6 +111,29 @@ def test_complete_dispatches_to_codex() -> None:
         assert ai_api.complete("p", env=env) == "ok"
 
     complete.assert_called_once()
+
+
+def test_complete_structured_keeps_model_override_with_injected_environment() -> None:
+    """주입 환경은 provider 선택용이며 명시 model을 덮어쓰지 않는다."""
+    from synapse_memory.llm import ai_api
+
+    provider_env = CodexEnvironment("/x/codex", "codex 1.0", "gpt-5.6-terra")
+    env = AIEnvironment(provider="codex", provider_env=provider_env)
+    with patch(
+        "synapse_memory.llm.ai_api.codex.complete_structured",
+        return_value={"related": []},
+    ) as complete:
+        assert (
+            ai_api.complete_structured(
+                "p",
+                env=env,
+                model="gpt-5.6-luna",
+            )
+            == {"related": []}
+        )
+
+    assert complete.call_args.kwargs["model"] == "gpt-5.6-luna"
+    assert complete.call_args.kwargs["env"] is provider_env
 
 
 def test_complete_wraps_provider_errors() -> None:

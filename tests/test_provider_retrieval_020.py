@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from synapse_memory.llm.claude import ClaudeEnvironment
 from synapse_memory.model import Entity
 from synapse_memory.wiki import ingest as ingest_mod, llm_retrieval as lr
 from synapse_memory.wiki.ingest import ingest_source
@@ -88,6 +89,34 @@ def test_select_related_respects_max_pages(monkeypatch) -> None:
         _fake_structured({"related": [f"c{i}" for i in range(5)]}),
     )
     assert len(lr.select_related("문서", idx, max_pages=2)) == 2
+
+
+def test_select_related_resolves_model_for_injected_provider(monkeypatch) -> None:
+    """주입된 provider와 relevance 모델 해석 provider는 반드시 같아야 한다."""
+    idx = build_page_index([Entity(type="concept", slug="rag", title="RAG", body="b")])
+    captured: dict[str, object] = {}
+
+    def fake_resolve(task: str, *, provider: str | None = None) -> str:
+        captured["task"] = task
+        captured["provider"] = provider
+        return "claude-haiku"
+
+    def fake_structured(*_args, model=None, env=None, **_kwargs):
+        captured["model"] = model
+        captured["env"] = env
+        return {"related": ["rag"]}
+
+    env = ClaudeEnvironment(claude_path=None, claude_version=None, model="sonnet")
+    monkeypatch.setattr(lr.ai_api, "resolve_model_for_task", fake_resolve)
+    monkeypatch.setattr(lr.ai_api, "complete_structured", fake_structured)
+
+    assert lr.select_related("문서", idx, env=env) == ["rag"]
+    assert captured == {
+        "task": "relevance",
+        "provider": "claude",
+        "model": "claude-haiku",
+        "env": env,
+    }
 
 
 # ---------- bounded limit (메모리 천장) ----------

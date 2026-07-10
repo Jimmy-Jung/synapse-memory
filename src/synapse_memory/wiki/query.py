@@ -67,6 +67,7 @@ def _retrieve_wiki(
     vault_path: Path | None = None,
     top_k: int = DEFAULT_TOP_K,
     include_history: bool = False,
+    ai_env: AIEnv = None,
 ) -> list[Entity]:
     """provider LLM(claude|codex)로 관련 Entity를 선별·로드 (020).
 
@@ -80,6 +81,7 @@ def _retrieve_wiki(
         build_index=build_page_index,
         item_id=lambda page: page.slug,
         top_k=top_k,
+        env=ai_env,
     )
     pages = expand_related_pages(query, seeds, all_pages, max_pages=top_k)
     if include_history:
@@ -137,12 +139,24 @@ def ask_wiki(
     include_history: bool = False,
 ) -> WikiAnswer:
     """Entity-first 질의 → 합성 답변 + 인용. save=True면 insight로 환원."""
-    pages = _retrieve_wiki(
-        query,
-        vault_path=vault_path,
-        top_k=top_k,
-        include_history=include_history,
-    )
+    if ai_env is None:
+        pages = _retrieve_wiki(
+            query,
+            vault_path=vault_path,
+            top_k=top_k,
+            include_history=include_history,
+        )
+    else:
+        pages = _retrieve_wiki(
+            query,
+            vault_path=vault_path,
+            top_k=top_k,
+            include_history=include_history,
+            ai_env=ai_env,
+        )
+    effective_model = model or ai_api.resolve_model_for_task(
+        "ask", provider=getattr(ai_env, "provider", None)
+    ) or getattr(ai_env, "model", None)
     if not pages:
         return WikiAnswer(query=query, answer=NO_RESULTS_ANSWER, sources=[])
 
@@ -160,7 +174,7 @@ def ask_wiki(
     answer = ai_api.complete(
         user_prompt,
         system=ASK_WIKI_SYSTEM,
-        model=model,
+        model=effective_model,
         env=ai_env,
         timeout=120,
     )

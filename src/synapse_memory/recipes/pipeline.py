@@ -29,7 +29,10 @@ from synapse_memory.feedback.last_response import (
     new_answer_reference,
     save_last_answer,
 )
-from synapse_memory.llm.ai_api import complete as ai_api_complete
+from synapse_memory.llm.ai_api import (
+    complete as ai_api_complete,
+    resolve_model_for_task,
+)
 from synapse_memory.model import Entity, supersedes_history
 from synapse_memory.postprocess import strip_meta_prefix
 from synapse_memory.profile.wiki import load_profile_text
@@ -474,6 +477,7 @@ def _retrieve_matches(
     top_k_override: int | None,
     rag_filter_override: dict[str, str] | None,
     include_history: bool,
+    ai_env: Any = None,
 ) -> list[tuple[Any, float]]:
     """provider 선별로 관련 카드 매칭 (로컬 임베딩 제거, 020).
 
@@ -501,7 +505,7 @@ def _retrieve_matches(
     if not index.entries:
         return []
 
-    selected = select_related(rag_query, index, max_pages=rag_top_k)
+    selected = select_related(rag_query, index, max_pages=rag_top_k, env=ai_env)
     if not selected:
         return []
 
@@ -601,6 +605,7 @@ def generate(
         top_k_override=top_k_override,
         rag_filter_override=rag_filter_override,
         include_history=include_history,
+        ai_env=ai_env,
     )
 
     if require_matched and not matched:
@@ -686,10 +691,18 @@ def generate(
             rag_mode=rag_mode,
         )
 
+    effective_model = (
+        model_override
+        or recipe.model
+        or resolve_model_for_task(
+            "generate", provider=getattr(ai_env, "provider", None)
+        )
+        or getattr(ai_env, "model", None)
+    )
     answer = ai_api_complete(
         user_prompt,
         system=system_rendered,
-        model=model_override or recipe.model,
+        model=effective_model,
         timeout=timeout_override or recipe.timeout,
         env=ai_env,
     )

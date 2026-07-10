@@ -10,7 +10,6 @@ save_subpath: null
 locale_aware: false
 domain_aware: false
 timeout: 120
-model: sonnet
 ---
 
 당신은 사용자의 개인 세컨드 브레인입니다.

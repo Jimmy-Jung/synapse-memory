@@ -9,7 +9,14 @@ from synapse_memory.cli.common import OK, api
 
 
 def cmd_wiki_ask(args: argparse.Namespace) -> int:
-    result = api().ask_wiki(args.query, save=getattr(args, "save", False))
+    args.model = api()._resolve_model(getattr(args, "model", None), "ask")
+    ai_env = api().detect_ai_environment(model=args.model)
+    result = api().ask_wiki(
+        args.query,
+        save=getattr(args, "save", False),
+        model=args.model,
+        ai_env=ai_env,
+    )
     print(result.answer)
     if result.sources:
         print("\n출처: " + ", ".join(f"[[{source}]]" for source in result.sources))
@@ -37,6 +44,7 @@ def _register_entity_parser(
 
     ask = entity_sub.add_parser("ask", help="Entity/온톨로지 근거 질의 (인용 포함)")
     ask.add_argument("query", help="자연어 질의")
+    ask.add_argument("--model", default=None)
     ask.add_argument("--save", action="store_true", help="답변을 insight Entity로 환원")
     ask.set_defaults(func=cmd_wiki_ask)
 

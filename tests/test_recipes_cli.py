@@ -165,6 +165,91 @@ def test_me_generate_passes_rag_mode_override(
     assert "rag_mode=hybrid" in captured.err
 
 
+def test_me_generate_passes_explicit_model_override(
+    fixture_vault: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv("SYNAPSE_FROM_AGENT", "1")
+    fake_result = SimpleNamespace(
+        recipe_name="weekly_report",
+        answer_markdown="## report",
+        saved_path=None,
+        source_ids=[],
+        profile_used=True,
+        locale_source="profile",
+        locale="한국어",
+        domain_source="default",
+        domain="generic",
+        rag_mode="dense",
+    )
+
+    with mock.patch("synapse_memory.recipes.generate", return_value=fake_result) as generate:
+        rc = cli_mod.main(
+            [
+                "persona",
+                "generate",
+                "weekly_report",
+                "--input",
+                "period=2026-W19",
+                "--model",
+                "gpt-5.6-sol",
+                "--vault",
+                str(fixture_vault),
+            ]
+        )
+
+    assert rc == 0
+    assert generate.call_args.kwargs["model_override"] == "gpt-5.6-sol"
+    assert "[persona.generate.weekly_report]" in capsys.readouterr().err
+
+
+def test_design_project_uses_generate_task_model(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """설계 초안은 resume이 아니라 일반 recipe 생성 모델을 사용한다."""
+    captured: dict[str, object] = {}
+    env = SimpleNamespace(ready=True, reasons_unavailable=lambda: [])
+    result = SimpleNamespace(
+        answer_markdown="# 설계 초안",
+        saved_path=None,
+        profile_used=True,
+        source_ids=[],
+    )
+
+    monkeypatch.setattr(
+        cli_mod,
+        "_resolve_model",
+        lambda model, task: captured.update({"resolve": (model, task)})
+        or "gpt-5.6-terra",
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "detect_ai_environment",
+        lambda *, model: captured.update({"detected_model": model}) or env,
+    )
+    monkeypatch.setattr(cli_mod, "_enforce_cost_cap", lambda *_args: None)
+    monkeypatch.setattr(cli_mod, "_interactive_guard", lambda *_args: None)
+    monkeypatch.setattr(
+        "synapse_memory.recipes.generate",
+        lambda name, **kwargs: captured.update({"recipe": name, "kwargs": kwargs})
+        or result,
+    )
+
+    assert cli_mod.main(["persona", "design-project", "새 아이디어"]) == 0
+    assert captured["resolve"] == (None, "generate")
+    assert captured["detected_model"] == "gpt-5.6-terra"
+    assert captured["recipe"] == "design_project"
+    assert captured["kwargs"] == {
+        "inputs": {"idea": "새 아이디어"},
+        "ai_env": env,
+        "model_override": "gpt-5.6-terra",
+        "top_k_override": 6,
+    }
+    assert "설계 초안" in capsys.readouterr().out
+
+
 def test_me_generate_missing_required_input_exits_with_code(
     fixture_vault: Path,
     monkeypatch: pytest.MonkeyPatch,

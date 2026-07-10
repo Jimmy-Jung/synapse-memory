@@ -80,6 +80,20 @@ def detect_ai_environment(
     )
 
 
+def resolve_model_for_task(
+    task: str,
+    *,
+    provider: AIProvider | None = None,
+) -> str | None:
+    """현재 실행 provider의 task별 설정 모델을 반환한다."""
+    try:
+        from synapse_memory.config import get_config
+
+        return get_config().models.model_for_task(_resolve_provider(provider), task)
+    except Exception:
+        return None
+
+
 def _complete_text(prompt: str, kwargs: dict[str, Any]) -> str:
     module, options = _resolve_call(kwargs)
     try:

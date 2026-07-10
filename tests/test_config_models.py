@@ -1,7 +1,7 @@
-"""provider별 기본 모델 해석 테스트.
+"""provider별 GPT-5.6 작업 모델 해석 테스트.
 
-task 기본값이 None일 때 provider 기본 모델(codex=gpt-5.5, claude=sonnet)로
-폴백하는지 검증한다. (codex인데 sonnet으로 떨어지던 버그 회귀 방지.)
+Codex 작업은 Sol/Terra/Luna tier로, Claude 작업은 기존 모델로 해석되는지
+검증한다. (Codex에 Claude 모델을 전달하던 회귀도 함께 방어.)
 
 저자: JunyoungJung
 작성일: 2026-07-07
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from synapse_memory.config import (
     ModelsConfig,
+    ModelTasksConfig,
     ProviderModelOverrideConfig,
     ProviderModelOverridesConfig,
 )
@@ -17,16 +18,41 @@ from synapse_memory.config import (
 
 def test_provider_default_fills_none_task() -> None:
     m = ModelsConfig()
-    # ask task 기본값 None → provider 기본 모델
-    assert m.model_for_task("codex", "ask") == "gpt-5.5"
+    assert m.model_for_task("codex", "ask") == "gpt-5.6-sol"
     assert m.model_for_task("claude", "ask") == "sonnet"
 
 
 def test_explicit_task_and_override_still_win() -> None:
     m = ModelsConfig()
-    assert m.model_for_task("codex", "classify") == "gpt-5.5"  # task base
+    assert m.model_for_task("codex", "classify") == "gpt-5.6-luna"
     assert m.model_for_task("claude", "classify") == "haiku"  # provider override
     assert m.model_for_task("claude", "resume") == "sonnet"  # None → claude default
+
+
+def test_provider_task_override_wins_over_shared_task_default() -> None:
+    """models.overrides.<provider>.<task>는 models.tasks.<task>보다 우선한다."""
+    m = ModelsConfig(
+        tasks=ModelTasksConfig(ask="shared-task-model"),
+        overrides=ProviderModelOverridesConfig(
+            codex=ProviderModelOverrideConfig(ask="codex-ask-override")
+        ),
+    )
+
+    assert m.model_for_task("codex", "ask") == "codex-ask-override"
+    assert m.model_for_task("claude", "ask") == "shared-task-model"
+
+
+def test_codex_tasks_use_the_right_gpt_5_6_tier() -> None:
+    m = ModelsConfig()
+
+    assert m.model_for_task("codex", "relevance") == "gpt-5.6-luna"
+    assert m.model_for_task("codex", "card_generate") == "gpt-5.6-terra"
+    assert m.model_for_task("codex", "recall") == "gpt-5.6-terra"
+    assert m.model_for_task("codex", "update_profile") == "gpt-5.6-terra"
+    assert m.model_for_task("codex", "generate") == "gpt-5.6-terra"
+    assert m.model_for_task("codex", "ask") == "gpt-5.6-sol"
+    assert m.model_for_task("codex", "decide") == "gpt-5.6-sol"
+    assert m.model_for_task("codex", "resume") == "gpt-5.6-sol"
 
 
 def test_fallback_map_when_no_default_field() -> None:
@@ -34,7 +60,7 @@ def test_fallback_map_when_no_default_field() -> None:
     m = ModelsConfig(
         overrides=ProviderModelOverridesConfig(codex=ProviderModelOverrideConfig())
     )
-    assert m.model_for_task("codex", "ask") == "gpt-5.5"
+    assert m.model_for_task("codex", "ask") == "gpt-5.6-terra"
 
 
 def test_resolve_model_prefers_config_provider_over_runtime(monkeypatch) -> None:
@@ -49,11 +75,17 @@ def test_resolve_model_prefers_config_provider_over_runtime(monkeypatch) -> None
 
     monkeypatch.setenv("CLAUDECODE", "1")  # Claude Code 세션 시뮬레이션
     monkeypatch.delenv("SYNAPSE_AI_PROVIDER", raising=False)
+    for name in (
+        "CODEX_CI",
+        "CODEX_THREAD_ID",
+        "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+    ):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(
         config_mod, "get_config", lambda: SynapseConfig(ai_provider="codex")
     )
 
-    assert common._resolve_model(None, "ask") == "gpt-5.5"
+    assert common._resolve_model(None, "ask") == "gpt-5.6-sol"
 
     # config=auto일 때만 runtime 감지 사용 → claude 모델
     monkeypatch.setattr(

@@ -22,13 +22,12 @@ from synapse_memory.feedback.last_response import (
     new_answer_reference,
     save_last_answer,
 )
-from synapse_memory.llm.ai_api import AIEnvironment
+from synapse_memory.llm.ai_api import AIEnvironment, resolve_model_for_task
 from synapse_memory.recipes import generate as recipes_generate
 from synapse_memory.recipes.kinds import is_known_source_kind
 
 _ASK_RECIPE_NAME = "ask"
 DEFAULT_TOP_K = 5
-DEFAULT_MODEL = "sonnet"
 
 
 @dataclass
@@ -73,7 +72,7 @@ def ask(
     query: str,
     *,
     top_k: int = DEFAULT_TOP_K,
-    model: str | None = DEFAULT_MODEL,
+    model: str | None = None,
     store: object | None = None,
     ai_env: AIEnvironment | None = None,
     where: dict[str, object] | None = None,
@@ -85,13 +84,16 @@ def ask(
     if not query.strip():
         raise ValueError("query는 빈 문자열일 수 없음")
 
+    effective_model = model or resolve_model_for_task(
+        "ask", provider=getattr(ai_env, "provider", None)
+    ) or getattr(ai_env, "model", None)
     result = recipes_generate(
         _ASK_RECIPE_NAME,
         inputs={"query": query},
         vault_path=vault_path,
         store=store,
         ai_env=ai_env,
-        model_override=model,
+        model_override=effective_model,
         top_k_override=top_k,
         disable_save=True,
         save_last=False,

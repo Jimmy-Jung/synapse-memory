@@ -57,6 +57,7 @@ def test_loader_parses_valid_frontmatter(tmp_path: Path) -> None:
     assert recipe.locale_aware is True
     assert recipe.domain_aware is False
     assert recipe.timeout == 120
+    assert recipe.model is None
     assert recipe.source == "builtin"
     assert recipe.source_path == p
     assert "{period}" in recipe.system_prompt

@@ -101,6 +101,133 @@ def test_load_nested_vault_path_and_folders_for_compatibility(tmp_path):
     assert cfg.vault_folders.system.ai.cleanup_reports == "99_Archive/CleanupReports"
 
 
+def test_load_v2_0_1_default_codex_models_migrate_to_gpt_5_6(tmp_path):
+    """v2.0.1이 저장한 전체 기본 models 블록은 GPT-5.6으로 승격한다."""
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "models": {
+                    "tasks": {
+                        "classify": "gpt-5.5",
+                        "card_generate": "gpt-5.5",
+                        "ask": None,
+                        "decide": None,
+                        "resume": None,
+                        "recall": None,
+                        "update_profile": None,
+                        "relevance": "gpt-5.5",
+                    },
+                    "overrides": {
+                        "codex": {
+                            "default": "gpt-5.5",
+                            "classify": None,
+                            "card_generate": None,
+                            "ask": None,
+                            "decide": None,
+                            "resume": None,
+                            "recall": None,
+                            "update_profile": None,
+                            "relevance": None,
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.models.model_for_task("codex", "classify") == "gpt-5.6-luna"
+    assert cfg.models.model_for_task("codex", "recall") == "gpt-5.6-terra"
+    assert cfg.models.model_for_task("codex", "decide") == "gpt-5.6-sol"
+    assert cfg.models.model_for_task("codex", "ask") == "gpt-5.6-sol"
+
+
+def test_load_legacy_null_override_preserves_explicit_shared_task_model(tmp_path):
+    """null은 기존처럼 사용자가 설정한 shared task 모델로 fallback해야 한다."""
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "models": {
+                    "tasks": {"ask": "user-shared-ask-model"},
+                    "overrides": {
+                        "codex": {"default": "gpt-5.5", "ask": None}
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.models.model_for_task("codex", "ask") == "user-shared-ask-model"
+
+
+def test_load_partial_legacy_codex_config_preserves_shared_gpt_5_5_pin(tmp_path):
+    """부분 config의 gpt-5.5는 자동 생성 기본값과 구분할 수 없어 보존한다."""
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "models": {
+                    "tasks": {"classify": "gpt-5.5"},
+                    "overrides": {
+                        "codex": {"default": "gpt-5.5", "classify": None}
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.models.model_for_task("codex", "classify") == "gpt-5.5"
+
+
+def test_load_partial_v2_0_1_shared_codex_default_preserves_gpt_5_5(tmp_path):
+    """누락된 legacy override는 새 역할별 기본값을 상속하면 안 된다."""
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "models": {
+                    "tasks": {
+                        "classify": "gpt-5.5",
+                        "card_generate": "gpt-5.5",
+                        "relevance": "gpt-5.5",
+                    },
+                    "overrides": {"codex": {"default": "gpt-5.5"}},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.models.model_for_task("codex", "classify") == "gpt-5.5"
+    assert cfg.models.model_for_task("codex", "ask") == "gpt-5.5"
+    assert cfg.models.model_for_task("codex", "generate") == "gpt-5.5"
+
+
+def test_load_partial_legacy_task_pin_preserves_task_model(tmp_path):
+    """legacy task 고정은 새 Codex 역할 override보다 우선해야 한다."""
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump({"models": {"tasks": {"classify": "gpt-5.5"}}}),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(path)
+
+    assert cfg.models.model_for_task("codex", "classify") == "gpt-5.5"
+
+
 def test_get_vault_path_env_takes_priority(tmp_path, monkeypatch):
     env_vault = tmp_path / "env_vault"
     cfg_vault = tmp_path / "cfg_vault"

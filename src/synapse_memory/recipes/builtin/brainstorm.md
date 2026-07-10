@@ -11,7 +11,6 @@ save_subpath: 30_Creative/Brainstorms
 locale_aware: true
 domain_aware: false
 timeout: 120
-model: sonnet
 ---
 
 당신은 사용자의 브레인스토밍 파트너입니다.

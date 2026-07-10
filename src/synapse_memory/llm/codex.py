@@ -25,7 +25,7 @@ from synapse_memory.llm._runtime import (
 )
 
 CODEX_BIN = "codex"
-DEFAULT_MODEL = "gpt-5.5"
+DEFAULT_MODEL = "gpt-5.6-terra"
 DEFAULT_TIMEOUT_SEC = 240
 
 

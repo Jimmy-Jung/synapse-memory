@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -81,6 +82,31 @@ class TestReadHistoryTail:
 
 
 class TestExtractProfileFacts:
+    def test_default_model_uses_update_profile_task_route(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        history = tmp_path / "history.jsonl"
+        history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
+        captured: dict[str, str | None] = {}
+
+        monkeypatch.setattr(
+            ex_mod.ai_api,
+            "resolve_model_for_task",
+            lambda task, **_kwargs: "gpt-5.6-terra" if task == "update_profile" else None,
+        )
+
+        def fake_complete(*_args, model=None, **_kwargs):
+            captured["model"] = model
+            return {"facts": []}
+
+        monkeypatch.setattr(ex_mod.ai_api, "complete_structured", fake_complete)
+        extract_profile_facts(
+            history_path=history,
+            ai_env=SimpleNamespace(provider="codex", model="gpt-5.6-sol"),
+        )
+
+        assert captured["model"] == "gpt-5.6-terra"
+
     def test_parses_response(self, tmp_path: Path) -> None:
         history = tmp_path / "history.jsonl"
         history.write_text(
@@ -195,6 +221,31 @@ class TestExtractProfileFacts:
 
 
 class TestExtractDecisionPatterns:
+    def test_default_model_uses_update_profile_task_route(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        history = tmp_path / "history.jsonl"
+        history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")
+        captured: dict[str, str | None] = {}
+
+        monkeypatch.setattr(
+            ex_mod.ai_api,
+            "resolve_model_for_task",
+            lambda task, **_kwargs: "gpt-5.6-terra" if task == "update_profile" else None,
+        )
+
+        def fake_complete(*_args, model=None, **_kwargs):
+            captured["model"] = model
+            return {"patterns": []}
+
+        monkeypatch.setattr(ex_mod.ai_api, "complete_structured", fake_complete)
+        extract_decision_patterns(
+            history_path=history,
+            ai_env=SimpleNamespace(provider="codex", model="gpt-5.6-sol"),
+        )
+
+        assert captured["model"] == "gpt-5.6-terra"
+
     def test_parses_response(self, tmp_path: Path) -> None:
         history = tmp_path / "h.jsonl"
         history.write_text(json.dumps({"display": "x"}) + "\n", encoding="utf-8")

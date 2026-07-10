@@ -788,7 +788,8 @@ def run_daily(
     Args:
         only: 이 단계 이름들만 실행. None이면 전체.
         skip: 제외할 단계.
-        ingest_model: ingest 단계에 쓸 단일 provider 모델. None이면 provider default.
+        ingest_model: ingest 단계에 쓸 단일 provider 모델. None이면
+            ``card_generate`` task 설정 모델.
         dry_run: True면 단계 이름만 출력.
         stage_actions: stage body override (테스트용).
         on_log: print 대체 (테스트용).
@@ -820,6 +821,11 @@ def run_daily(
             suffix = " (resume skip)" if resume_skipped else ""
             on_log(f"{mark} {s}{suffix}")
         return result
+
+    if ingest_model is None:
+        from synapse_memory.llm.ai_api import resolve_model_for_task
+
+        ingest_model = resolve_model_for_task("card_generate")
 
     lock_context = (
         DailyRunLock()

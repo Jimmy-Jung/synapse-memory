@@ -17,6 +17,7 @@ from synapse_memory.cli.common import FAIL, OK, api
 
 def cmd_daily(args: argparse.Namespace) -> int:
     try:
+        args.model = api()._resolve_model(args.model, "card_generate")
         only = api()._parse_stage_csv(args.only) if args.only else None
         skip = api()._parse_stage_csv(args.skip) if args.skip else None
         with api()._daily_status_watcher(

@@ -200,7 +200,7 @@ def cmd_persona_ingest(args: argparse.Namespace) -> int:
 
 def cmd_persona_design_project(args: argparse.Namespace) -> int:
     args.top_k = api()._arg_or_config(args.top_k, "top_k.resume", 6)
-    args.model = api()._resolve_model(args.model, "resume")
+    args.model = api()._resolve_model(args.model, "generate")
     api()._enforce_cost_cap("persona design-project")
     api()._interactive_guard("persona design-project", "decide")
     ai_env = api().detect_ai_environment(model=args.model)
@@ -335,6 +335,7 @@ def cmd_me_generate(args: argparse.Namespace) -> int:
             cli_domain=args.domain,
             rag_mode_override=args.rag_mode,
             dry_run=args.dry_run,
+            model_override=args.model,
         )
     except RecipeNotFoundError as exc:
         print(f"{FAIL} {exc}", file=sys.stderr)

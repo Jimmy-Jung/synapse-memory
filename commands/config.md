@@ -20,12 +20,12 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 | "이력서 초안 / drafts N일" | `cleanup.old_resume_days` |
 | "MemoryInbox / 메모리 인박스 후보 N일" | `cleanup.stale_memory_inbox_days` |
 | "DailyReports / 일일 리포트 N일" | `cleanup.old_daily_reports_days` |
-| "claude 이력서 모델 opus / sonnet" | `models.claude.resume` |
-| "codex 이력서 모델 …" | `models.codex.resume` |
-| "claude 카드 생성 모델" | `models.claude.card_generate` |
-| "codex 카드 생성 모델" | `models.codex.card_generate` |
-| "claude 분류 모델 / codex 분류 모델" | `models.claude.classify` / `models.codex.classify` |
-| "claude ask 모델 / codex ask 모델" | `models.claude.ask` / `models.codex.ask` |
+| "claude 이력서 모델 opus / sonnet" | `models.overrides.claude.resume` |
+| "codex 이력서 모델 …" | `models.overrides.codex.resume` |
+| "claude 카드 생성 모델" | `models.overrides.claude.card_generate` |
+| "codex 카드 생성 모델" | `models.overrides.codex.card_generate` |
+| "claude 분류 모델 / codex 분류 모델" | `models.overrides.claude.classify` / `models.overrides.codex.classify` |
+| "claude ask 모델 / codex ask 모델" | `models.overrides.claude.ask` / `models.overrides.codex.ask` |
 | "ask 결과 N개" | `top_k.ask` |
 | "decide 결과 N개" | `top_k.decide` |
 | "recall 결과 N개" | `top_k.recall` |
@@ -38,6 +38,9 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 | "codex 자동 수집 끄기/켜기" | `automation.codex_poller.enabled` |
 | "매일 자동 실행 N시" | `automation.daily_cron.time` (+ `automation.daily_cron.enabled=true`) |
 | "profile sample N줄" | `profile.sample_lines` |
+
+Codex 기본 배정은 Sol(ask·decide·resume), Terra(통합·회상·Profile·일반 생성),
+Luna(분류·관련 페이지 선별)입니다. `--model`과 위 override가 항상 이 기본값보다 우선합니다.
 
 ### 동의 흐름
 

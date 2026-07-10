@@ -22,7 +22,7 @@ from synapse_memory.feedback.last_response import (
     new_answer_reference,
     save_last_answer,
 )
-from synapse_memory.llm.ai_api import AIEnvironment
+from synapse_memory.llm.ai_api import AIEnvironment, resolve_model_for_task
 from synapse_memory.model import Entity
 from synapse_memory.recall.timeline import (
     _EMPTY_MESSAGE,
@@ -35,7 +35,6 @@ from synapse_memory.recipes.pipeline import build_entity_index, entity_to_text
 from synapse_memory.store import load_entity
 
 DEFAULT_PROJECTS_FOR_RESUME = 6
-DEFAULT_RESUME_MODEL = "sonnet"
 DEFAULT_RESUME_TIMEOUT = 240
 DRAFTS_SUBPATH = Path("30_Creative") / "Drafts"
 
@@ -89,11 +88,21 @@ def _build_resume_prompt(company: Entity, matched: list[tuple[object, float]]) -
     )
 
 
+def _task_model(
+    model: str | None,
+    task: str,
+    ai_env: AIEnvironment | None,
+) -> str | None:
+    return model or resolve_model_for_task(
+        task, provider=getattr(ai_env, "provider", None)
+    ) or getattr(ai_env, "model", None)
+
+
 def draft_resume(
     company_id: str,
     *,
     top_k_projects: int = DEFAULT_PROJECTS_FOR_RESUME,
-    model: str = DEFAULT_RESUME_MODEL,
+    model: str | None = None,
     vault_path: Path | None = None,
     ai_env: AIEnvironment | None = None,
     store: object | None = None,  # 시그니처 호환 — provider 선별로 미사용
@@ -122,7 +131,7 @@ def draft_resume(
             inputs={"company_id": company_id},
             vault_path=vault_path,
             ai_env=ai_env,
-            model_override=model,
+            model_override=_task_model(model, "resume", ai_env),
             timeout_override=timeout,
             company=company,
             disable_save=True,  # SC-005: wrapper 가 기존 filename rule 로 직접 저장
@@ -180,7 +189,7 @@ def what_did_i_think(
     topic: str,
     *,
     top_k: int = 8,
-    model: str | None = "sonnet",
+    model: str | None = None,
     ai_env: AIEnvironment | None = None,
     store: object | None = None,  # 시그니처 호환 — provider 선별로 미사용
     by: Literal["time", "distance"] = "distance",
@@ -249,7 +258,7 @@ def what_did_i_think(
         inputs={"topic": topic},
         vault_path=vault_path,
         ai_env=ai_env,
-        model_override=model,
+        model_override=_task_model(model, "recall", ai_env),
         top_k_override=top_k,
         disable_save=True,
         return_empty_on_no_matches=True,
@@ -288,7 +297,7 @@ def decide(
     situation: str,
     *,
     top_k: int = 6,
-    model: str = "sonnet",
+    model: str | None = None,
     ai_env: AIEnvironment | None = None,
     store: object | None = None,  # 시그니처 호환 — provider 선별로 미사용
     vault_path: Path | None = None,
@@ -313,7 +322,7 @@ def decide(
         inputs={"situation": situation},
         vault_path=vault_path,
         ai_env=ai_env,
-        model_override=model,
+        model_override=_task_model(model, "decide", ai_env),
         top_k_override=top_k,
         disable_save=True,
         return_empty_on_no_matches=True,

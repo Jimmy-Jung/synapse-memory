@@ -11,7 +11,6 @@ save_subpath: 30_Creative/Drafts
 locale_aware: true
 domain_aware: true
 timeout: 240
-model: sonnet
 ---
 
 당신은 사용자 voice 기반 이력서 작성 어시스턴트입니다.

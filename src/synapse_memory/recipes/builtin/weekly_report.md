@@ -12,7 +12,6 @@ save_subpath: 30_Creative/Reports
 locale_aware: true
 domain_aware: false
 timeout: 120
-model: sonnet
 ---
 
 당신은 사용자의 주간 보고 작성 어시스턴트입니다.
