@@ -118,8 +118,13 @@ def _build_relation_context(pages: list[Entity]) -> str:
 
 
 def _resolve_sources(answer: str, pages: list[Entity]) -> list[str]:
-    """인용된 slug 우선, 비면 retrieved slug."""
-    cited = extract_wikilinks(answer)
+    """인용된 slug 우선, 비면 retrieved slug.
+
+    답변 텍스트의 wikilink는 제공된 Entity slug로 검증한다 — LLM이 인용 형식을
+    설명하며 쓴 리터럴(``[[slug]]`` 등)이 출처로 새는 것을 막는다.
+    """
+    valid = {p.slug for p in pages}
+    cited = [s for s in extract_wikilinks(answer) if s in valid]
     page_slugs = [p.slug for p in pages if p.slug in answer]
     sources = list(dict.fromkeys(cited + page_slugs))
     if sources:
