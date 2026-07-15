@@ -4,6 +4,15 @@ All notable changes to Synapse Memory are documented here.
 
 ## [Unreleased]
 
+## [2.0.3] — 2026-07-15
+
+### Fixed
+
+- **ask 출처 검증**: `_resolve_sources`가 답변 텍스트의 wikilink를 검증 없이
+  출처로 수집해, LLM이 인용 형식을 설명하며 쓴 리터럴(`[[slug]]`)이나 환각
+  링크가 출처·insight `related`에 새어들어가던 문제를 수정했다. 제공된 Entity
+  slug 집합으로 필터해 `select_related`와 동일한 검증 원칙을 적용한다.
+
 ## [2.0.2] — 2026-07-10
 
 ### Changed

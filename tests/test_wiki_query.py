@@ -20,6 +20,17 @@ def test_ask_wiki_synthesizes_with_citation(tmp_path, monkeypatch) -> None:
     assert "rag" in res.sources
 
 
+def test_ask_wiki_sources_drop_unknown_wikilinks(tmp_path, monkeypatch) -> None:
+    """답변에 섞인 리터럴/환각 wikilink는 출처에서 제외 — 실존 slug만 남는다."""
+    save_page(Entity(type="concept", slug="rag", title="RAG", body="검색 증강 생성"), vault_path=tmp_path)
+    monkeypatch.setattr(q, "_retrieve_wiki",
+        lambda query, *, vault_path, top_k, include_history=False: [load_page("concept", "rag", vault_path=vault_path)])
+    monkeypatch.setattr(q.ai_api, "complete",
+        lambda *a, **k: "주장별 `[[slug]]` 인용 형식을 따릅니다 [[rag]] [[ghost-page]]")
+    res = q.ask_wiki("RAG가 뭐야?", vault_path=tmp_path)
+    assert res.sources == ["rag"]
+
+
 def test_ask_wiki_writeback_creates_insight(tmp_path, monkeypatch) -> None:
     save_page(Entity(type="concept", slug="rag", title="RAG", body="x"), vault_path=tmp_path)
     monkeypatch.setattr(q, "_retrieve_wiki",
