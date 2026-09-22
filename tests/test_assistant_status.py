@@ -199,6 +199,9 @@ def test_recommend_actions_priority_order():
     assert any("MemoryInbox 검토" in r for r in recs)
     assert any("draft 카드" in r for r in recs)
     assert any("키워드 비어 있는 회사 카드" in r for r in recs)
+    assert any("/sm:career-tailor" in r for r in recs)
+    assert any("$sm:career-tailor" in r for r in recs)
+    assert all("/sm:resume" not in r for r in recs)
     inbox_idx = next(i for i, r in enumerate(recs) if "MemoryInbox" in r)
     draft_idx = next(i for i, r in enumerate(recs) if "draft 카드" in r)
     assert inbox_idx < draft_idx

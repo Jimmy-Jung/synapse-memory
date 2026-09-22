@@ -122,22 +122,48 @@ synapse-memory persona decide "이번 PR을 하나로 낼까 기능 단위로 �
 Profile과 DecisionPatterns가 비어 있으면 일반 조언에 가까워집니다. `MemoryInbox` 후보를
 검토해 승인된 자료를 늘릴수록 답이 사용자에게 맞춰집니다.
 
-## 이력서 초안
+## 자기소개·이력서 작성
+
+| 시작점 | Claude Code | Codex |
+| --- | --- | --- |
+| 제공 자료로 작성·수정 | `/sm:career-write <자료/요청>` | `$sm:career-write <자료/요청>` |
+| 자료 정리·필요한 질문 후 작성 | `/sm:career-interview <경험/자료>` | `$sm:career-interview <경험/자료>` |
+| 회사·공고 조사와 경험 매칭 후 작성 | `/sm:career-tailor <회사/공고>` | `$sm:career-tailor <회사/공고>` |
+
+세 스킬 모두 자기소개와 이력서를 지원합니다. `career-interview`와 `career-tailor`는
+확인한 사실과 출처를 전달하고 `career-write`의 작성 절차를 재사용합니다.
+기존 `resume` 스킬은 이 세 스킬로 교체되었습니다.
+
+자료는 `20_Reference/Career/`, 경력 관련 `00_Inbox/`, `Entities/Projects/`, `Profile/`
+순으로 확인하고 필요할 때 `Insights/`, `Logs/`, `Concepts/`로 확장합니다. 회사 맞춤
+작업에서는 `20_Reference/Companies/`와 기존 `Entities/Companies/`도 참고하고,
+공식 회사·채용공고 페이지에서 현재 정보를 확인합니다. private raw 기록은 읽지 않습니다.
+
+기본 결과 위치:
 
 ```text
-/sm:resume examplecorp
+00_Inbox/<작업명>/
+  자기소개.md 또는 이력서.md
+  검토자료.md
 ```
 
-Codex에서는 `$resume examplecorp`를 실행합니다.
+본문에는 근거가 확인된 사실을 쓰고, 출처·미확정 사항·경험 선정 이유는 검토자료에
+남깁니다. 핵심 역할·재직 기간처럼 글의 구성을 바꾸는 정보가 막힐 때만 먼저 질문합니다.
+나머지는 확인된 내용으로 초안을 작성하며, 기존 파일과 승인된 최종본을 임의 덮어쓰지 않습니다.
+회사 조사·지원 전략도 검토자료에 포함하고 실제 제출·외부 전송은 별도 요청이 있어야 합니다.
 
-터미널에서는 다음과 같습니다.
+### 별도 CLI와의 차이
+
+세 스킬은 현재 Claude·Codex 대화에서 자료를 읽고 작성합니다. 다음 기존 CLI와 `resume`
+recipe는 호환성을 위해 유지되며, 회사 엔티티·프로젝트·Profile을 바탕으로 설정된
+provider를 별도로 호출합니다. 새 스킬의 조사·인터뷰·검토자료 분리 절차는 실행하지 않습니다.
 
 ```bash
 synapse-memory persona draft-resume examplecorp
 ```
 
-결과는 Obsidian vault의 `30_Creative/Drafts/`에 생성됩니다. 제출 전에 문장, 수치,
-회사명, 민감정보를 직접 확인하세요.
+CLI 결과는 `vault_folders.creative.drafts` 설정 위치(기본 `30_Creative/Drafts/`)에
+생성됩니다. 어느 경로든 제출 전에 문장, 수치, 회사명, 민감정보를 직접 확인하세요.
 
 ## MemoryInbox 검토
 
@@ -478,7 +504,7 @@ ingest 비용 정책은 문서 크기 기준으로 고정됩니다. 40,000자 �
 120,000자를 넘는 초대형 문서는 LLM 없이 skip하고 watermark를 전진시켜 backfill
 queue가 같은 파일에서 멈추지 않게 합니다.
 
-질문 경로(`ask`, `wiki ask`, `persona decide/recall/resume`)는 wiki 카드와 사용자가 승인한
+질문 CLI 경로(`ask`, `wiki ask`, `persona decide`, `persona what-did-i-think`, `persona draft-resume`)는 wiki 카드와 사용자가 승인한
 Profile/DecisionPatterns를 중심으로 provider에 전달합니다. raw mirror를 provider에 보내는
 경로는 wiki 통합용 ingest/backfill/watch입니다.
 

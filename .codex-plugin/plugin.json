@@ -21,13 +21,13 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Synapse Memory",
-    "shortDescription": "vault 기반 RAG + 자동 메모리 / 이력서 / 의사결정 코파일럿.",
-    "longDescription": "Synapse Memory는 Obsidian vault와 Claude Code 활동 로그를 안전하게 mirror한 뒤, 자동으로 Project / Company Card를 추출하고, 자연어 질의(ask) / 시간순 회상(recall) / 의사결정(decide) / 회사 맞춤 이력서(resume) / 일일 통합(daily) 워크플로를 제공합니다. 모든 raw 데이터는 ~/.synapse/private/ (0700)에 격리됩니다.",
+    "shortDescription": "vault 기반 RAG + 자동 메모리 / 자기소개·이력서 / 의사결정 코파일럿.",
+    "longDescription": "Synapse Memory는 Obsidian vault와 Claude Code 활동 로그를 안전하게 mirror한 뒤, 자동으로 Project / Company Card를 추출하고, 자연어 질의(ask) / 시간순 회상(recall) / 의사결정(decide) / 자기소개·이력서 작성(career-write), 경력 인터뷰(career-interview), 회사 맞춤 작성(career-tailor) / 일일 통합(daily) 워크플로를 제공합니다. 모든 raw 데이터는 ~/.synapse/private/ (0700)에 격리됩니다.",
     "developerName": "Synapse Memory Maintainers",
     "category": "Productivity",
     "capabilities": [
       "Local RAG retrieval",
-      "Resume drafting per company",
+      "Career writing, interviews and company tailoring",
       "Topic recall over time",
       "Decision copilot",
       "Daily ingest pipeline"
@@ -38,7 +38,7 @@
     "defaultPrompt": [
       "Synapse Memory로 'iOS 클린 아키텍처 어떻게 도입했지?' 회상해줘.",
       "오늘 synapse-memory daily 실행해서 신규 Card 있는지 보고해줘.",
-      "당근마켓 지원할건데 persona draft-resume으로 이력서 초안 만들어줘."
+      "$sm:career-tailor 당근마켓 채용공고와 내 경험을 연결해 이력서 초안을 만들어줘."
     ],
     "brandColor": "#2563EB"
   }

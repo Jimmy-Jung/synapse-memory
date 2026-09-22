@@ -9,7 +9,7 @@
     {
       "name": "sm",
       "source": "./",
-      "description": "Synapse Memory — Local-first RAG + 자동 메모리 시스템. /sm:ask, /sm:recall, /sm:decide, /sm:resume, /sm:daily, /sm:doctor, /sm:fix slash 명령 제공."
+      "description": "Synapse Memory — Local-first RAG + 자동 메모리 시스템. /sm:ask, /sm:recall, /sm:decide, /sm:career-write, /sm:career-interview, /sm:career-tailor, /sm:daily, /sm:doctor, /sm:fix 제공."
     }
   ]
 }

@@ -22,4 +22,6 @@ SYNAPSE_FROM_AGENT=1 synapse-memory ask "<질의>" [--top-k N]
 - 단순 "오늘 한 일 정리" → `daily` skill
 - 특정 주제의 시간순 입장 변화 → `recall` skill
 - 의사결정 추천 → `decide` skill
-- 이력서 합성 → `resume` skill
+- 자기소개·이력서 작성/수정 → `career-write` skill
+- 경력 자료 정리와 인터뷰 → `career-interview` skill
+- 회사·공고 맞춤 자기소개·이력서 → `career-tailor` skill

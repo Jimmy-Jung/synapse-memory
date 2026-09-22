@@ -1,6 +1,6 @@
 ---
 name: sm
-description: Use when the user asks to recall what they thought about a topic, draft a company-tailored resume, make a decision based on their past patterns, run daily ingest, or query their vault via RAG. Synapse Memory is a local-first AI assistant / second brain / clone backed by an Obsidian vault and Claude Code activity logs.
+description: Use when the user asks to recall what they thought about a topic, write or revise a self-introduction or résumé, organize career evidence through an interview, tailor either document to a company, make a decision based on their past patterns, run daily ingest, or query their vault via RAG. Synapse Memory is a local-first AI assistant / second brain / clone backed by an Obsidian vault and Claude Code activity logs.
 ---
 
 # Synapse Memory Skill (sm)
@@ -12,7 +12,9 @@ Obsidian vault + Claude Code 활동 로그를 mirror한 뒤 Project / Company Ca
 ## 언제 이 skill을 쓰는가
 
 - 사용자가 "내가 X에 대해 뭐라 했었지?" 회상 → `/sm:recall <주제>`
-- "Y 회사 지원할건데 이력서 써줘" → `/sm:resume <회사>`
+- "자기소개/이력서를 작성하거나 다듬어줘" → `career-write`
+- "경력 자료를 정리하고 경험을 질문해줘" → `career-interview`
+- "Y 회사에 맞춰 자기소개/이력서를 써줘" → `career-tailor`
 - "Z 상황에서 어떻게 결정하지?" → `/sm:decide <상황>`
 - "vault에서 X 찾아줘" / 자연어 질의 → `/sm:ask <질의>`
 - "내 회고록/일기/메모를 학습시켜줘" → `persona ingest --file <path>` (M1b)
@@ -91,16 +93,38 @@ skills/sm/SKILL.md                  # 양쪽이 공유하는 skill
 
 Claude Code는 `commands/` + `skills/`를 모두 사용, Codex는 `skills/`만 사용합니다.
 
+## 경력 작성 스킬 연결
+
+| 목적 | Claude Code | Codex |
+|---|---|---|
+| 자기소개·이력서 작성과 수정 | `/sm:career-write` | `$sm:career-write` |
+| 자료 정리·필요한 질문 후 작성 | `/sm:career-interview` | `$sm:career-interview` |
+| 회사·공고 조사와 경험 매칭 후 작성 | `/sm:career-tailor` | `$sm:career-tailor` |
+
+세 스킬은 현재 대화에서 해당 [작성](../career-write/SKILL.md),
+[인터뷰](../career-interview/SKILL.md), [회사 맞춤](../career-tailor/SKILL.md) 절차를
+읽고 실행합니다. `career-interview`와 `career-tailor`는 확인한 사실과 출처를
+`career-write`에 전달합니다. CLI provider 호출을 자동 실행하는 래퍼가 아닙니다.
+
+현재 Vault의 핵심 경력 자료부터 확인하고 관련 문서로 확장합니다. 본문은
+`00_Inbox/<작업명>/자기소개.md` 또는 `이력서.md`, 출처·미확정 사항·선정 이유는
+같은 폴더의 `검토자료.md`에 저장합니다. raw private 기록과 미승인 MemoryInbox
+후보를 경력 근거로 사용하지 않습니다.
+
+기존 `resume` 스킬은 세 스킬로 교체되었습니다. 별도 CLI
+`synapse-memory persona draft-resume <회사>`와 `resume` recipe는 그대로 유지되며,
+설정된 provider를 호출하고 기본 `30_Creative/Drafts/`에 저장합니다.
+사용자가 이 CLI를 명시한 경우에만 별도 경로임을 구분해 안내합니다.
+
 ## CLI 백엔드 + 사용 정책
 
-모든 slash 명령은 내부적으로 `synapse-memory` Python CLI를 `SYNAPSE_FROM_AGENT=1` env 와 함께 호출합니다:
+다음 명령은 `synapse-memory` Python CLI를 호출합니다. 경력 스킬의 실행 절차와 구분합니다:
 
 | Slash | 내부 호출 | 종류 |
 |---|---|---|
 | `/sm:ask` | `SYNAPSE_FROM_AGENT=1 synapse-memory ask "<질의>"` | 대화형 |
 | `/sm:recall` | `SYNAPSE_FROM_AGENT=1 synapse-memory persona what-did-i-think "<주제>"` | 대화형 |
 | `/sm:decide` | `SYNAPSE_FROM_AGENT=1 synapse-memory persona decide "<상황>"` | 대화형 |
-| `/sm:resume` | `SYNAPSE_FROM_AGENT=1 synapse-memory persona draft-resume <회사>` | 대화형 |
 | `/sm:daily` | `synapse-memory daily` | 배치 |
 | `/sm:doctor` | `synapse-memory doctor` | 환경 진단 |
 | `/sm:fix` | `synapse-memory doctor --fix` | 환경 자동 복구 |
@@ -118,10 +142,10 @@ Claude Code는 `commands/` + `skills/`를 모두 사용, Codex는 `skills/`만 �
 
 ## 안전 규칙
 
-- vault 파일을 *직접* 수정하지 마세요. 항상 CLI를 통해 처리 (CLI가 trash-first 보존 + diff 생성).
+- 기존 wiki·Profile 원본은 임의로 수정하지 마세요. 유지보수는 해당 CLI 절차를 따릅니다. 사용자가 요청한 경력 문서와 검토자료는 `career-write`의 파일 보존 규칙에 따라 `00_Inbox/<작업명>/`에 직접 작성합니다.
 - raw 데이터는 `~/.synapse/private/`(0700)에 격리됩니다. 외부 LLM(Claude API)에는 요약 카드와 사용자가 승인한 자료만 전달하세요.
 - `~/.synapse/private/` 내용을 chat에 그대로 노출하지 마세요.
-- 이력서 / 결정 결과는 사용자 vault `30_Creative/Drafts/`에 저장된 파일 경로를 알려주고, 사용자가 수동 검토 후 공식화하도록 권장.
+- 경력 스킬 결과는 `00_Inbox/<작업명>/`의 본문·검토자료 경로를 알려줍니다. 별도 CLI 결과는 실제 반환된 저장 경로를 보고합니다. 제출·외부 전송은 별도 요청 없이 수행하지 않습니다.
 
 ## 도움 / 진단
 

@@ -14,7 +14,7 @@ Synapse Memory는 Claude Code·Codex 등 어떤 AI 툴과의 대화든 자동으
 2. 새 AI 대화마다 내 프로젝트 맥락을 처음부터 설명해야 합니다.
 3. 이력서·회고·의사결정처럼 "내가 예전에 뭘 했고 어떻게 판단했는지"가 필요한 작업을 매번 다시 정리합니다.
 
-Synapse Memory는 새 노트와 대화 기록을 자동으로 모아 서로 연결된 wiki로 정리하고, 그 wiki로 질문에 답합니다. 사용자는 원본 파일을 뒤지는 대신 Claude Code의 `/sm:ask`·`/sm:recall`·`/sm:resume`, Codex의 `$ask`·`$recall`·`$resume` 같은 짧은 명령으로 자기 자료를 다시 사용합니다.
+Synapse Memory는 새 노트와 대화 기록을 자동으로 모아 서로 연결된 wiki로 정리하고, 그 wiki로 질문에 답합니다. 사용자는 Claude Code의 `/sm:ask`·`/sm:recall`·`/sm:career-tailor`, Codex의 `$ask`·`$recall`·`$sm:career-tailor` 같은 짧은 명령으로 자기 자료를 다시 사용합니다.
 
 ## 핵심 용어
 
@@ -198,11 +198,17 @@ synapse-memory watch status      # 설치 여부 + 소스별 watermark
 | 답변을 Insight 카드로 저장 | `/sm:ask "질문" --save` | `$ask "질문" --save` | `synapse-memory ask "질문" --save` |
 | 예전에 한 생각 회상 | `/sm:recall "주제"` | `$recall "주제"` | `synapse-memory persona what-did-i-think "주제"` |
 | 의사결정 도움 받기 | `/sm:decide "상황"` | `$decide "상황"` | `synapse-memory persona decide "상황"` |
-| 회사 맞춤 이력서 초안 | `/sm:resume <회사>` | `$resume <회사>` | `synapse-memory persona draft-resume <회사>` |
+| 자기소개·이력서 작성과 수정 | `/sm:career-write <자료/요청>` | `$sm:career-write <자료/요청>` | 스킬에서 진행 |
+| 경력 자료 정리와 인터뷰 → 작성 | `/sm:career-interview <경험/자료>` | `$sm:career-interview <경험/자료>` | 스킬에서 진행 |
+| 회사·공고 조사와 경험 매칭 → 맞춤 작성 | `/sm:career-tailor <회사/공고>` | `$sm:career-tailor <회사/공고>` | 스킬에서 진행 |
 | 오늘 할 일 추천 | `/sm:assistant` | `$assistant` | `synapse-memory assistant-status` |
 | Profile 후보 항목별 GUI 승인 | `/sm:apply-profile [date]` | `$apply-profile` | `synapse-memory list-pending-profiles` |
 | 다른 프로젝트에 sm 컨텍스트 등록 | `/sm:setup` | `$setup` | `synapse-memory setup` |
 | 등록된 프로젝트 marker + 캐시 갱신 | `/sm:sync` | `$sync` | `synapse-memory sync` |
+
+세 `career-*` 스킬은 모두 자기소개와 이력서를 지원합니다. 현재 Vault의 경력 문서와 프로젝트 자료를 읽고, 필요한 질문을 거쳐 현재 Claude·Codex 대화에서 작성합니다. 최종 작성은 `career-write` 절차를 공유하며 `00_Inbox/<작업명>/`에 `자기소개.md` 또는 `이력서.md`와 `검토자료.md`를 분리해 저장합니다. 기존 `resume` 스킬은 이 세 스킬로 교체되었습니다.
+
+별도 CLI `synapse-memory persona draft-resume <회사>`와 `resume` recipe는 유지됩니다. 이 경로는 설정된 provider를 별도로 호출하며 기본 `30_Creative/Drafts/`에 저장합니다. 새 스킬의 회사 조사·인터뷰·검토자료 분리 흐름을 자동 실행하지 않습니다.
 
 ### 자동 통합 엔진 제어 (터미널)
 
@@ -258,11 +264,15 @@ Synapse Memory는 "쌓아두는 도구"가 아니라 "다시 꺼내 쓰는 도�
   synapse-memory persona what-did-i-think "AI 코딩 도구"
   ```
 
-- **회사 맞춤 이력서 초안.** 축적된 프로젝트/성과 기록에서 특정 회사에 맞춘 초안을 뽑습니다.
+- **경험을 자기소개와 이력서로 정리.** 자료가 준비됐으면 `career-write`, 경험 정리부터 필요하면 `career-interview`, 지원 회사와 공고가 있으면 `career-tailor`로 시작합니다.
 
-  ```bash
-  synapse-memory persona draft-resume examplecorp
+  ```text
+  /sm:career-write 자기소개 초안을 다듬어줘
+  /sm:career-interview 프로젝트 기록으로 이력서를 정리해줘
+  /sm:career-tailor examplecorp 채용공고에 맞춰 이력서를 써줘
   ```
+
+  Codex에서는 같은 이름 앞에 `$sm:`을 붙입니다. 확인된 사실로 본문을 쓰고 출처·미확정 사항·경험 선정 이유는 별도 검토자료에 남깁니다.
 
 - **의사결정 보조.** 현재 상황을 넣으면 과거 결정 패턴을 근거로 판단을 돕습니다.
 
