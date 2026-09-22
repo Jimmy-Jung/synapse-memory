@@ -47,6 +47,36 @@ def test_ingest_creates_page_and_updates_watermark(tmp_path, monkeypatch) -> Non
     assert again.docs_processed == 0
 
 
+def test_sampled_ingest_stores_exact_evidence_with_unsampled_source_ref(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    raw_root = tmp_path / "raw" / "claude-code"
+    quote = "Demo는 RAG를 사용한다."
+    _write_session(raw_root, "evidence", quote + "\n" + "중간문장 " * 40 + "끝")
+    monkeypatch.setattr(routing_mod, "LARGE_DOC_CHAR_THRESHOLD", 25)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_LIMIT", 500)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_CHAR_BUDGET", 300)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_EDGE_CHARS", 30)
+    monkeypatch.setattr(routing_mod, "SAMPLED_DOC_SIGNAL_CHARS", 0)
+    monkeypatch.setattr(ingest_mod.ai_api, "complete_structured", _fake_complete_structured({
+        "operations": [{"op": "create", "type": "project", "slug": "demo", "title": "Demo",
+                        "body": "프로젝트 요약", "uses": ["rag"],
+                        "relation_evidence": [{"relation": "uses", "target": "rag",
+                                               "quote": quote}]}],
+    }))
+    result = ingest_source("claude-code", vault_path=tmp_path, raw_root=raw_root,
+                           watermark_path=tmp_path / "state.json", today="2026-09-22")
+    assert result.errors == []
+    page = load_page("project", "demo", vault_path=tmp_path)
+    assert page.sources == ("claude-code:evidence.jsonl",)
+    evidence = page.relation_evidence[0]
+    assert evidence.source == "claude-code:evidence.jsonl"
+    assert evidence.start_byte == 0
+    assert evidence.end_byte == (raw_root / "evidence.jsonl").stat().st_size
+    assert evidence.start_char == 0
+    assert evidence.end_char == len(quote)
+
+
 def test_ingest_logs_dropped_continuant_related_warning(
     tmp_path: Path,
     monkeypatch,

@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 
-from synapse_memory.wiki.rawdoc import RawDoc, iter_new_raw, source_date_from_ref
+from synapse_memory.wiki.rawdoc import RawDoc, _file_text, iter_new_raw, source_date_from_ref
 
 
 def test_source_date_from_codex_ref() -> None:
@@ -176,6 +176,7 @@ def test_offsets_send_only_appended_tail(tmp_path: Path) -> None:
     d1 = next(iter(iter_new_raw("claude-code", since=None, root=root)))
     assert "첫줄" in d1.text
     assert d1.byte_size == len(first.encode("utf-8"))
+    assert d1.start_byte == 0
 
     # append 후 2회차: 이전 byte_size를 offset으로 주면 새 줄만.
     f.write_text(first + '{"message":{"role":"user","content":"둘째줄"}}\n', encoding="utf-8")
@@ -185,6 +186,23 @@ def test_offsets_send_only_appended_tail(tmp_path: Path) -> None:
     assert "둘째줄" in d2.text
     assert "첫줄" not in d2.text  # 이미 ingest한 부분 재전송 안 함
     assert d2.byte_size > d1.byte_size
+    assert d2.start_byte == d1.byte_size
+    assert _file_text(f, "claude-code", start_byte=d2.start_byte,
+                      end_byte=d2.byte_size) == d2.text
+
+    # A subsequent append must not change the evidence text for the recorded interval.
+    with f.open("a", encoding="utf-8") as handle:
+        handle.write('{"message":{"role":"user","content":"셋째줄"}}\n')
+    assert _file_text(f, "claude-code", start_byte=d2.start_byte,
+                      end_byte=d2.byte_size) == d2.text
+
+
+def test_file_text_rejects_invalid_byte_ranges(tmp_path: Path) -> None:
+    f = tmp_path / "s.jsonl"
+    _write_jsonl(f, [{"message": {"content": "원문"}}])
+    assert _file_text(f, "claude-code", start_byte=-1) == ""
+    assert _file_text(f, "claude-code", start_byte=10, end_byte=5) == ""
+    assert _file_text(f, "claude-code", end_byte=0) == ""
 
 
 def test_offset_past_eof_reparses_full(tmp_path: Path) -> None:

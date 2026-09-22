@@ -177,7 +177,9 @@ def ingest_source(
                     provider=_provider() if ai_env is None else None,
                     timeout=INTEGRATION_TIMEOUT_SECONDS,
                 )
-                ops = _stamp_sources(parse_ops(payload), chunk.ref)
+                ops = _stamp_sources(
+                    parse_ops(payload, source_doc=doc, source_text=chunk.text), doc.ref,
+                )
                 if dry_run:
                     # dry-run은 디스크에 아무것도 쓰지 않으며 pages_written도 비워 둔다
                     # (계획서 테스트 계약: result.pages_written == []).

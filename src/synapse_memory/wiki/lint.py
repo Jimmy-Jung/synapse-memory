@@ -21,6 +21,7 @@ from typing import Any
 from synapse_memory.config import get_vault_path
 from synapse_memory.model import (
     Entity,
+    entity_from_meta,
     folder_for,
     load_schema,
     parse_frontmatter,
@@ -314,6 +315,19 @@ def _validate_page(
         _validate_relations(rel_path, meta, page_type, schema, page_types_by_slug)
     )
     violations.extend(_validate_coverage_gate(rel_path, meta, page_type))
+    if "relation_evidence" in meta and all(meta.get(key) for key in COMMON_REQUIRED_FIELDS):
+        evidence_meta = {
+            "type": page_type, "slug": slug, "title": str(meta["title"]),
+            "relation_evidence": meta["relation_evidence"],
+            **{relation: meta.get(relation, ()) for relation in relation_fields()},
+        }
+        try:
+            entity_from_meta(evidence_meta)
+        except (ValueError, TypeError):
+            violations.append(LintViolation(
+                "invalid_relation_evidence", rel_path,
+                "관계 근거의 구조·출처·위치 또는 실제 typed relation 연결이 잘못되었습니다.",
+            ))
     return tuple(violations)
 
 

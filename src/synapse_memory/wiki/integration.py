@@ -9,12 +9,21 @@
 """
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
-from synapse_memory.model import Entity, fields_for, load_schema, render_schema_guidance
+from synapse_memory.model import (
+    Entity,
+    RelationEvidence,
+    fields_for,
+    load_schema,
+    normalize_relation_target,
+    render_schema_guidance,
+)
 from synapse_memory.model.entity import RELATION_FIELDS
 from synapse_memory.wiki.page import VALID_TYPES, serialize_page
+from synapse_memory.wiki.rawdoc import RawDoc
 
 VALID_OPS = ("create", "update")
 CONTINUANT_TYPES = ("project", "company", "concept", "profile")
@@ -92,6 +101,18 @@ INTEGRATION_SCHEMA: dict[str, Any] = {
                         relation: {"type": "array", "items": {"type": "string"}}
                         for relation in RELATION_FIELDS
                     },
+                    "relation_evidence": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "relation": {"type": "string", "enum": list(RELATION_FIELDS)},
+                                "target": {"type": "string"},
+                                "quote": {"type": "string", "minLength": 1, "maxLength": 2000},
+                            },
+                            "required": ["relation", "target", "quote"],
+                        },
+                    },
                     "sources": {"type": "array", "items": {"type": "string"}},
                     **_typed_field_properties(),
                 },
@@ -116,6 +137,9 @@ INTEGRATION_SYSTEM = f"""당신은 사용자의 개인 wiki를 유지하는 사�
 - 결정·판단(decision)은 concept가 아니라 insight 또는 log에 기록하세요. concept는 지속적 지식(기술·도구·알고리즘·방법론)에 한정합니다.
 - 연결은 반드시 typed relation 필드 중 하나로 분류하고, 값은 "slug" 문자열 목록으로 넣으세요.
 - typed relation으로 분류할 수 없으면 연결을 만들지 마세요.
+- 새 typed relation마다 relation_evidence에 relation, target, quote를 넣으세요. quote는 '새 대화/노트 내용'에서 관계를 뒷받침하는 원문을 변경 없이 연속 인용한 1~2000자입니다.
+- quote는 현재 제공된 새 내용에 실제로 있는 문장만 사용하세요. 기존 페이지의 관계나 근거를 추측하여 새 근거를 만들지 마세요. 기존 관계는 유지하되 새 내용에 근거가 없으면 relation_evidence는 생략하세요.
+- 원문 위치(source/offset/hash)는 실행 코드가 검증·기록하므로 반환하지 마세요.
 - uses: 대상 range는 concept만 허용합니다. 예: project "synapse-memory"가 concept "rag"를 쓰면 uses=["rag"].
 - decided_in: 대상 range는 insight 또는 log만 허용합니다. 예: project "synapse-memory" 결정이 insight "2026-07-provider-only"에 기록되면 decided_in=["2026-07-provider-only"].
 - part_of, supersedes, same_as: 대상 range는 project/company/concept/insight/log/profile 모두 허용합니다.
@@ -169,7 +193,76 @@ def build_integration_prompt(
     )
 
 
-def parse_ops(payload: Any) -> list[PageOp]:
+def _parse_relation_evidence(
+    raw: Any,
+    page_type: str,
+    relations: dict[str, Any],
+    source_doc: RawDoc | None,
+    source_text: str | None,
+    warnings: list[str],
+) -> tuple[RelationEvidence, ...]:
+    if raw is None or raw == []:
+        return ()
+    if not isinstance(raw, list):
+        warnings.append("dropped relation evidence: invalid list")
+        return ()
+    if source_doc is None or not 0 <= source_doc.start_byte < source_doc.byte_size:
+        warnings.append("dropped relation evidence: missing runtime source bounds")
+        return ()
+    input_text = source_doc.text if source_text is None else source_text
+    accepted: list[RelationEvidence] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            warnings.append("dropped relation evidence: invalid record")
+            continue
+        relation, target, quote = (item.get(key) for key in ("relation", "target", "quote"))
+        if (
+            not isinstance(relation, str) or relation not in RELATION_FIELDS
+            or not isinstance(target, str)
+        ):
+            warnings.append("dropped relation evidence: unmatched typed relation")
+            continue
+        try:
+            target = normalize_relation_target(target)
+            matches = target in {
+                normalize_relation_target(value) for value in relations[relation]
+            }
+        except ValueError:
+            matches = False
+        if not matches:
+            warnings.append("dropped relation evidence: unmatched typed relation")
+            continue
+        spec = load_schema()["relations"][relation]
+        if page_type not in spec["domain"] or (
+            ":" in target and target.partition(":")[0] not in spec["range"]
+        ):
+            warnings.append("dropped relation evidence: invalid relation domain or range")
+            continue
+        if not isinstance(quote, str) or not quote.strip() or len(quote) > 2000:
+            warnings.append("dropped relation evidence: invalid quote")
+            continue
+        start = source_doc.text.find(quote)
+        if start < 0 or quote not in input_text:
+            warnings.append("dropped relation evidence: quote absent from current source input")
+            continue
+        try:
+            record = RelationEvidence(
+                relation=relation, target=target,
+                source=source_doc.ref, start_byte=source_doc.start_byte,
+                end_byte=source_doc.byte_size, start_char=start, end_char=start + len(quote),
+                sha256=hashlib.sha256(quote.encode("utf-8")).hexdigest(),
+            )
+        except ValueError:
+            warnings.append("dropped relation evidence: invalid runtime source")
+            continue
+        if record not in accepted:
+            accepted.append(record)
+    return tuple(accepted)
+
+
+def parse_ops(
+    payload: Any, *, source_doc: RawDoc | None = None, source_text: str | None = None,
+) -> list[PageOp]:
     """엔진 응답(dict) → 검증된 PageOp 목록. 잘못된 항목은 skip."""
     if not isinstance(payload, dict):
         return []
@@ -217,6 +310,10 @@ def parse_ops(payload: Any) -> list[PageOp]:
             related=related_values,
             sources=tuple(str(x) for x in (entry.get("sources") or [])),
             **relation_kwargs,
+            relation_evidence=_parse_relation_evidence(
+                entry.get("relation_evidence"), str(page_type), relation_kwargs,
+                source_doc, source_text, warnings,
+            ),
             attrs=attrs,
             body=str(entry.get("body", "")),
         )

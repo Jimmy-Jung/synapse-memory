@@ -21,6 +21,7 @@ from synapse_memory.model.frontmatter import (
     parse_frontmatter,
     serialize_frontmatter,
 )
+from synapse_memory.model.provenance import RelationEvidence, normalize_relation_target
 from synapse_memory.model.schema import (
     fields_for,
     folder_for,
@@ -38,6 +39,7 @@ __all__ = [
     "RELATION_FIELDS",
     "AttrDict",
     "Entity",
+    "RelationEvidence",
     "attr_dict",
     "backfill_created",
     "current_entities",
@@ -46,6 +48,7 @@ __all__ = [
     "fields_for",
     "folder_for",
     "load_schema",
+    "normalize_relation_target",
     "parse_entity",
     "parse_frontmatter",
     "relation_fields",
