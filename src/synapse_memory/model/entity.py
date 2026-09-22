@@ -3,12 +3,23 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime
 from typing import Any
 
 from synapse_memory.model.frontmatter import parse_frontmatter, serialize_frontmatter
-from synapse_memory.model.schema import entity_types, fields_for, relation_fields, statuses_for
+from synapse_memory.model.provenance import (
+    RelationEvidence,
+    normalize_relation_target,
+    parse_relation_evidence,
+)
+from synapse_memory.model.schema import (
+    entity_types,
+    fields_for,
+    load_schema,
+    relation_fields,
+    statuses_for,
+)
 
 ENTITY_TYPES = entity_types()
 RELATION_FIELDS = relation_fields()
@@ -22,6 +33,7 @@ COMMON_FIELDS: tuple[str, ...] = (
     "t_invalid",
     "sources",
     "related",
+    "relation_evidence",
 )
 OBSERVED_AT_TYPES: tuple[str, ...] = ("insight", "log")
 SUPERSEDED_STATUS = "superseded"
@@ -81,6 +93,7 @@ class Entity:
     decided_in: tuple[str, ...] = ()
     supersedes: tuple[str, ...] = ()
     same_as: tuple[str, ...] = ()
+    relation_evidence: tuple[RelationEvidence, ...] = ()
 
     def __post_init__(self) -> None:
         if self.type not in ENTITY_TYPES:
@@ -124,6 +137,16 @@ class Entity:
         )
         for key in RELATION_FIELDS:
             setattr(self, key, tuple(str(value) for value in _as_sequence(getattr(self, key))))
+        self.relation_evidence = parse_relation_evidence(self.relation_evidence)
+        for evidence in self.relation_evidence:
+            spec = load_schema()["relations"][evidence.relation]
+            targets = {
+                normalize_relation_target(ref) for ref in getattr(self, evidence.relation)
+            }
+            if self.type not in spec["domain"] or evidence.target not in targets:
+                raise ValueError("relation_evidence must belong to an existing typed relation")
+            if ":" in evidence.target and evidence.target.partition(":")[0] not in spec["range"]:
+                raise ValueError("relation_evidence target type violates the relation range")
         self.attrs = _normalize_attrs(self.type, attrs)
 
     @property
@@ -230,6 +253,8 @@ def serialize_entity(entity: Entity) -> str:
         meta["sources"] = [_plain_value(source) for source in entity.sources]
     if entity.related:
         meta["related"] = list(entity.related)
+    if entity.relation_evidence:
+        meta["relation_evidence"] = [asdict(evidence) for evidence in entity.relation_evidence]
     for key in RELATION_FIELDS:
         values = tuple(getattr(entity, key) or ())
         if values:
@@ -282,6 +307,7 @@ def entity_from_meta(meta: dict[str, Any], body: str = "") -> Entity:
         body=body,
         attrs=attrs,
         related=tuple(str(value) for value in _as_sequence(meta.get("related"))),
+        relation_evidence=meta.get("relation_evidence", ()),
         **relation_values,
     )
 

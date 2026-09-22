@@ -6,6 +6,7 @@ Created: 2026-07-07
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,6 @@ from synapse_memory.model import (
     RELATION_FIELDS,
     Entity,
     fields_for,
-    load_schema,
     supersedes_history,
 )
 from synapse_memory.store import load_page, save_page
@@ -47,15 +47,14 @@ EXPECTED_SUPPORTED = {
     "CQ07",
     "CQ08",
     "CQ09",
+    "CQ10",
     "CQ11",
     "CQ12",
     "CQ13",
     "CQ14",
     "CQ15",
 }
-EXPECTED_XFAIL = {
-    "CQ10",
-}
+EXPECTED_XFAIL: set[str] = set()
 
 
 def _load_competency_questions() -> list[dict[str, str]]:
@@ -407,18 +406,43 @@ def test_supported_cq14_repeated_logs_promote_to_insight_candidate() -> None:
     assert candidates[0].decided_in == ("log-1", "log-2")
 
 
-@pytest.mark.parametrize(
-    "cq_id",
-    [
-        pytest.param("CQ10", marks=pytest.mark.xfail(reason="edge provenance는 후속 provenance 확장 대상", strict=True)),
-    ],
-)
-def test_xfail_competency_questions_are_tracked(
-    cq_id: str,
+def test_supported_cq10_ingest_persists_relation_source_and_cli_verifies_quote(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _assert_future_competency_question(cq_id, tmp_path, monkeypatch)
+    import synapse_memory.cli as cli
+    import synapse_memory.wiki.ingest as ingest_module
+    from synapse_memory.storage.l0 import l0_root
+
+    quote = "Alpha 프로젝트는 Python을 사용한다."
+    raw_root = l0_root() / "raw" / "claude-code"
+    raw_root.mkdir(parents=True)
+    (raw_root / "cq10.jsonl").write_text(
+        json.dumps({"message": {"role": "user", "content": quote}}, ensure_ascii=False) + "\n"
+    )
+    payload = {"operations": [{
+        "op": "create", "type": "project", "slug": "alpha", "title": "Alpha",
+        "body": "프로젝트 개요", "uses": ["python"],
+        "relation_evidence": [{"relation": "uses", "target": "python", "quote": quote}],
+    }]}
+    monkeypatch.setattr(ingest_module.ai_api, "complete_structured", lambda *a, **k: payload)
+    result = ingest_module.ingest_source(
+        "claude-code", vault_path=tmp_path, watermark_path=tmp_path / "watermark.json",
+        today="2026-09-22",
+    )
+    assert result.pages_written == ["alpha"]
+    saved = load_page("project", "alpha", vault_path=tmp_path)
+    assert saved.relation_evidence[0].source == "claude-code:cq10.jsonl"
+    assert quote not in (tmp_path / "Entities/Projects/alpha.md").read_text()
+
+    assert cli.main([
+        "entity", "provenance", "project:alpha", "uses", "python",
+        "--vault", str(tmp_path), "--json",
+    ]) == 0
+    evidence = json.loads(capsys.readouterr().out)
+    assert evidence[0]["status"] == "verified"
+    assert evidence[0]["excerpt"] == quote
 
 
 def _assert_future_competency_question(
@@ -488,9 +512,6 @@ def _assert_future_competency_question(
 
         answer = wiki_query.ask_wiki("Swift concurrency stance 시간순 변화", vault_path=tmp_path)
         assert answer.sources == ["stance-v1", "stance-v2"]
-    elif cq_id == "CQ10":
-        uses_spec = load_schema()["relations"]["uses"]
-        assert "provenance" in uses_spec
     elif cq_id == "CQ13":
         from synapse_memory.store import load_page, save_page
         from synapse_memory.wiki.apply import apply_ops

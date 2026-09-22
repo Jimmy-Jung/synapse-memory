@@ -58,6 +58,7 @@ Common fields stay top-level:
 - `updated`
 - `observed_at` for `insight` and `log`
 - `sources`
+- `relation_evidence` (optional, per-edge source locators without raw text)
 
 Type-specific fields live in `attrs` and serialize as normal frontmatter keys.
 The old `ProjectCard`, `CompanyCard`, and `InsightCard` surfaces remain as
@@ -78,6 +79,25 @@ the target slug against current entity pages and checks both schema
 `domain` and `range`. For example, `uses` currently points to `concept`, so a
 page that `uses: [[some-company]]` is invalid when `some-company` is a
 `company`.
+
+### Relation evidence (CQ10)
+
+`relation_evidence` is an optional list of immutable records containing `relation`,
+`target`, `source`, `start_byte`, `end_byte`, `start_char`, `end_char`, and `sha256`.
+The source is a provider-relative JSONL reference. Byte offsets select the original
+ingest window, and character offsets select a contiguous quote within that window's
+normalized `RawDoc.text`; end offsets are exclusive. The hash covers the UTF-8 quote.
+Only a quote found in both the actual integration input and the raw document can be
+recorded. Model-generated source paths and offsets are not trusted. Quotes are not
+persisted in the Vault, and updates preserve and deduplicate existing evidence.
+
+`entity provenance <type:slug> <relation> <target>` resolves these locators against
+the local mirror and prints an excerpt only after hash verification. Missing,
+changed, unsafe, or over-limit sources return an explicit status. Append-only growth
+does not change earlier windows; rewriting or compacting a window can invalidate it.
+Lookup is read-only and does not use a provider. Ask context includes locators and
+missing-evidence notices only. Legacy edges remain loadable and are not assigned
+fabricated evidence; this patch does not automatically reingest existing data.
 
 ## Ingest
 

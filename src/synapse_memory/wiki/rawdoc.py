@@ -52,6 +52,7 @@ class RawDoc:
     text: str
     mtime_iso: str    # 파일 수정 시각 (watermark 갱신용)
     byte_size: int = 0  # 처리 시점 파일 byte 크기 (레버 2 offset 갱신용)
+    start_byte: int = 0  # text를 추출한 raw byte 구간의 시작점
 
 
 def default_source_root(source: str) -> Path:
@@ -138,15 +139,21 @@ _SOURCE_EXTRACTORS = {
 }
 
 
-def _file_text(path: Path, source: str, *, start_byte: int = 0) -> str:
+def _file_text(
+    path: Path, source: str, *, start_byte: int = 0, end_byte: int | None = None,
+) -> str:
+    """Read/extract only the recorded raw byte interval (end is exclusive)."""
+    if start_byte < 0 or (end_byte is not None and end_byte < start_byte):
+        return ""
     extract = _SOURCE_EXTRACTORS.get(source, _extract_text)
     try:
-        data = path.read_bytes()
+        with path.open("rb") as handle:
+            handle.seek(start_byte)
+            chunk = handle.read() if end_byte is None else handle.read(end_byte - start_byte)
     except OSError:
         return ""
     # 레버 2: start_byte 이후 tail만 파싱. jsonl은 라인 단위라 byte offset이 항상
     # 줄 경계(settled 파일은 정지 → 완결 라인). 중간 잘린 라인은 json 파싱 실패로 skip.
-    chunk = data[start_byte:] if start_byte else data
     lines: list[str] = []
     for raw_line in chunk.decode("utf-8", errors="replace").splitlines():
         raw_line = raw_line.strip()
@@ -246,7 +253,7 @@ def iter_new_raw(
         if offsets:
             prev = offsets.get(ref, 0)
             start = _line_boundary_offset(path, prev, size)
-        text = _file_text(path, source, start_byte=start)
+        text = _file_text(path, source, start_byte=start, end_byte=size)
         if not text:
             continue
         yield RawDoc(
@@ -257,4 +264,5 @@ def iter_new_raw(
                 timespec="microseconds"
             ),
             byte_size=size,
+            start_byte=start,
         )

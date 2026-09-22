@@ -2,6 +2,47 @@
 # Created: 2026-07-06
 version: 1
 
+common_fields:
+  relation_evidence:
+    type: list
+    description: >-
+      실제 typed relation별 근거. source는 claude-code:<relative .jsonl> 또는
+      codex:<relative .jsonl> 식별자이며 절대 경로, 경로 순회, 빈 경로 구간, 역슬래시,
+      제어문자를 허용하지 않는다. 추가 필드와 raw quote는 저장하지 않는다.
+      byte 범위는 RawDoc 생성에 소비한 원본 JSONL 구간이고 char 범위는 그 전체 구간을
+      source 추출기로 정규화한 RawDoc.text 안의 문자 범위다. 모든 offset은 bool이 아닌
+      정수로 0 <= start < end이며 끝은 exclusive다. sha256은 char 범위 원문의 UTF-8
+      해시(64자리 소문자 hex)다. target은 링크/alias 껍질을 벗기되 type:slug를 보존하며
+      해당 페이지의 relation 대상과 정확히 일치해야 한다. 기존 sources는 페이지 전체 출처다.
+    items:
+      type: object
+      additional_properties: false
+      fields:
+        relation:
+          type: string
+          required: true
+        target:
+          type: string
+          required: true
+        source:
+          type: string
+          required: true
+        start_byte:
+          type: integer
+          required: true
+        end_byte:
+          type: integer
+          required: true
+        start_char:
+          type: integer
+          required: true
+        end_char:
+          type: integer
+          required: true
+        sha256:
+          type: string
+          required: true
+
 types:
   project:
     folder: Entities/Projects

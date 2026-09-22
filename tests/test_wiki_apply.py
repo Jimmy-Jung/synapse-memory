@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from synapse_memory.model import Entity
+from synapse_memory.model import Entity, RelationEvidence
 from synapse_memory.model.entity import SUPERSEDED_STATUS
 from synapse_memory.wiki.apply import apply_ops
 from synapse_memory.wiki.integration import PageOp
@@ -140,6 +140,24 @@ def test_apply_update_preserves_existing_created(tmp_path: Path) -> None:
     saved = load_page("project", "tablet", vault_path=tmp_path)
     assert saved.created == "2026-05-01"
     assert saved.updated == "2026-06-20"
+
+
+def test_apply_update_preserves_and_deduplicates_relation_evidence(tmp_path: Path) -> None:
+    old = RelationEvidence("uses", "swift", "codex:old.jsonl", 0, 10, 0, 5, "a" * 64)
+    new = RelationEvidence("uses", "rust", "claude-code:new.jsonl", 0, 20, 0, 5, "b" * 64)
+    save_page(Entity(type="project", slug="app", title="App", uses=("swift",),
+                     relation_evidence=(old,), sources=("vault-md:app.md",)),
+              vault_path=tmp_path)
+    apply_ops([PageOp(op="update", page=Entity(
+        type="project", slug="app", title="App", uses=("swift", "rust"),
+        relation_evidence=(old, new), body="new body"))], vault_path=tmp_path)
+    saved = load_page("project", "app", vault_path=tmp_path)
+    assert saved.uses == ("swift", "rust")
+    assert saved.relation_evidence == (old, new)
+    assert saved.sources == ("vault-md:app.md",)
+    apply_ops([PageOp(op="update", page=Entity(type="project", slug="app", title="App"))],
+              vault_path=tmp_path)
+    assert load_page("project", "app", vault_path=tmp_path).relation_evidence == (old, new)
 
 
 def test_apply_merges_typed_relations_and_keeps_schema_ranges_valid(

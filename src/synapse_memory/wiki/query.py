@@ -25,12 +25,12 @@ from datetime import date
 from pathlib import Path
 
 from synapse_memory.llm import ai_api
-from synapse_memory.model import Entity
+from synapse_memory.model import Entity, normalize_relation_target
 from synapse_memory.retrieval.page_index import build_page_index
 from synapse_memory.retrieval.pages import _all_pages
 from synapse_memory.retrieval.semantic import retrieve_items
 from synapse_memory.store import save_page
-from synapse_memory.wiki.links import extract_wikilinks, reverse_relations
+from synapse_memory.wiki.links import extract_wikilinks, reverse_relations, typed_neighbors
 from synapse_memory.wiki.page import (
     slugify,
 )
@@ -44,6 +44,8 @@ ASK_WIKI_SYSTEM = """당신은 사용자의 개인 Entity/온톨로지를 근거
 - 아래 제공된 Entity 본문만 근거로 답변합니다.
 - 자료에 없는 정보는 **추측하지 않습니다** — "자료에 없음"이라고 솔직히 답합니다.
 - 각 주장 끝에 출처를 ``[[slug]]`` 형식으로 인용합니다.
+- 관계 근거 위치는 원문 인용이 아닙니다. 원문 미조회 상태에서는 내용을 추정하지 않고,
+  정확한 문장은 로컬 `synapse-memory entity provenance <type:slug> <관계> <대상>` 조회로 안내합니다.
 - 한국어로 자연스럽게, 사용자에게 직접 말하듯 답변합니다.
 - 짧고 정확하게. 불필요한 인사·반복 금지."""
 
@@ -132,6 +134,33 @@ def _resolve_sources(answer: str, pages: list[Entity]) -> list[str]:
     return [p.slug for p in pages]
 
 
+def _build_provenance_context(pages: list[Entity]) -> str:
+    """Include recorded locators only; raw lookup stays outside provider paths."""
+    lines: list[str] = []
+    for page in pages:
+        for relation, targets in typed_neighbors(page).items():
+            for target in targets:
+                try:
+                    normalized = normalize_relation_target(target)
+                except ValueError:
+                    continue
+                matching = [
+                    evidence for evidence in page.relation_evidence
+                    if evidence.relation == relation
+                    and evidence.target == normalized
+                ]
+                label = f"{page.type}:{page.slug} {relation} {target}"
+                if not matching:
+                    lines.append(f"- {label}: 근거 미기록")
+                for evidence in matching:
+                    lines.append(
+                        f"- {label}: {evidence.source}; "
+                        f"bytes {evidence.start_byte}:{evidence.end_byte}; "
+                        f"chars {evidence.start_char}:{evidence.end_char}; 원문 미조회"
+                    )
+    return "\n".join(lines)
+
+
 def ask_wiki(
     query: str,
     *,
@@ -170,10 +199,13 @@ def ask_wiki(
     relation_block = (
         f"# 관계 (타입별)\n{relation_context}\n\n" if relation_context else ""
     )
+    provenance = _build_provenance_context(pages)
+    provenance_block = f"# 관계 근거 위치\n{provenance}\n\n" if provenance else ""
     user_prompt = (
         f"# 질문\n{query}\n\n"
         f"# 자료\n{context}\n\n"
         f"{relation_block}"
+        f"{provenance_block}"
         f"위 Entity 본문을 근거로 답변하세요. 추측 금지. 각 주장에 [[slug]] 인용."
     )
     answer = ai_api.complete(

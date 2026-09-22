@@ -61,6 +61,9 @@ def _page_for_apply(page: Entity, op: str, *, vault_path: Path | None, stamp: st
         attrs={**existing.attrs, **stamped.attrs},
         related=_merge_tuple(existing.related, stamped.related),
         sources=_merge_tuple(existing.sources, stamped.sources),
+        relation_evidence=tuple(
+            dict.fromkeys((*existing.relation_evidence, *stamped.relation_evidence))
+        ),
         **merged_relations,
     )
 

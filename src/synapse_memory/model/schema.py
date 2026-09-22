@@ -89,6 +89,10 @@ def render_schema_guidance() -> str:
         "- slug는 파일명(.md 제외)과 같아야 합니다.",
         "- type별 폴더와 status enum은 아래 선언을 따릅니다.",
     ]
+    for name, spec in schema.get("common_fields", {}).items():
+        lines.append(f"- 공통 {name}: {_render_field_spec(spec)}")
+        if spec.get("description"):
+            lines.append(f"  {spec['description']}")
     for entity_type, spec in schema["types"].items():
         statuses = ", ".join(spec.get("statuses") or ())
         folder = spec.get("folder")
