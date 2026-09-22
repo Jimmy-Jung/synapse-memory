@@ -68,7 +68,7 @@ Claude Code 또는 Codex 채팅창에 아래 프롬프트를 그대로 붙여넣
 Synapse Memory를 설치해줘.
 
 설치 파일은 아래 링크에서 받아줘.
-https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.0/SynapseMemory-v2.1.0-macos-installer.zip
+https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.1/SynapseMemory-v2.1.1-macos-installer.zip
 
 다운로드한 zip을 압축 해제한 뒤
 installer/SynapseMemory-Installer.command가 있는지 확인하고,
@@ -93,7 +93,7 @@ GUI 동의, Obsidian 저장소 위치 선택, Gatekeeper 우회, 실제 적용�
 
 ### 방법 B — 직접 다운로드해서 실행하기
 
-1. [SynapseMemory-v2.1.0-macos-installer.zip][installer-zip]을 다운로드합니다.
+1. [SynapseMemory-v2.1.1-macos-installer.zip][installer-zip]을 다운로드합니다.
 2. zip을 열고 `installer/SynapseMemory-Installer.command`를 실행합니다.
 3. 안내에 따라 Obsidian vault를 선택하고 환경 점검을 마칩니다.
 4. Claude Code에서는 `/sm:doctor`, Codex에서는 `$doctor`로 상태를 확인합니다.
@@ -427,4 +427,4 @@ flowchart LR
 
 MIT — [LICENSE](LICENSE)
 
-[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.0/SynapseMemory-v2.1.0-macos-installer.zip
+[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.1/SynapseMemory-v2.1.1-macos-installer.zip
