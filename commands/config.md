@@ -13,6 +13,8 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 
 ### 자연어 → 키 매핑
 
+아래 `resume` 모델·`top_k` 설정과 `cleanup.old_resume_days`는 별도 `persona draft-resume` CLI 및 기존 CLI 초안용이다. 현재 세션에서 작성하는 `career-write`·`career-interview`·`career-tailor`에는 적용되지 않는다. 사용자가 새 스킬의 모델을 바꾸려는 경우에는 현재 Claude·Codex 세션의 모델 선택을 안내하고 이 CLI 설정을 대신 바꾸지 않는다. 어느 경로인지 불명확하면 먼저 확인한다.
+
 | 사용자 표현 패턴 | config 키 |
 |---|---|
 | "cleanup inbox / 받은편지함 N일" | `cleanup.inbox_stale_days` |
@@ -39,7 +41,7 @@ argument-hint: (인자 없음 → 대화형) | "<자연어 변경 지시>" (예:
 | "매일 자동 실행 N시" | `automation.daily_cron.time` (+ `automation.daily_cron.enabled=true`) |
 | "profile sample N줄" | `profile.sample_lines` |
 
-Codex 기본 배정은 Sol(ask·decide·resume), Terra(통합·회상·Profile·일반 생성),
+별도 CLI의 Codex 기본 배정은 Sol(ask·decide·resume), Terra(통합·회상·Profile·일반 생성),
 Luna(분류·관련 페이지 선별)입니다. `--model`과 위 override가 항상 이 기본값보다 우선합니다.
 
 ### 동의 흐름
@@ -62,7 +64,7 @@ Luna(분류·관련 페이지 선별)입니다. `--model`과 위 override가 항
 
 ```
 어떤 값을 바꾸고 싶나요? 자연어로 답해주세요.
-  예: "cleanup inbox를 60일로", "이력서 모델은 opus로", "ask 결과는 8개"
+  예: "cleanup inbox를 60일로", "별도 이력서 CLI 모델은 opus로", "ask 결과는 8개"
   ("exit"라고 답하면 종료)
 ```
 

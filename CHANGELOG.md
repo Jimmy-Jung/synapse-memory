@@ -4,6 +4,29 @@ All notable changes to Synapse Memory are documented here.
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-09-22
+
+### Added
+
+- **자기소개·이력서 스킬 분리**: 준비된 자료로 작성·수정하는 `career-write`,
+  경력 자료와 질문을 정리하는 `career-interview`, 회사·공고를 조사하고 경험을
+  매칭하는 `career-tailor`를 제공한다. 세 스킬 모두 자기소개와 서술형 이력서를 지원한다.
+- **공통 작성 기준 내장**: Chris Lattner의 글을 분석한 두 가이드를 스킬의
+  `references/`에 포함했다. 개인 Vault의 가이드 경로 없이 분석·예시를 참고할 수 있다.
+- **근거를 보존하는 작성**: 개인 기여와 팀 성과, 완료와 진행 상태, 수치의 측정 조건을
+  구분한다. 부족한 핵심 사실만 질문하고 미확정 내용은 검토 자료에 분리한다.
+
+### Changed
+
+- **스킬 호출 교체**: 기존 `/sm:resume`은 `/sm:career-write`, `/sm:career-interview`,
+  `/sm:career-tailor`로 교체된다. Codex에서는 `$sm:career-write`, `$sm:career-interview`,
+  `$sm:career-tailor`를 사용한다. 기존 `persona draft-resume` CLI와 `resume` recipe는 유지한다.
+- **작성 흐름과 출력**: 인터뷰·회사 맞춤 스킬은 공통 작성 단계를 재사용하며 현재
+  Claude·Codex 세션에서 실행된다. 기본 출력은 `00_Inbox/<작업명>/`의 `자기소개.md`
+  또는 `이력서.md`와 `검토자료.md`이며, 기존 회사별 결과물을 자동 이동하지 않는다.
+- **연결 안내 정리**: 라우터·온보딩·설정·CLI 안내와 두 플러그인 패키지를 새 스킬에
+  맞췄다. 별도 이력서 CLI의 모델·검색 설정과 현재 세션 작성의 적용 범위를 구분한다.
+
 ## [2.0.3] — 2026-07-15
 
 ### Fixed

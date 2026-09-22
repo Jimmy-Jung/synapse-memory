@@ -187,7 +187,8 @@ def recommend_actions(status: AssistantStatus) -> list[str]:
     if status.empty_company_count > 0:
         recs.append(
             f"키워드 비어 있는 회사 카드 보강 ({status.empty_company_count}장) — "
-            f"`/sm:resume` 매칭 정확도가 올라감"
+            "회사 맞춤 작성 — Claude Code `/sm:career-tailor` / "
+            "Codex `$sm:career-tailor`에서 참고"
         )
 
     if status.last_daily_at is None or status.last_daily_state != "done":

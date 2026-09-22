@@ -33,11 +33,18 @@ Obsidian vault에는 사용자가 읽고 검토할 수 있는 결과물이 남�
 
 외부 AI에 나가는 자료는 명령 경로에 따라 다릅니다.
 
-`ask`, `wiki ask`, `persona decide/recall/resume` 같은 질문 경로는 질문에 필요한 최소
+`ask`, `wiki ask`, `persona decide`, `persona what-did-i-think`, `persona draft-resume` 같은 CLI 질문 경로는 질문에 필요한 최소
 자료만 전달합니다.
 
 1. 관련 요약 카드
 2. 사용자가 직접 승인한 Profile/DecisionPatterns
+
+`career-write`, `career-interview`, `career-tailor`는 현재 Claude·Codex 세션에서 동작합니다.
+스킬이 읽은 경력 문서·프로젝트·관련 기록과 사용자의 답변은 해당 세션의 모델 컨텍스트에
+들어갑니다. 회사 맞춤 작업은 회사명·공고·직무 중심으로 공개 웹을 조사하며, 개인 경력이나
+내부 문서를 웹 검색어에 넣지 않습니다. `~/.synapse/private/`의 raw 기록은 읽지 않습니다.
+결과는 `00_Inbox/<작업명>/`에 본문과 검토자료로 나눠 저장하고, 실제 지원·게시·외부 전송은
+별도 요청 없이 수행하지 않습니다.
 
 `ingest`, `backfill`, `watch`, `daily` 같은 유지보수 경로는 raw 대화를 wiki 페이지로
 통합하기 위해 small raw 문서 전체 또는 sampled raw 일부를 provider에 보낼 수 있습니다.
@@ -93,10 +100,12 @@ AI가 잘못 추측한 내용을 곧바로 "나의 성향"으로 쓰지 않게 �
 | `synapse-memory daily` | 대화 단위로 외부 AI 호출 — 수집 소스(Claude/Codex 등)와 양에 따라 비용·시간 증가 |
 | `synapse-memory ingest-audit --source codex` | 무료에 가까움 — pending queue 크기와 예상 호출 수만 로컬 계산 |
 | 질문하기 (`/sm:ask`, `$ask`, `synapse-memory ask`) | 질문마다 외부 AI 호출 가능 |
-| 이력서 초안 (`/sm:resume`, `$resume`) | 이력서 초안 생성 시 외부 AI 호출 |
+| 경력 스킬 (`career-write`, `career-interview`, `career-tailor`) | 현재 Claude·Codex 세션 사용량. 회사·공고 웹 조사 도구의 비용은 사용하는 환경에 따름 |
+| 별도 이력서 CLI (`synapse-memory persona draft-resume`) | 설정된 provider를 별도로 호출 |
 | 의사결정 도움 (`/sm:decide`, `$decide`) | 상황 판단 시 외부 AI 호출 |
 
-최근 비용은 다음 명령으로 확인합니다.
+Synapse CLI가 기록한 최근 비용은 다음 명령으로 확인합니다. 현재 세션에서 직접 실행한
+경력 스킬의 모델·웹 도구 사용량은 이 CLI 비용 기록에 포함되지 않을 수 있습니다.
 
 ```bash
 synapse-memory cost summary --days 30 --by command
@@ -160,6 +169,7 @@ Obsidian vault 안의 요약 카드와 초안은 사용자가 직접 지웁니�
 ```text
 Entities/Projects/
 Entities/Companies/
+00_Inbox/<작업명>/
 30_Creative/Drafts/
 90_System/AI/
 ```

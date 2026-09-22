@@ -258,7 +258,7 @@ def cmd_me_draft_resume(args: argparse.Namespace) -> int:
     args.top_k = api()._arg_or_config(args.top_k, "top_k.resume", 6)
     args.model = api()._resolve_model(args.model, "resume")
     api()._enforce_cost_cap("persona draft-resume")
-    api()._interactive_guard("persona draft-resume", "resume")
+    api()._interactive_guard("persona draft-resume", "career-tailor")
     ai_env = api().detect_ai_environment(model=args.model)
     if not ai_env.ready:
         print(f"{FAIL} AI provider 사용 불가:", file=sys.stderr)

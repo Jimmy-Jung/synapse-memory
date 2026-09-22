@@ -168,15 +168,25 @@ synapse-memory persona what-did-i-think "AI 코딩 도구"
 자료가 충분하면 시간순 변화와 근거 카드를 함께 보여주고, 자료가 부족하면 부족하다고
 말하도록 설계되어 있습니다.
 
-## 8. 이력서와 의사결정
+## 8. 자기소개·이력서와 의사결정
 
-회사 맞춤 이력서 초안:
+필요한 시작점을 고릅니다. 세 스킬 모두 자기소개와 이력서를 지원합니다.
 
 ```text
-/sm:resume examplecorp
+/sm:career-write 자기소개 초안을 다듬어줘
+/sm:career-interview 프로젝트 기록에서 이력서에 쓸 경험을 정리해줘
+/sm:career-tailor examplecorp 채용공고에 맞춰 이력서를 써줘
 ```
 
-Codex에서는 `$resume examplecorp`처럼 실행합니다.
+Codex에서는 `$sm:career-write`, `$sm:career-interview`, `$sm:career-tailor`로 실행합니다.
+기존 `resume` 스킬은 세 스킬로 교체되었습니다. 경력 자료를 먼저 읽고, 필요한 사실만
+질문한 뒤 `career-write`의 공통 작성 절차로 연결합니다. 확인되지 않은 수치는 본문에
+넣지 않고 검토자료에 남깁니다.
+
+결과는 `00_Inbox/<작업명>/자기소개.md` 또는 `이력서.md`와 `검토자료.md`입니다.
+회사 조사 결과·출처·확인할 사항도 검토자료에 포함됩니다. 현재 Claude·Codex 세션에서
+작성하며, 별도 provider를 호출하는 `persona draft-resume` CLI와는 다른 경로입니다.
+CLI의 기존 동작과 기본 `30_Creative/Drafts/` 출력은 유지됩니다.
 
 의사결정 도움:
 
@@ -186,7 +196,8 @@ Codex에서는 `$resume examplecorp`처럼 실행합니다.
 
 Codex에서는 `$decide "이번 PR을 하나로 낼까 기능 단위로 나눌까?"`처럼 실행합니다.
 
-이 두 기능은 `90_System/AI/Profile.md`와 `DecisionPatterns.md`가 채워질수록 좋아집니다.
+의사결정은 `90_System/AI/Profile.md`와 `DecisionPatterns.md`가 채워질수록 좋아집니다.
+경력 스킬은 기존 경력 문서·프로젝트·경력 관련 Profile을 우선 읽고 관련 기록으로 확장합니다.
 Profile 후보는 `daily`가 `MemoryInbox`에 만들고, 사용자가 Obsidian에서 검토한 뒤
 맞는 것만 직접 옮깁니다. AI가 추측한 내용을 승인 없이 곧바로 "나"로 확정하지 않는
 것이 핵심입니다.

@@ -27,6 +27,7 @@
    - 자동 wiki 통합 데몬 (`watch`) + 수동 통합/검증 (`ingest`, `lint`)
    - 다른 프로젝트에서 sm 컨텍스트 활용 (`/sm:setup`, `/sm:sync`)
    - Profile 후보 GUI 승인 (`/sm:apply-profile`)
+   - 자기소개·이력서 작성, 경력 인터뷰, 회사 맞춤 작성 (`career-write`, `career-interview`, `career-tailor`)
    - 외부 데이터 수집기 (Claude Code / Codex / Obsidian 등)와 Codex 세션 통합
    - 대형 Codex 문서 비용 예산 + `ingest-audit` 사전 점검
    - raw mirror 수동 축소와 원복 (`compact-raw`)

@@ -30,7 +30,7 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 2. **`vault_path: null`** → vault 경로 설정 안내. 이후 추천 중단.
 3. **`inbox_pending_count >= 1`** → MemoryInbox 검토 권유 (시간 5분, 비용 무료)
 4. **`draft_project_count + draft_company_count >= 1`** → draft 카드 검토 + active 승격
-5. **`empty_company_count >= 1`** → 키워드 비어 있는 회사 카드 보강 (`/sm:resume` 정확도에 영향)
+5. **`empty_company_count >= 1`** → 회사 맞춤 작성에 참고할 회사 카드 보강 (`/sm:career-tailor`). 카드 보강을 스킬의 선행 조건으로 요구하지 않음.
 6. **`last_daily_at`가 24시간 이상 전이거나 `last_daily_state != "done"`** → `/sm:daily` 실행
 7. **`cleanup_candidate_count >= 1`** → vault 청소 권유 (`/sm:cleanup`). 영구 삭제 0건, archive 폴더로 이동만. `cleanup_by_kind`에서 카테고리별 건수를 사람 말로 짚어주세요 (예: "오래된 이력서 초안 3건, 묵은 MemoryInbox 후보 2건"). 청소 후 비용은 발생하지 않습니다 (로컬 작업).
 8. **모두 OK이지만 사용자가 추천 정확도를 더 높이고 싶을 때** → Gmail Sent opt-in 안내 (선택 사항, *우선순위 1~7이 모두 비었을 때만*). 다음 한 줄만:
@@ -50,11 +50,11 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 어떤 걸 같이 할까요? (번호 / "직접 지시" / "skip")
 ```
 
-예상 비용 가이드:
+비용 안내:
 - MemoryInbox 검토, draft 승격, 회사 카드 보강 → **무료** (Obsidian에서 직접)
-- `/sm:daily` → 보통 $0.05~0.5 (변경량에 따라)
-- `/sm:resume` → 보통 $0.3~0.8 (1장당)
-- `/sm:ask`, `/sm:decide`, `/sm:recall` → 보통 $0.02~0.1
+- `/sm:daily`, `/sm:ask`, `/sm:decide`, `/sm:recall` → 설정된 provider 사용량에 따라 달라짐
+- `/sm:career-write`, `/sm:career-interview`, `/sm:career-tailor` → 현재 세션과 사용하는 조사 도구의 사용량에 따라 달라짐. 별도 `persona draft-resume` provider 호출을 자동 실행하지 않음
+- 실제 사용량 근거가 없으면 고정 금액을 추정하지 않음
 
 ## 3단계 — 사용자 선택 후 *각 작업마다 동의 받고* 실행
 
@@ -98,9 +98,14 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 | "X에 대해 알려줘", "X 정리해줘" | `/sm:ask "X"` |
 | "X에 대해 예전에 뭐라 생각했지", "시간순으로" | `/sm:recall "X"` |
 | "A vs B 어떤 게 좋을까", "결정 도와줘" | `/sm:decide "..."` |
-| "<회사> 이력서", "<회사>에 지원할건데" | `/sm:resume <회사>` |
+| "자기소개/이력서 써줘", "기존 초안 다듬어줘" | `/sm:career-write` |
+| "경력 자료 정리", "경험을 질문해줘" | `/sm:career-interview` |
+| "<회사> 자기소개/이력서", "<회사>에 지원할건데" | `/sm:career-tailor <회사/공고>` |
 | "오늘 정리해줘", "데이터 갱신" | `/sm:daily` |
 | "환경 점검", "doctor" | `/sm:doctor` |
+
+경력 스킬은 모두 자기소개·이력서를 지원합니다. 현재 대화에서 각 스킬 절차를 따르고,
+`00_Inbox/<작업명>/`의 `자기소개.md` 또는 `이력서.md`와 `검토자료.md` 경로를 보고합니다.
 
 ### 사용자가 "skip"을 선택했을 때
 
@@ -128,7 +133,7 @@ JSON 필드를 보고 *우선순위 규칙*에 따라 1~3개로 추려서 보여
 - ❌ `persona update-profile --auto-promote` 같은 자동 승격 (현재 미구현 + 의도적 수동 원칙)
 - ❌ MemoryInbox 후보를 *Synapse가 대신* Profile.md로 옮기기 (사용자가 직접 Obsidian에서)
 - ❌ 카드 status를 *Synapse가 대신* draft → active로 바꾸기
-- ❌ `/sm:resume` 결과 파일을 사용자 확인 없이 *외부로 전송·게시*
+- ❌ 경력 스킬 결과 파일을 사용자 요청 없이 *외부로 전송·게시*
 - ❌ Gatekeeper 우회, 보안 설정 변경, vault 외부 임의 파일 생성
 
 ## 사용자가 인자를 줬을 때
