@@ -555,6 +555,12 @@ PY
       else
         log_step "vault_config" "warning" "synapse-memory config set vault failed; run manually after install"
       fi
+      # 최초 설치 — codex 모델을 카탈로그 기준 최신으로 기록 (실패 시 코드 기본값 유지).
+      if "${synapse_runtime_bin}" models refresh --yes >>"${LOG_FILE}" 2>&1; then
+        log_step "models_refresh" "success" "codex models pinned to catalog latest"
+      else
+        log_step "models_refresh" "warning" "codex catalog unavailable; run 'synapse-memory models refresh' after codex login"
+      fi
     else
       log_step "vault_config" "skipped" "synapse-memory runtime not available at ${synapse_runtime_bin}"
     fi

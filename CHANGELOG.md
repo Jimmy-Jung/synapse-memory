@@ -17,6 +17,11 @@ All notable changes to Synapse Memory are documented here.
 - **watch 로그 경로 선택**: `watch install` 최초 실행 시 로그 경로를 묻고
   (`--log-dir`로 지정 가능) `maintenance.log_dir`에 저장한다. 외장 볼륨 경로는 거부한다.
 - **doctor 점검**: 설치된 plist의 로그 경로가 외장 볼륨이면 경고하고 재설치 명령을 안내한다.
+- **codex 모델 최신화**: `models refresh`가 `codex debug models` 카탈로그로 역할별 최신
+  모델을 제안하고 확인 후 config에 기록한다(기본·고급 = 1순위, 저가 = 최신 luna).
+  설치 스크립트는 `--yes`로 자동 실행한다. doctor는 새 모델이 있으면 알린다.
+- **폐기 모델 대체**: 설정된 codex 모델이 카탈로그에서 사라지면 그 실행에서만 최신
+  모델로 대체하고 경고를 남긴다. 카탈로그 조회에 실패하면 기존 설정을 유지한다.
 
 ## [2.1.1] — 2026-09-22
 

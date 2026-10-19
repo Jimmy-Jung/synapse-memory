@@ -193,6 +193,33 @@ def diagnose_wiki_maintenance(
     )
 
 
+def diagnose_codex_models() -> DiagnosticResult:
+    """codex 설정 모델이 카탈로그 기준 최신인지 점검 — 알림만, 자동 적용 안 함."""
+    from synapse_memory.config import load_config
+    from synapse_memory.llm.codex_catalog import load_catalog, pending_changes
+
+    catalog = load_catalog()
+    if catalog is None:
+        return DiagnosticResult(
+            check_id="codex_models",
+            status=DiagnosticStatus.UNKNOWN,
+            message="codex 모델 카탈로그 조회 불가(`codex debug models`) — 최신 여부 확인 생략",
+        )
+    changes = pending_changes(load_config().models, catalog)
+    if not changes:
+        return DiagnosticResult(
+            check_id="codex_models",
+            status=DiagnosticStatus.OK,
+            message=f"codex 모델 최신 (기본 {catalog[0]})",
+        )
+    missing = sorted({current for _, current, _ in changes if current and current not in catalog})
+    summary = ", ".join(f"{task} {current}→{proposed}" for task, current, proposed in changes)
+    message = f"codex 새 모델 있음: {summary} — 적용: `synapse-memory models refresh`"
+    if missing:
+        message += f" (카탈로그에 없는 {', '.join(missing)}은 실행 중 자동 대체)"
+    return DiagnosticResult(check_id="codex_models", status=DiagnosticStatus.WARN, message=message)
+
+
 def diagnose_runtime_shim(shim_path: Path) -> DiagnosticResult:
     path = shim_path.expanduser()
     if not path.is_file():

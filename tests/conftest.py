@@ -49,3 +49,19 @@ def _isolate_external_volumes_root(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     fake_root = Path(tempfile.gettempdir()).resolve() / "syn-fake-Volumes"
     monkeypatch.setattr("synapse_memory.wiki.launchd._EXTERNAL_VOLUMES_ROOT", fake_root)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_codex_catalog(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """`codex debug models` 실호출 차단 — 기본은 '조회 불가'(모델 대체 없음).
+
+    카탈로그가 필요한 테스트는 `codex_catalog._run_catalog`를 다시 monkeypatch한 뒤
+    `load_catalog.cache_clear()`를 호출한다.
+    """
+    from synapse_memory.llm import codex_catalog
+
+    monkeypatch.setattr(codex_catalog, "_run_catalog", lambda: None)
+    codex_catalog.load_catalog.cache_clear()
+    codex_catalog._warned.clear()
+    yield
+    codex_catalog.load_catalog.cache_clear()

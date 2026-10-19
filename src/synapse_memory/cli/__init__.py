@@ -30,6 +30,7 @@ COMMAND_MODULES: tuple[str, ...] = (
     "cost",
     "daily",
     "config",
+    "models",
     "cleanup",
 )
 
