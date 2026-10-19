@@ -127,8 +127,12 @@ def diagnose_wiki_maintenance(
     error_fresh_after: timedelta = timedelta(hours=24),
 ) -> DiagnosticResult:
     """v2 wiki 자동 유지 watch 데몬(launchd LaunchAgent) 설치 점검."""
-    from synapse_memory.storage.l0 import l0_root
-    from synapse_memory.wiki.launchd import plist_path
+    from synapse_memory.wiki.launchd import (
+        check_log_dir,
+        default_log_dir,
+        installed_err_log,
+        plist_path,
+    )
     from synapse_memory.wiki.watermark import load_watermark
 
     path = plist_path(home=home)
@@ -146,8 +150,20 @@ def diagnose_wiki_maintenance(
                 continue
             if now - parsed.astimezone() > stale_after:
                 issues.append(f"{source} watermark stale: {watermark}")
+        err_log = (
+            err_log_path
+            or installed_err_log(home=home)
+            or default_log_dir(home=home) / "watch.err.log"
+        )
+        try:
+            check_log_dir(err_log.parent)
+        except ValueError:
+            issues.append(
+                f"로그 경로가 외장 볼륨({err_log.parent}) — launchd EX_CONFIG(78)로 잡 미실행. "
+                "재설치: `synapse-memory watch install --log-dir <내장 경로>`"
+            )
         errors = _recent_watch_errors(
-            err_log_path or (l0_root() / "watch.err.log"),
+            err_log,
             fresh_after=error_fresh_after,
             now=now,
         )
@@ -175,6 +191,33 @@ def diagnose_wiki_maintenance(
         ),
         target=path,
     )
+
+
+def diagnose_codex_models() -> DiagnosticResult:
+    """codex 설정 모델이 카탈로그 기준 최신인지 점검 — 알림만, 자동 적용 안 함."""
+    from synapse_memory.config import load_config
+    from synapse_memory.llm.codex_catalog import load_catalog, pending_changes
+
+    catalog = load_catalog()
+    if catalog is None:
+        return DiagnosticResult(
+            check_id="codex_models",
+            status=DiagnosticStatus.UNKNOWN,
+            message="codex 모델 카탈로그 조회 불가(`codex debug models`) — 최신 여부 확인 생략",
+        )
+    changes = pending_changes(load_config().models, catalog)
+    if not changes:
+        return DiagnosticResult(
+            check_id="codex_models",
+            status=DiagnosticStatus.OK,
+            message=f"codex 모델 최신 (기본 {catalog[0]})",
+        )
+    missing = sorted({current for _, current, _ in changes if current and current not in catalog})
+    summary = ", ".join(f"{task} {current}→{proposed}" for task, current, proposed in changes)
+    message = f"codex 새 모델 있음: {summary} — 적용: `synapse-memory models refresh`"
+    if missing:
+        message += f" (카탈로그에 없는 {', '.join(missing)}은 실행 중 자동 대체)"
+    return DiagnosticResult(check_id="codex_models", status=DiagnosticStatus.WARN, message=message)
 
 
 def diagnose_runtime_shim(shim_path: Path) -> DiagnosticResult:

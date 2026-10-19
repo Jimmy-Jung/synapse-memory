@@ -68,7 +68,7 @@ Claude Code 또는 Codex 채팅창에 아래 프롬프트를 그대로 붙여넣
 Synapse Memory를 설치해줘.
 
 설치 파일은 아래 링크에서 받아줘.
-https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.1/SynapseMemory-v2.1.1-macos-installer.zip
+https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.2/SynapseMemory-v2.1.2-macos-installer.zip
 
 다운로드한 zip을 압축 해제한 뒤
 installer/SynapseMemory-Installer.command가 있는지 확인하고,
@@ -93,7 +93,7 @@ GUI 동의, Obsidian 저장소 위치 선택, Gatekeeper 우회, 실제 적용�
 
 ### 방법 B — 직접 다운로드해서 실행하기
 
-1. [SynapseMemory-v2.1.1-macos-installer.zip][installer-zip]을 다운로드합니다.
+1. [SynapseMemory-v2.1.2-macos-installer.zip][installer-zip]을 다운로드합니다.
 2. zip을 열고 `installer/SynapseMemory-Installer.command`를 실행합니다.
 3. 안내에 따라 Obsidian vault를 선택하고 환경 점검을 마칩니다.
 4. Claude Code에서는 `/sm:doctor`, Codex에서는 `$doctor`로 상태를 확인합니다.
@@ -174,7 +174,11 @@ synapse-memory daily --quick
 synapse-memory hook install
 
 # 2) 자동 통합 데몬 설치 — 이후 대화가 20분마다 wiki로 자동 통합
+#    최초 설치 때 로그 저장 경로를 묻습니다(Enter = ~/.synapse/logs). 선택값은 config에 저장.
 synapse-memory watch install
+
+# 2-1) codex 모델을 카탈로그 기준 최신으로 (설치 스크립트는 자동 실행)
+synapse-memory models refresh
 
 # 3) (선택) 기존 대화 이력 한 번에 구축 — 소스별로
 synapse-memory backfill --source claude-code
@@ -214,9 +218,15 @@ synapse-memory watch status      # 설치 여부 + 소스별 watermark
 
 대부분은 `watch install` 한 번이면 끝나고, 아래 명령은 수동 제어가 필요할 때만 씁니다.
 
+watch 로그 경로는 내장 디스크여야 합니다. launchd가 로그 파일을 직접 여는데, 외장 볼륨(`/Volumes/...`)이면 열지 못해 잡이 `EX_CONFIG(78)`로 시작되지 않습니다. `watch install`은 외장 경로를 거부하고, `doctor`는 기존 설치가 외장 경로를 쓰면 경고합니다. `~/.synapse/private`를 외장 볼륨으로 옮겨도 로그는 별도 경로라 영향이 없습니다.
+
+codex 모델은 `codex debug models` 카탈로그를 기준으로 고릅니다. 기본·고급 task는 카탈로그 1순위(codex 기본 모델), 저가 task(classify, relevance)는 가장 최신 luna입니다. 티어 이름의 의미가 세대마다 바뀌기 때문에 이름이 아니라 우선순위를 기준으로 삼습니다. 새 모델이 나와도 자동으로 바꾸지 않습니다. `doctor`가 알려 주면 `models refresh`로 확인한 뒤 적용합니다. 설정된 모델이 카탈로그에서 사라진 경우에만 그 실행에서 최신 모델로 자동 대체하고 경고를 남깁니다. Claude는 `sonnet`/`haiku`/`opus` 별칭을 CLI가 계열 최신 모델로 바꿔 주므로 따로 처리하지 않습니다.
+
 | 하고 싶은 일 | 터미널 |
 | --- | --- |
 | 자동 트리거 설치 (launchd) | `synapse-memory watch install` |
+| 로그 경로를 바꿔 재설치 | `synapse-memory watch install --log-dir <경로>` |
+| codex 모델 최신화 (제안 확인 후 적용) | `synapse-memory models refresh` (`--dry-run` / `--yes`) |
 | 자동 트리거 상태 확인 / 제거 | `synapse-memory watch status` / `synapse-memory watch uninstall` |
 | watch 작업을 지금 한 번 직접 실행 | `synapse-memory watch run` |
 | 쌓인 raw 대화를 지금 wiki로 통합 | `synapse-memory ingest --now` |
@@ -427,4 +437,4 @@ flowchart LR
 
 MIT — [LICENSE](LICENSE)
 
-[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.1/SynapseMemory-v2.1.1-macos-installer.zip
+[installer-zip]: https://github.com/Jimmy-Jung/synapse-memory/releases/download/v2.1.2/SynapseMemory-v2.1.2-macos-installer.zip

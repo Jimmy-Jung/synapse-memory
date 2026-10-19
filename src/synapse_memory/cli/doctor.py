@@ -129,6 +129,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"⚠ Entity 유지 데몬 진단 실패: {exc}")
 
     try:
+        from synapse_memory.config import load_config
+        from synapse_memory.doctor import DiagnosticStatus, diagnose_codex_models
+
+        cfg = load_config()
+        if cfg.ai_provider in ("codex", "auto") or cfg.maintenance.engine == "codex":
+            models_result = diagnose_codex_models()
+            mark = OK if models_result.status == DiagnosticStatus.OK else "⚠"
+            print(f"{mark} {models_result.message}")
+    except Exception as exc:
+        print(f"⚠ codex 모델 진단 실패: {exc}")
+
+    try:
         from synapse_memory.hooks.install import diagnose_session_hook
 
         hook_result = diagnose_session_hook()

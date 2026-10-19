@@ -6,11 +6,12 @@ import json
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal, cast
 
 from synapse_memory.cost.events import CostStatus, append_cost_event
+from synapse_memory.llm import codex_catalog
 from synapse_memory.llm._runtime import (
     DEFAULT_STRUCTURED_SYSTEM,
     CompleteOptions,
@@ -95,6 +96,10 @@ def _complete_text(prompt: str, options: CompleteOptions) -> str:
     env = env or detect_codex_environment(options.model or DEFAULT_MODEL)
     _ensure_ready(env)
     assert env.codex_path is not None
+    # 카탈로그에서 사라진(폐기된) 모델이면 이번 실행만 최신 모델로 대체 — 중단 방지.
+    replacement = codex_catalog.replacement_for(options.model or env.model)
+    if replacement is not None:
+        options = replace(options, model=replacement)
 
     full_prompt = compose_prompt(prompt=prompt, system=options.system)
     with tempfile.TemporaryDirectory(prefix="synapse-codex-") as tmp:

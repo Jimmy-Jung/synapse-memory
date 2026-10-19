@@ -4,6 +4,27 @@ All notable changes to Synapse Memory are documented here.
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-10-19
+
+### Fixed
+
+- **watch 잡 미실행(EX_CONFIG 78)**: launchd 로그 경로가 L0(`~/.synapse/private`)
+  아래라, L0를 외장 볼륨으로 옮기면 launchd가 로그 파일을 열지 못해 잡이 시작조차
+  되지 않았다. 로그를 별도 디렉터리(기본 `~/.synapse/logs`)로 분리했다.
+- **재설치 반영**: `watch install` 재실행 시 기존 잡을 unload한 뒤 load해 새 plist가
+  실제로 반영된다.
+
+### Added
+
+- **watch 로그 경로 선택**: `watch install` 최초 실행 시 로그 경로를 묻고
+  (`--log-dir`로 지정 가능) `maintenance.log_dir`에 저장한다. 외장 볼륨 경로는 거부한다.
+- **doctor 점검**: 설치된 plist의 로그 경로가 외장 볼륨이면 경고하고 재설치 명령을 안내한다.
+- **codex 모델 최신화**: `models refresh`가 `codex debug models` 카탈로그로 역할별 최신
+  모델을 제안하고 확인 후 config에 기록한다(기본·고급 = 1순위, 저가 = 최신 luna).
+  설치 스크립트는 `--yes`로 자동 실행한다. doctor는 새 모델이 있으면 알린다.
+- **폐기 모델 대체**: 설정된 codex 모델이 카탈로그에서 사라지면 그 실행에서만 최신
+  모델로 대체하고 경고를 남긴다. 카탈로그 조회에 실패하면 기존 설정을 유지한다.
+
 ## [2.1.1] — 2026-09-22
 
 ### Fixed
