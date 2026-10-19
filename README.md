@@ -174,6 +174,7 @@ synapse-memory daily --quick
 synapse-memory hook install
 
 # 2) 자동 통합 데몬 설치 — 이후 대화가 20분마다 wiki로 자동 통합
+#    최초 설치 때 로그 저장 경로를 묻습니다(Enter = ~/.synapse/logs). 선택값은 config에 저장.
 synapse-memory watch install
 
 # 3) (선택) 기존 대화 이력 한 번에 구축 — 소스별로
@@ -214,9 +215,12 @@ synapse-memory watch status      # 설치 여부 + 소스별 watermark
 
 대부분은 `watch install` 한 번이면 끝나고, 아래 명령은 수동 제어가 필요할 때만 씁니다.
 
+watch 로그 경로는 내장 디스크여야 합니다. launchd가 로그 파일을 직접 여는데, 외장 볼륨(`/Volumes/...`)이면 열지 못해 잡이 `EX_CONFIG(78)`로 시작되지 않습니다. `watch install`은 외장 경로를 거부하고, `doctor`는 기존 설치가 외장 경로를 쓰면 경고합니다. `~/.synapse/private`를 외장 볼륨으로 옮겨도 로그는 별도 경로라 영향이 없습니다.
+
 | 하고 싶은 일 | 터미널 |
 | --- | --- |
 | 자동 트리거 설치 (launchd) | `synapse-memory watch install` |
+| 로그 경로를 바꿔 재설치 | `synapse-memory watch install --log-dir <경로>` |
 | 자동 트리거 상태 확인 / 제거 | `synapse-memory watch status` / `synapse-memory watch uninstall` |
 | watch 작업을 지금 한 번 직접 실행 | `synapse-memory watch run` |
 | 쌓인 raw 대화를 지금 wiki로 통합 | `synapse-memory ingest --now` |

@@ -1,9 +1,34 @@
+import io
 import json
+import sys
+
+import pytest
 
 import synapse_memory.cli as cli
+import synapse_memory.wiki.launchd as launchd
 from synapse_memory.wiki.daemon import CycleOutcome
 from synapse_memory.wiki.ingest import IngestResult
 from synapse_memory.wiki.launchd import LaunchctlError
+
+
+@pytest.fixture(autouse=True)
+def _isolate_config(monkeypatch, tmp_path):
+    """watch install이 config에 log_dir를 저장하므로 실제 ~/.synapse/config.yaml 보호."""
+    import synapse_memory.config as config_module
+
+    monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", tmp_path / "config.yaml")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+
+class _Tty(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def _saved_log_dir():
+    from synapse_memory.config import load_config
+
+    return load_config().maintenance.log_dir
 
 
 def _per_source(results: dict):
@@ -61,8 +86,39 @@ def test_cli_watch_run_skipped(monkeypatch, capsys):
 
 
 def test_cli_watch_install(monkeypatch, tmp_path):
+    """비대화형 최초 설치 — 기본 경로(~/.synapse/logs)를 쓰고 config에 저장."""
     monkeypatch.setattr(cli, "install_watch", lambda **kw: tmp_path / "x.plist")
     assert cli.main(["watch", "install"]) == 0
+    assert _saved_log_dir() == str((tmp_path / ".synapse" / "logs").resolve())
+
+
+def test_cli_watch_install_first_run_prompts_then_reuses(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(cli, "install_watch",
+                        lambda **kw: calls.append(kw) or tmp_path / "x.plist")
+    monkeypatch.setattr(sys, "stdin", _Tty())
+    chosen = (tmp_path / "my-logs").resolve()
+    monkeypatch.setattr("builtins.input", lambda prompt: str(chosen))
+
+    assert cli.main(["watch", "install"]) == 0
+    assert calls[-1]["log_dir"] == chosen
+    assert _saved_log_dir() == str(chosen)
+
+    # 재설치는 저장값 재사용 — 다시 묻지 않는다.
+    monkeypatch.setattr("builtins.input", lambda prompt: pytest.fail("재질문하면 안 됨"))
+    assert cli.main(["watch", "install"]) == 0
+    assert calls[-1]["log_dir"] == chosen
+
+
+def test_cli_watch_install_rejects_external_log_dir(monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr(cli, "install_watch", lambda **kw: calls.append(kw))
+    external = launchd._EXTERNAL_VOLUMES_ROOT / "Ext" / "logs"
+
+    assert cli.main(["watch", "install", "--log-dir", str(external)]) == 2
+    assert "EX_CONFIG" in capsys.readouterr().err
+    assert not calls
+    assert _saved_log_dir() is None
 
 
 def test_cli_watch_install_returns_nonzero_on_launchctl_failure(monkeypatch, capsys):

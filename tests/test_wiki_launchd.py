@@ -5,12 +5,14 @@ import subprocess
 
 import pytest
 
+import synapse_memory.wiki.launchd as launchd
 from synapse_memory.wiki.launchd import (
     LABEL,
     LaunchctlError,
     _launchctl,
     build_plist,
     install_watch,
+    installed_err_log,
     plist_path,
     uninstall_watch,
 )
@@ -85,9 +87,42 @@ def test_install_writes_plist_and_loads(tmp_path, monkeypatch) -> None:
     cmds = []
     monkeypatch.setattr("synapse_memory.wiki.launchd._launchctl", lambda *a: cmds.append(a))
     path = install_watch(home=tmp_path, program_args=["synapse-memory", "watch", "run"],
-                         interval_seconds=1200)
+                         interval_seconds=1200, log_dir=tmp_path / "logs")
     assert path.is_file()
     assert cmds  # launchctl 호출됨
+
+
+def test_install_writes_log_paths_under_log_dir(tmp_path, monkeypatch) -> None:
+    """로그는 L0가 아닌 log_dir — L0가 외장 볼륨이면 launchd EX_CONFIG(회귀)."""
+    monkeypatch.setattr("synapse_memory.wiki.launchd._launchctl", lambda *a: None)
+    log_dir = tmp_path / "logs"
+    path = install_watch(home=tmp_path, program_args=["x"], interval_seconds=1200,
+                         log_dir=log_dir)
+    payload = plistlib.loads(path.read_bytes())
+    assert log_dir.is_dir()  # launchd는 디렉터리를 만들지 않는다
+    assert payload["StandardOutPath"] == str(log_dir.resolve() / "watch.out.log")
+    assert payload["StandardErrorPath"] == str(log_dir.resolve() / "watch.err.log")
+    assert installed_err_log(home=tmp_path) == log_dir.resolve() / "watch.err.log"
+
+
+def test_install_rejects_external_volume_log_dir(tmp_path, monkeypatch) -> None:
+    cmds = []
+    monkeypatch.setattr("synapse_memory.wiki.launchd._launchctl", lambda *a: cmds.append(a))
+    with pytest.raises(ValueError, match="EX_CONFIG"):
+        install_watch(home=tmp_path, program_args=["x"], interval_seconds=1200,
+                      log_dir=launchd._EXTERNAL_VOLUMES_ROOT / "External" / "logs")
+    assert not cmds
+    assert not plist_path(home=tmp_path).exists()
+
+
+def test_reinstall_unloads_before_load(tmp_path, monkeypatch) -> None:
+    """재설치 시 기존 잡을 내려야 새 plist가 반영된다."""
+    cmds = []
+    monkeypatch.setattr("synapse_memory.wiki.launchd._launchctl", lambda *a: cmds.append(a[0]))
+    for _ in range(2):
+        install_watch(home=tmp_path, program_args=["x"], interval_seconds=1200,
+                      log_dir=tmp_path / "logs")
+    assert cmds == ["load", "unload", "load"]
 
 
 def test_launchctl_raises_on_failure(monkeypatch) -> None:
@@ -106,6 +141,7 @@ def test_launchctl_raises_on_failure(monkeypatch) -> None:
 
 def test_uninstall_removes_plist(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("synapse_memory.wiki.launchd._launchctl", lambda *a: None)
-    install_watch(home=tmp_path, program_args=["x"], interval_seconds=1200)
+    install_watch(home=tmp_path, program_args=["x"], interval_seconds=1200,
+                  log_dir=tmp_path / "logs")
     uninstall_watch(home=tmp_path)
     assert not plist_path(home=tmp_path).exists()

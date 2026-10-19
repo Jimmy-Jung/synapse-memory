@@ -130,3 +130,24 @@ def test_wiki_maintenance_ignores_old_watch_errors(tmp_path: Path) -> None:
 
     assert result.status == DiagnosticStatus.OK
     assert "watch.err.log" not in result.message
+
+
+def test_wiki_maintenance_warns_when_installed_log_on_external_volume(tmp_path: Path) -> None:
+    """설치된 plist 로그가 외장 볼륨이면 launchd EX_CONFIG — watermark가 fresh여도 경고."""
+    import plistlib
+
+    import synapse_memory.wiki.launchd as launchd
+
+    path = launchd.plist_path(home=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    external = launchd._EXTERNAL_VOLUMES_ROOT / "Ext" / "watch.err.log"
+    path.write_bytes(plistlib.dumps({"StandardErrorPath": str(external)}))
+    state = tmp_path / "state.json"
+    now = datetime.now().astimezone().isoformat()
+    state.write_text(f'{{"claude-code": "{now}", "codex": "{now}"}}', encoding="utf-8")
+
+    result = diagnose_wiki_maintenance(home=tmp_path, state_path=state)
+
+    assert result.status == DiagnosticStatus.WARN
+    assert "EX_CONFIG" in result.message
+    assert "--log-dir" in result.message

@@ -302,6 +302,9 @@ class MaintenanceConfig:
     # 토큰 절감: wakeup 빈도 ↓ (72→24회/일). idle_minutes(30)와 스케일 일치.
     # 변경 시 launchd plist 재설치 필요(StartInterval에 구워짐).
     interval_minutes: int = 60
+    # watch 로그 디렉터리. None = ~/.synapse/logs. `watch install` 최초 실행 때 선택·저장.
+    # 내장 디스크만 허용(외장 볼륨은 launchd EX_CONFIG). 변경 시 plist 재설치 필요.
+    log_dir: str | None = None
 
 
 @dataclass

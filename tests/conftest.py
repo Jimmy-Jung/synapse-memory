@@ -38,3 +38,14 @@ def _isolate_l0_root(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         yield
     finally:
         shutil.rmtree(isolate, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_external_volumes_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    """watch 로그 외장 볼륨 판별 루트(`/Volumes`)를 존재하지 않는 가짜 경로로 교체.
+
+    TMPDIR가 외장 볼륨이어도 `tmp_path`가 '내장'으로 판정되게 한다. 외장 경로가
+    필요한 테스트는 `launchd._EXTERNAL_VOLUMES_ROOT / ...`를 쓴다.
+    """
+    fake_root = Path(tempfile.gettempdir()).resolve() / "syn-fake-Volumes"
+    monkeypatch.setattr("synapse_memory.wiki.launchd._EXTERNAL_VOLUMES_ROOT", fake_root)

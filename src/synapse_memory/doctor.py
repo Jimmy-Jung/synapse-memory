@@ -127,8 +127,12 @@ def diagnose_wiki_maintenance(
     error_fresh_after: timedelta = timedelta(hours=24),
 ) -> DiagnosticResult:
     """v2 wiki 자동 유지 watch 데몬(launchd LaunchAgent) 설치 점검."""
-    from synapse_memory.storage.l0 import l0_root
-    from synapse_memory.wiki.launchd import plist_path
+    from synapse_memory.wiki.launchd import (
+        check_log_dir,
+        default_log_dir,
+        installed_err_log,
+        plist_path,
+    )
     from synapse_memory.wiki.watermark import load_watermark
 
     path = plist_path(home=home)
@@ -146,8 +150,20 @@ def diagnose_wiki_maintenance(
                 continue
             if now - parsed.astimezone() > stale_after:
                 issues.append(f"{source} watermark stale: {watermark}")
+        err_log = (
+            err_log_path
+            or installed_err_log(home=home)
+            or default_log_dir(home=home) / "watch.err.log"
+        )
+        try:
+            check_log_dir(err_log.parent)
+        except ValueError:
+            issues.append(
+                f"로그 경로가 외장 볼륨({err_log.parent}) — launchd EX_CONFIG(78)로 잡 미실행. "
+                "재설치: `synapse-memory watch install --log-dir <내장 경로>`"
+            )
         errors = _recent_watch_errors(
-            err_log_path or (l0_root() / "watch.err.log"),
+            err_log,
             fresh_after=error_fresh_after,
             now=now,
         )
